@@ -131,14 +131,14 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f5f7f7] text-slate-900">
       <header className="border-b border-slate-800 bg-[#102a35] text-white">
-        <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4 px-5 py-5 sm:px-8">
+        <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-teal-300/30 bg-teal-300/15 text-lg font-bold text-teal-200" aria-hidden="true">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-teal-300/25 bg-teal-300/10 text-xl font-semibold text-teal-200 shadow-sm" aria-hidden="true">
               F
             </span>
             <div>
-              <p className="text-xl font-semibold tracking-tight">FinLens</p>
-              <p className="text-xs tracking-wide text-slate-300">SEC filing research</p>
+              <p className="text-xl font-semibold tracking-tight">FinLens<span className="ml-1 text-teal-300" aria-hidden="true">.</span></p>
+              <p className="mt-0.5 text-xs tracking-wide text-slate-300">SEC filing research</p>
             </div>
           </div>
           <p className="hidden rounded-full border border-slate-500/60 px-3 py-1.5 text-xs font-medium text-slate-200 sm:block">
@@ -147,26 +147,33 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1320px] px-5 pb-16 pt-10 sm:px-8">
-        <div className="mb-9 max-w-3xl">
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Research workspace</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-[#102a35] sm:text-4xl">
+      <div className="mx-auto max-w-[1320px] px-5 pb-16 pt-9 sm:px-8 sm:pt-11">
+        <div className="mb-8 max-w-4xl sm:mb-10">
+          <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-700"><span className="h-px w-6 bg-teal-700" aria-hidden="true" />Research workspace</p>
+          <h1 className="text-4xl font-semibold leading-tight tracking-[-0.035em] text-[#102a35] sm:text-5xl">
             Ask the filing. Follow the evidence.
           </h1>
-          <p className="mt-4 text-base leading-7 text-slate-600">
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
             Select a company and an indexed SEC filing, then ask a question.
             Every supported claim links back to the filing record.
           </p>
+          <ul aria-label="Research capabilities" className="mt-5 flex flex-wrap gap-2 text-xs font-medium text-slate-700">
+            {["SEC-sourced", "Hybrid retrieval", "Traceable citations", "Abstains on insufficient evidence"].map((label) => (
+              <li key={label} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-700" aria-hidden="true" />{label}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(310px,390px)_minmax(0,1fr)]">
-          <section className="rounded-2xl border border-slate-200 bg-white shadow-[0_8px_28px_rgba(16,42,53,0.05)]" aria-labelledby="research-input-title">
-            <div className="border-b border-slate-100 px-6 py-5">
+        <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(320px,390px)_minmax(0,1fr)] lg:gap-8">
+          <section className="rounded-2xl border border-slate-200/90 bg-white shadow-[0_4px_24px_rgba(16,42,53,0.06)] transition-shadow focus-within:shadow-[0_8px_32px_rgba(16,42,53,0.09)]" aria-labelledby="research-input-title">
+            <div className="rounded-t-2xl border-b border-slate-100 bg-slate-50/50 px-5 py-5 sm:px-6">
               <h2 id="research-input-title" className="text-lg font-semibold text-[#102a35]">Build your question</h2>
               <p className="mt-1 text-sm text-slate-500">Choose the exact filing you want to examine.</p>
             </div>
 
-            <form onSubmit={ask} className="space-y-7 p-6">
+            <form onSubmit={ask} className="space-y-6 p-5 sm:p-6">
               <div>
                 <label htmlFor="company" className="mb-2 block text-sm font-semibold text-slate-800">
                   <span className="mr-2 text-teal-700">01</span> Company
@@ -259,7 +266,7 @@ export default function Home() {
                         setQuestion(example);
                         questionInput.current?.focus();
                       }}
-                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-teal-600 hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700"
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
                     >
                       {example}
                     </button>
@@ -285,8 +292,8 @@ export default function Home() {
             </form>
           </section>
 
-          <section className="min-h-[540px] rounded-2xl border border-slate-200 bg-white shadow-[0_8px_28px_rgba(16,42,53,0.05)]" aria-labelledby="answer-title">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-5">
+          <section className="flex min-h-[540px] flex-col rounded-2xl border border-slate-200/90 bg-white shadow-[0_4px_24px_rgba(16,42,53,0.06)]" aria-labelledby="answer-title">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-slate-50/50 px-5 py-5 sm:px-6">
               <h2 id="answer-title" className="text-lg font-semibold text-[#102a35]">Research answer</h2>
               {answer && (
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${answer.evidence_status === "sufficient" ? "bg-teal-50 text-teal-800" : "bg-amber-50 text-amber-800"}`}>
@@ -295,7 +302,7 @@ export default function Home() {
               )}
             </div>
 
-            <div className="p-6 sm:p-8" aria-live="polite">
+            <div className="flex-1 p-5 sm:p-8" aria-live="polite">
               {askError && (
                 <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm leading-6 text-red-800">
                   <p className="font-semibold">Unable to produce a verified answer</p>
@@ -313,12 +320,26 @@ export default function Home() {
               )}
 
               {!answer && !askLoading && !askError && (
-                <div className="flex min-h-[430px] flex-col items-center justify-center px-4 text-center">
-                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-2xl text-teal-700" aria-hidden="true">↗</div>
-                  <h3 className="text-xl font-semibold text-[#102a35]">Start with a filing question</h3>
-                  <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500">
-                    FinLens will retrieve matching SEC excerpts and show which source supports each claim.
+                <div className="flex h-full min-h-[430px] flex-col items-center justify-center text-center">
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50 text-teal-700" aria-hidden="true">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" />
+                      <path d="M14 3v6h6M8 13h8M8 17h5" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-semibold tracking-tight text-[#102a35]">Ask a filing question</h3>
+                  <p className="mt-3 max-w-sm text-sm leading-6 text-slate-600">
+                    Start with an SEC filing. Follow each answer back to the evidence it cites.
                   </p>
+                  <ol aria-label="How to use FinLens" className="mt-8 grid w-full max-w-lg grid-cols-1 gap-3 border-y border-slate-100 py-5 min-[480px]:grid-cols-3">
+                    {["Select filing", "Ask question", "Trace evidence"].map((step, index) => (
+                      <li key={step} className="flex items-center justify-center gap-2 text-xs font-medium text-slate-700">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-teal-800">{index + 1}</span>
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-5 max-w-sm text-xs leading-5 text-slate-500">When the retrieved evidence is insufficient, FinLens abstains rather than generating an answer.</p>
                   {!filingLoading && ticker && indexedFilings.length === 0 && (
                     <p className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
                       This company has no filing text indexed for Q&amp;A yet. Select a company with an indexed filing.

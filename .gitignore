@@ -24,6 +24,7 @@ htmlcov/
 # JavaScript dependencies and generated output
 node_modules/
 .next/
+.next-prod/
 out/
 dist/
 build/
