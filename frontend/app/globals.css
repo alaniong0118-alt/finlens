@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: #f5f7f7;
+  color: #102a35;
+  font-family: "Segoe UI", Inter, Arial, sans-serif;
+}

@@ -1,0 +1,58 @@
+# Private configuration and credentials (at every directory level)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets*.json
+
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+
+# JavaScript dependencies and generated output
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# Local database files, dumps, backups, logs and scratch files
+*.sql
+*.dump
+*.backup
+*.sqlite
+*.sqlite3
+*.db
+*.log
+logs/
+*.bak
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+/backend/from app.database import*
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
