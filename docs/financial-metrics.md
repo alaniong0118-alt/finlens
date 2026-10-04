@@ -1,6 +1,6 @@
 # Standardized financial metrics
 
-Item 6 adds a read-only service over existing `FinancialFact` rows. It never imports facts, writes normalized values, downloads filings, loads embeddings or calls an LLM. [Architecture](architecture.md) describes module ownership; the [verification report](../backend/reports/financial_metrics_verification.json) records the actual local dataset, coverage and source-row checks.
+Item 6 adds a read-only service over existing `FinancialFact` rows. It never imports facts, writes normalized values, downloads filings, loads embeddings or calls an LLM. [Architecture](architecture.md) describes module ownership. [Item 6 verification](../backend/reports/financial_metrics_verification.json) preserves its initial dataset; [Item 7 verification](../backend/reports/structured_financial_verification.json) records expanded coverage. Ingestion follows the separate [sync policy](data-sources.md#structured-financial-sync), without changing these selection contracts.
 
 ## Registry and concepts
 
@@ -11,15 +11,15 @@ Item 6 adds a read-only service over existing `FinancialFact` rows. It never imp
 | revenue | RevenuesNetOfInterestExpense; RevenueFromContractWithCustomerExcludingAssessedTax; Revenues; SalesRevenueNet | Four observed concepts with distinct economic bases; scope is resolved before restatement priority. A reported component is labelled rather than asserted to cover total issuer revenue. Never summed. |
 | net_income | NetIncomeLoss | Reported net income/loss; observed. No substitution with earnings available to common shareholders. |
 | diluted_eps | EarningsPerShareDiluted | Reported diluted EPS; observed. Source `USD/shares` is presented as `USD/share`. |
-| gross_profit | GrossProfit | Reported gross profit. Conditional primary definition only; no stored observations. |
-| operating_income | OperatingIncomeLoss | Reported operating profit/loss. Conditional; no stored observations. |
-| cash_and_equivalents | CashAndCashEquivalentsAtCarryingValue | Instant cash and equivalents, not restricted cash. Conditional; no stored observations. |
-| total_assets | Assets | Instant total assets. Conditional; no stored observations. |
-| total_liabilities | Liabilities | Instant total liabilities, not liabilities plus equity. Conditional; no stored observations. |
-| operating_cash_flow | NetCashProvidedByUsedInOperatingActivities | Signed operating cash flow. Conditional; no stored observations. |
-| capital_expenditures | PaymentsToAcquirePropertyPlantAndEquipment | Positive cash payments for PP&E. Conditional; no stored observations. |
+| gross_profit | GrossProfit | Reported gross profit; not applicable to observed banking revenue bases. |
+| operating_income | OperatingIncomeLoss | Reported operating profit/loss; no unsupported substitutes. |
+| cash_and_equivalents | CashAndCashEquivalentsAtCarryingValue | Instant cash and equivalents, not restricted cash. |
+| total_assets | Assets | Instant total assets. |
+| total_liabilities | Liabilities | Instant total liabilities, not liabilities plus equity. |
+| operating_cash_flow | NetCashProvidedByUsedInOperatingActivities | Signed operating cash flow; YTD and annual flows remain separate from quarters. |
+| capital_expenditures | PaymentsToAcquirePropertyPlantAndEquipment | Positive cash payments for PP&E; negative observations are retained but not used in FCF. |
 
-All monetary definitions require `USD`; other currencies and shares are rejected. The unobserved primary definitions are covered with SEC-like fixtures, not claimed as verified issuer coverage. They contain no speculative aliases. Broader acquisition/mappings need a separately authorized, audited milestone.
+All monetary definitions require `USD`; other currencies and shares are rejected. Item 7 acquires only these already reviewed concepts/units. They contain no speculative aliases. Source presence does not establish compatible current-period coverage; broader mappings still require separate review.
 
 ### Revenue economic scope
 
@@ -38,7 +38,7 @@ YoY requires the same basis or an explicit centrally reviewed equivalence. `REVE
 
 ## Period and selection policy
 
-- Duration comes from start/end dates, including both endpoints: quarter 75–105 days, half-year 165–200, nine-month 245–295, annual 330–390. These reuse the existing classifier; observed durations are 89–98, 180–189, 271–280 and 364–371 days. Other durations are excluded.
+- Duration comes from start/end dates, including both endpoints: quarter 75–105 days, half-year 165–200, nine-month 245–295, annual 330–390. These reuse the existing classifier; the initial Item 6 dataset had durations of 89–98, 180–189, 271–280 and 364–371 days. Other durations are excluded from normalized metrics, even if valid source observations are retained during sync.
 - Instants require an end date and no start date. Duration metrics require both dates. Stored `period_type` does not override dates. Half-year/nine-month observations remain separate YTD series; cash-flow YTD is never presented as a quarter.
 - SEC `fy`/`fp` describe filing context and may label comparative observations with later years/quarters. Preserve them as `source_fiscal_year`/`source_fiscal_period` in provenance. Fiscal normalization uses unique observed annual revenue boundaries. A current year can use a YTD start immediately following a known annual end. Ambiguous boundaries leave normalized labels null.
 - Normalized fiscal year means the calendar year containing the fiscal year end. `fiscal_label_basis` records that convention/boundary inference. Quarter starts are matched to the fiscal anchor's 0/13/26/39-week positions within 14 days, accommodating 52/53-week calendars. Annual/YTD series remain distinct. Calendar frames are retained as source metadata, not fiscal-quarter authority.
@@ -63,7 +63,7 @@ YoY requires both start-date and end-date gaps of 357–378 days, duration diffe
 
 YoY additionally requires compatible revenue bases. All three margins require an approved total/net-interest denominator; component-only revenue yields null with a scope reason. Issuers showing a net-interest basis cannot receive margins using pre-interest total revenue. Derived input metadata carries the selected revenue basis alongside the original source fact.
 
-There is no stored CapEx data to establish issuer sign conventions. The conditional payments definition assumes positive outflows; negative payment observations are unavailable, never converted with `abs`. A new CapEx concept/sign convention needs explicit review before adoption. Missing inputs, incompatible periods/units and zero/negative denominators return null with a reason.
+The payments definition requires positive outflows; negative payment observations are unavailable, never converted with `abs`. Item 7 retained 3,296 CapEx observations across 25 issuers, including nine negative observations. Their presence does not authorize changing the convention. A new CapEx concept/sign convention needs explicit review before adoption. Missing inputs, incompatible periods/units and zero/negative denominators return null with a reason.
 
 ## Provenance and financial institutions
 
@@ -86,10 +86,32 @@ Each endpoint uses two SELECTs: company lookup and one bounded company fact load
 
 ## Verified coverage and limitations
 
-Current 3,251 facts contain revenue/net income/EPS only, for the original ten issuers. Snapshot availability: reported revenue/net income/YoY revenue growth 10/35 (28.57%); EPS 9/35 (25.71%, Visa has none); net margin 3/35 (8.57%, GOOGL/NVDA/JPM); other metrics 0/35. The scope fix makes AAPL/AMZN/META/MSFT/TSLA/V/WMT net margins unavailable because only customer-contract observations are retained for their latest quarters. Their reported revenue, income and compatible YoY values remain source-faithful. JPM gross profit/margin are not applicable. All 25 additions have indexed filing evidence but no structured facts; filing readiness and financial coverage are separate states.
+Item 6's historical baseline contained 3,251 facts for ten issuers. Item 7 now has **58,881 observations across 35/35 companies**, retaining every original row unchanged. Supported source revenue/net-income observations exist for 35/35; EPS for 34/35. Current snapshot coverage below is measured after scope/date/unit selection:
 
-Real source rows/formulas were checked for AAPL, MSFT, JPM and WMT. GS, COST, JNJ, XOM, CAT and F were checked for honest absence. All-company coverage and unchanged table fingerprints are recorded. Fixture tests cover additional formulas/primary definitions; they do not prove real issuer coverage. Legacy ingestion already discarded some duplicate/concept candidates; the service cannot recover them. No currency conversion, Q4 synthesis, missing-period interpolation, as-of filing snapshot or full SEC numerical re-audit is provided.
+| Metric | Quarterly summary available /35 | Annual summary available /35 |
+|---|---:|---:|
+| revenue | 34 | 32 |
+| gross_profit | 8 | 8 |
+| operating_income | 23 | 23 |
+| net_income | 32 | 31 |
+| diluted_eps | 34 | 33 |
+| cash_and_equivalents | 30 | 29 |
+| total_assets | 35 | 34 |
+| total_liabilities | 25 | 24 |
+| operating_cash_flow | 5 | 34 |
+| capital_expenditures | 3 | 21 |
+| free_cash_flow | 3 | 21 |
+| revenue_growth_yoy | 33 | 31 |
+| gross_margin | 4 | 4 |
+| operating_margin | 13 | 14 |
+| net_margin | 21 | 20 |
 
-The verifier now checks source rows for every returned all-company history point and representative annual revenue histories. It verifies ordering, kind/dates, exact values, IDs/concepts/accessions and official source URLs, including derived inputs. Twenty-six representative histories (716 observations) are also compared with real HTTP response contents, alongside ten summaries. The report retains initial validation separately from review-fix evidence.
+Instant summary values match the selected period end. Annual cash-flow coverage is more useful than quarterly availability because many issuers report YTD flows. Four banking-basis issuers have gross profit/margin `not_applicable`. AXP's latest revenue is unavailable because customer-contract and net-interest observations coexist. CAT/F/MA latest net income lacks a compatible primary fact, although historical observations exist. Visa has no supported EPS. COST latest YoY is unavailable due to a revenue-basis transition. No speculative mappings fill these gaps.
 
-Reproduce the recorded read-only checks from backend using `.venv/Scripts/python.exe -m scripts.verify_financial_metrics --api-url http://127.0.0.1:8000` against this baseline dataset and a running current backend. The script updates only its report and verifies exact database preservation; it does not ingest data. Historical report counts are not a fresh-clone data prerequisite.
+AAPL/MSFT retain source-faithful revenue/income/EPS and unavailable component-denominator margins. XOM stays current CIK 0002115436 with 22 supported observations. Official current-registrant comparative periods are retained, with no independent predecessor acquisition. No annual revenue or established fiscal-year label is claimed for that limited response. Filing readiness and financial coverage remain separate.
+
+Real expanded source rows/formulas were checked for AAPL/MSFT/JPM/JNJ/XOM/COST/CAT/F, including values, concepts, dates, units, accessions, filed dates, source URLs and derived inputs. All original fact fingerprints and company/chunk/vector hashes were preserved. Source responses may no longer contain candidates discarded by legacy ingestion, so sync cannot guarantee complete vintage recovery. No currency conversion, Q4 synthesis, interpolation, as-of filing snapshot, adjusted EPS comparability or full filing-text numerical re-audit is provided. Legacy financial routes retain their earlier analysis contracts; Research Mode should consume the standardized routes.
+
+Item 7's verifier checks all-company source histories, representative annual revenue/cash-flow/FCF histories and derived inputs. Sixteen summaries and 56 histories across eight representatives were compared with real HTTP bodies, alongside catalog/health checks. Item 6's earlier verification remains separately recorded.
+
+For this local Item 7 baseline, run `.venv/Scripts/python.exe -m scripts.verify_financial_sync --api-url http://127.0.0.1:8000` from backend against a running current backend. It reads the database and writes only its report. Its ID-specific baseline is a local preservation artifact, not a fresh-clone prerequisite. The older `verify_financial_metrics` intentionally verifies the frozen Item 6 dataset; do not overwrite that historical report to accommodate expanded data.

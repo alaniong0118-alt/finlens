@@ -125,7 +125,7 @@ flowchart LR
     E --> D[(PostgreSQL + pgvector)]
 ```
 
-Company Facts is a separate structured-data path for revenue, net income, and diluted EPS. See [architecture](docs/architecture.md) and [technical challenges](docs/technical-challenges.md).
+Company Facts is a separate structured-data path using the existing reviewed financial-metric concepts. See [architecture](docs/architecture.md), [sync policy](docs/data-sources.md#structured-financial-sync) and [technical challenges](docs/technical-challenges.md).
 
 ## Tech stack
 
@@ -260,9 +260,25 @@ GET /companies/AAPL/financials/summary?period=quarter
 GET /companies/MSFT/financials/metrics/revenue?period=annual&limit=10
 ```
 
-Fifteen canonical definitions provide date-aware summaries/history, Decimal calculations, explicit missing values and SEC fact/input provenance. Current data supports reported revenue/net income/compatible YoY growth for 10/35 companies, EPS for 9/35 and approved net margins for 3/35. Customer-contract revenue is explicitly labelled; it cannot establish a consolidated margin denominator alone. EPS histories expose unverified share-basis comparability. All 35 filing-ready companies are audited, including missing structured data for the 25 additions. Values serialize as decimal strings; ratios use `0.25` for 25%. See [metric contracts](docs/financial-metrics.md) and [coverage/preservation verification](backend/reports/financial_metrics_verification.json).
+Fifteen canonical definitions provide date-aware summaries/history, Decimal calculations, explicit missing values and SEC fact/input provenance. Customer-contract revenue is explicitly labelled; it cannot establish a consolidated margin denominator alone. EPS histories expose unverified share-basis comparability. Values serialize as decimal strings; ratios use `0.25` for 25%. See [metric contracts](docs/financial-metrics.md) and [current structured-data verification](backend/reports/structured_financial_verification.json). The [Item 6 report](backend/reports/financial_metrics_verification.json) preserves its earlier 10-company structured-data baseline.
 
 Item 6 review-fix verification: **66 focused tests**, **168 backend tests and 44 subtests** passed, including the provider-mocked database suite. Permanent fiscal-calendar, revenue-scope, EPS and history-content regressions cover the review findings. Twenty-six real HTTP histories (716 observations), ten summaries, two-SELECT summaries and Alembic checks passed; all database fingerprints are unchanged. The linked report retains initial validation separately. This is backend Research Mode infrastructure; dashboard/chart work and live LLM auditing remain pending.
+
+## Structured financial sync
+
+From `backend`, with the existing database/schema and private SEC contact configured:
+
+```powershell
+python -m scripts.sync_financial_facts
+python -m scripts.sync_financial_facts --ticker JNJ --ticker XOM --dry-run --report reports/financial_facts_discovery.json
+python -m scripts.sync_financial_facts --ticker CAT --report reports/financial_facts_retry.json
+```
+
+The command sequentially fetches official SEC Company Facts, preserves distinct concepts/filing vintages and inserts only missing observations. Each company commits atomically; failures roll back that company and do not prevent healthy companies from completing. Rerun the failed subset or the full catalog to resume. Dry-run writes a diagnostic report, with no database changes. Report destinations must be JSON files under `backend/reports`; unrelated existing reports cannot be overwritten. Exit 1 indicates failures, absent supported source data, interruption or a global error.
+
+Item 7 verified **35/35 issuers with structured facts**, **58,881 rows** including all **3,251 original rows unchanged**, and unchanged **3,175 chunks/vectors**. All 35 companies updated; a full rerun inserted zero rows with identical table hashes. Current quarterly snapshots have revenue 34/35, net income 32/35, EPS 34/35 and approved net margin 21/35; annual FCF is available for 21/35. These are period/scope-specific results, not universal metric coverage. XOM retains current CIK `0002115436` and has only 22 supported observations; no predecessor CIK is requested.
+
+Item 7 regression: **195 tests and 44 subtests passed**, including 27 sync tests; real content checks passed for 16 summary and 56 history responses across eight industries/issuers, alongside catalog/health checks. Alembic remains clean. See [identity, recovery and limitations](docs/data-sources.md#structured-financial-sync), [rollout/no-op proof](backend/reports/structured_financial_rollout.json), [source/coverage audit](backend/reports/structured_financial_verification.json) and the [completed plan](docs/exec-plans/completed/2026-10-04-structured-financial-coverage.md). No live LLM acceptance is claimed.
 
 ## Limitations
 

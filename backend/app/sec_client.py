@@ -3,6 +3,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 
 import httpx
 
@@ -113,7 +114,8 @@ def get_company_facts(cik: str) -> dict:
         f"CIK{normalized_cik}.json"
     )
 
-    return _sec_get(url).json()
+    # Avoid binary-float rounding before Numeric(24,4) representability checks.
+    return _sec_get(url).json(parse_float=Decimal)
 def build_filing_url(
     company_cik: str,
     accession_number: str,

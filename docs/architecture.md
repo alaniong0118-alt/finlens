@@ -7,7 +7,7 @@ Ingestion and answering are separate. Questions read stored chunks scoped by com
 | Responsibility | Implementation |
 |---|---|
 | API and error mapping | `backend/app/main.py` |
-| SEC / metric import | `sec_client.py`, `sec_importer.py` |
+| SEC / metric import | `sec_client.py`, `sec_importer.py`, `financial_sync_service.py`; `scripts/sync_financial_facts.py` |
 | Canonical financial metrics | `financial_metric_registry.py`, `financial_metrics_service.py`, `financial_metric_schemas.py` |
 | Document extraction / cleanup / chunking | `sec_parser.py` |
 | Persistence / embeddings | `sec_filing_service.py`, `embedding_service.py` |
@@ -20,7 +20,7 @@ Backend module filenames are relative to `backend/app` unless stated otherwise.
 
 ## Data paths
 
-Company Facts contains multiple concepts for a metric. The importer normalizes supported revenue concepts, net income, and diluted EPS; retains units, periods, and provenance; and deduplicates records. Prior-year analysis uses fiscal/period information and date/duration constraints rather than calendar-quarter assumptions.
+Company Facts contains multiple concepts and filing vintages for a metric. The importer collects the existing reviewed base concepts/units, validates precision/metadata and merges exact source identities without deleting rows or choosing period winners. The sequential catalog sync commits per company under a PostgreSQL transaction lock, reports coverage/failures and resumes from stored identities. Item 6 resolves scope, restatements and compatible periods after ingestion; see [sync policy](data-sources.md#structured-financial-sync). Legacy financial interfaces retain their existing contracts.
 
 EDGAR submissions contain multiple documents. The parser selects the primary document for the requested form. BeautifulSoup removes scripts, styles, inline XBRL headers, and hidden elements. Whitespace is normalized. Chunking uses 2,500 characters with 250-character overlap; offsets refer to cleaned text.
 
@@ -72,7 +72,7 @@ Chunks commit per filing before scoped embedding work. A company failure rolls b
 
 ## Standardized financial metrics
 
-The read-only metrics service loads a company's stored facts once, resolves original concepts and revenue economic scope, selects compatible date-based periods and calculates Decimal ratios/FCF with input provenance. Ambiguous years remain null; unapproved revenue bases cannot produce consolidated margins or incompatible YoY growth. EPS history exposes unverified share-basis comparability. Dedicated typed `/financials/summary` and `/financials/metrics/{metric}` routes preserve legacy financial APIs. No normalized table, migration, ingestion change or AI dependency is required. Coverage is independent of filing readiness: current structured facts cover ten companies and three base metrics only. See [metric contracts and limitations](financial-metrics.md) and [all-company verification](../backend/reports/financial_metrics_verification.json).
+The read-only metrics service loads a company's stored facts once, resolves original concepts and revenue economic scope, selects compatible date-based periods and calculates Decimal ratios/FCF with input provenance. Ambiguous years remain null; unapproved revenue bases cannot produce consolidated margins or incompatible YoY growth. EPS history exposes unverified share-basis comparability. Dedicated typed `/financials/summary` and `/financials/metrics/{metric}` routes preserve legacy financial APIs. No normalized table, migration or AI dependency is required. Item 7 supplies structured facts for all 35 issuers while preserving the original observations; normalized metric availability remains separate from filing readiness and source presence. See [metric contracts and limitations](financial-metrics.md) and [current all-company verification](../backend/reports/structured_financial_verification.json).
 
 ## Verification boundary
 

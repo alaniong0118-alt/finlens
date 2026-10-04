@@ -1,0 +1,1194 @@
+{
+  "report_type": "financial_rollout",
+  "started_at": "2026-10-04T13:51:58.626316+00:00",
+  "canaries": [
+    {
+      "ticker": "JNJ",
+      "inserted": 1905,
+      "structured_companies": 11,
+      "facts_after": 5156,
+      "original_preserved": 3251,
+      "http_checks": 72,
+      "rerun_inserted": 0,
+      "whole_database_rerun_unchanged": true
+    },
+    {
+      "ticker": "XOM",
+      "inserted": 22,
+      "structured_companies": 12,
+      "facts_after": 5178,
+      "original_preserved": 3251,
+      "http_checks": 72,
+      "rerun_inserted": 0,
+      "whole_database_rerun_unchanged": true
+    },
+    {
+      "ticker": "CAT",
+      "inserted": 1785,
+      "structured_companies": 13,
+      "facts_after": 6963,
+      "original_preserved": 3251,
+      "http_checks": 72,
+      "rerun_inserted": 0,
+      "whole_database_rerun_unchanged": true
+    },
+    {
+      "ticker": "COST",
+      "inserted": 2462,
+      "structured_companies": 14,
+      "facts_after": 9425,
+      "original_preserved": 3251,
+      "http_checks": 72,
+      "rerun_inserted": 0,
+      "whole_database_rerun_unchanged": true
+    },
+    {
+      "ticker": "F",
+      "inserted": 1559,
+      "structured_companies": 15,
+      "facts_after": 10984,
+      "original_preserved": 3251,
+      "http_checks": 72,
+      "rerun_inserted": 0,
+      "whole_database_rerun_unchanged": true
+    }
+  ],
+  "finished_at": "2026-10-04T13:52:28.761078+00:00",
+  "remaining_batch": {
+    "requested": 30,
+    "updated": 30,
+    "failed": 0,
+    "facts_inserted": 47897,
+    "artifact": "financial_facts_batch.json"
+  },
+  "full_rerun": {
+    "already_current": 35,
+    "facts_inserted": 0,
+    "failed": 0,
+    "before": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "after": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "whole_database_unchanged": true,
+    "artifact": "financial_facts_rerun.json"
+  },
+  "companies_requested": [
+    "AAPL",
+    "ABBV",
+    "AMZN",
+    "AXP",
+    "BAC",
+    "CAT",
+    "COP",
+    "COST",
+    "CVX",
+    "DIS",
+    "F",
+    "GE",
+    "GM",
+    "GOOGL",
+    "GS",
+    "HD",
+    "HON",
+    "JNJ",
+    "JPM",
+    "KO",
+    "LLY",
+    "MA",
+    "MCD",
+    "META",
+    "MRK",
+    "MS",
+    "MSFT",
+    "NVDA",
+    "PEP",
+    "TSLA",
+    "UNH",
+    "UPS",
+    "V",
+    "WMT",
+    "XOM"
+  ],
+  "updated": 35,
+  "already_current": 0,
+  "failed": 0,
+  "facts_before": 3251,
+  "facts_inserted": 55630,
+  "facts_after": 58881,
+  "companies_with_facts_before": 10,
+  "companies_with_facts_after": 35,
+  "companies": [
+    {
+      "ticker": "AAPL",
+      "company_cik": "0000320193",
+      "facts_before": 369,
+      "facts_after": 2343,
+      "facts_inserted": 1974,
+      "would_insert": 1974,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2343,
+      "already_present": 369,
+      "inserted_by_metric": {
+        "Revenues": 215,
+        "GrossProfit": 338,
+        "OperatingIncomeLoss": 234,
+        "NetIncomeLoss": 215,
+        "EarningsPerShareDiluted": 215,
+        "CashAndCashEquivalentsAtCarryingValue": 228,
+        "Assets": 146,
+        "Liabilities": 144,
+        "NetCashProvidedByUsedInOperatingActivities": 134,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 105
+      }
+    },
+    {
+      "ticker": "ABBV",
+      "company_cik": "0001551152",
+      "facts_before": 0,
+      "facts_after": 1387,
+      "facts_inserted": 1387,
+      "would_insert": 1387,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1387,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 271,
+        "GrossProfit": 62,
+        "OperatingIncomeLoss": 175,
+        "NetIncomeLoss": 168,
+        "EarningsPerShareDiluted": 237,
+        "CashAndCashEquivalentsAtCarryingValue": 164,
+        "Assets": 108,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 81,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 121
+      }
+    },
+    {
+      "ticker": "AMZN",
+      "company_cik": "0001018724",
+      "facts_before": 424,
+      "facts_after": 2248,
+      "facts_inserted": 1824,
+      "would_insert": 1824,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2248,
+      "already_present": 424,
+      "inserted_by_metric": {
+        "Revenues": 190,
+        "GrossProfit": 11,
+        "OperatingIncomeLoss": 289,
+        "NetIncomeLoss": 244,
+        "EarningsPerShareDiluted": 190,
+        "CashAndCashEquivalentsAtCarryingValue": 270,
+        "Assets": 149,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 329,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 152
+      }
+    },
+    {
+      "ticker": "AXP",
+      "company_cik": "0000004962",
+      "facts_before": 0,
+      "facts_after": 1446,
+      "facts_inserted": 1446,
+      "would_insert": 1446,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1446,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 253,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 21,
+        "NetIncomeLoss": 311,
+        "EarningsPerShareDiluted": 252,
+        "CashAndCashEquivalentsAtCarryingValue": 34,
+        "Assets": 180,
+        "Liabilities": 138,
+        "NetCashProvidedByUsedInOperatingActivities": 102,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 155
+      }
+    },
+    {
+      "ticker": "BAC",
+      "company_cik": "0000070858",
+      "facts_before": 0,
+      "facts_after": 1357,
+      "facts_inserted": 1357,
+      "would_insert": 1357,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1357,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 238,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 238,
+        "EarningsPerShareDiluted": 237,
+        "CashAndCashEquivalentsAtCarryingValue": 184,
+        "Assets": 192,
+        "Liabilities": 144,
+        "NetCashProvidedByUsedInOperatingActivities": 124,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "CAT",
+      "company_cik": "0000018230",
+      "facts_before": 0,
+      "facts_after": 1785,
+      "facts_inserted": 1785,
+      "would_insert": 1785,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1785,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 552,
+        "GrossProfit": 104,
+        "OperatingIncomeLoss": 231,
+        "NetIncomeLoss": 58,
+        "EarningsPerShareDiluted": 335,
+        "CashAndCashEquivalentsAtCarryingValue": 56,
+        "Assets": 156,
+        "Liabilities": 149,
+        "NetCashProvidedByUsedInOperatingActivities": 86,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 58
+      }
+    },
+    {
+      "ticker": "COP",
+      "company_cik": "0001163165",
+      "facts_before": 0,
+      "facts_after": 1576,
+      "facts_inserted": 1576,
+      "would_insert": 1576,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1576,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 432,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 234,
+        "EarningsPerShareDiluted": 221,
+        "CashAndCashEquivalentsAtCarryingValue": 219,
+        "Assets": 167,
+        "Liabilities": 144,
+        "NetCashProvidedByUsedInOperatingActivities": 159,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "COST",
+      "company_cik": "0000909832",
+      "facts_before": 0,
+      "facts_after": 2462,
+      "facts_inserted": 2462,
+      "would_insert": 2462,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2462,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 629,
+        "GrossProfit": 6,
+        "OperatingIncomeLoss": 351,
+        "NetIncomeLoss": 306,
+        "EarningsPerShareDiluted": 295,
+        "CashAndCashEquivalentsAtCarryingValue": 234,
+        "Assets": 180,
+        "Liabilities": 134,
+        "NetCashProvidedByUsedInOperatingActivities": 114,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 213
+      }
+    },
+    {
+      "ticker": "CVX",
+      "company_cik": "0000093410",
+      "facts_before": 0,
+      "facts_after": 1464,
+      "facts_inserted": 1464,
+      "would_insert": 1464,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1464,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 335,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 237,
+        "EarningsPerShareDiluted": 232,
+        "CashAndCashEquivalentsAtCarryingValue": 210,
+        "Assets": 144,
+        "Liabilities": 144,
+        "NetCashProvidedByUsedInOperatingActivities": 162,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "DIS",
+      "company_cik": "0001744489",
+      "facts_before": 0,
+      "facts_after": 795,
+      "facts_inserted": 795,
+      "would_insert": 795,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 795,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 138,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 138,
+        "NetIncomeLoss": 141,
+        "EarningsPerShareDiluted": 138,
+        "CashAndCashEquivalentsAtCarryingValue": 74,
+        "Assets": 65,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 26,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 75
+      }
+    },
+    {
+      "ticker": "F",
+      "company_cik": "0000037996",
+      "facts_before": 0,
+      "facts_after": 1559,
+      "facts_inserted": 1559,
+      "would_insert": 1559,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1559,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 442,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 87,
+        "NetIncomeLoss": 187,
+        "EarningsPerShareDiluted": 224,
+        "CashAndCashEquivalentsAtCarryingValue": 207,
+        "Assets": 200,
+        "Liabilities": 139,
+        "NetCashProvidedByUsedInOperatingActivities": 73,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "GE",
+      "company_cik": "0000040545",
+      "facts_before": 0,
+      "facts_after": 1979,
+      "facts_inserted": 1979,
+      "would_insert": 1979,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1979,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 432,
+        "GrossProfit": 24,
+        "OperatingIncomeLoss": 44,
+        "NetIncomeLoss": 398,
+        "EarningsPerShareDiluted": 394,
+        "CashAndCashEquivalentsAtCarryingValue": 48,
+        "Assets": 162,
+        "Liabilities": 154,
+        "NetCashProvidedByUsedInOperatingActivities": 176,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 147
+      }
+    },
+    {
+      "ticker": "GM",
+      "company_cik": "0001467858",
+      "facts_before": 0,
+      "facts_after": 1861,
+      "facts_inserted": 1861,
+      "would_insert": 1861,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1861,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 456,
+        "GrossProfit": 16,
+        "OperatingIncomeLoss": 202,
+        "NetIncomeLoss": 263,
+        "EarningsPerShareDiluted": 233,
+        "CashAndCashEquivalentsAtCarryingValue": 158,
+        "Assets": 175,
+        "Liabilities": 124,
+        "NetCashProvidedByUsedInOperatingActivities": 102,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 132
+      }
+    },
+    {
+      "ticker": "GOOGL",
+      "company_cik": "0001652044",
+      "facts_before": 214,
+      "facts_after": 1108,
+      "facts_inserted": 894,
+      "would_insert": 894,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1108,
+      "already_present": 214,
+      "inserted_by_metric": {
+        "Revenues": 91,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 146,
+        "NetIncomeLoss": 79,
+        "EarningsPerShareDiluted": 59,
+        "CashAndCashEquivalentsAtCarryingValue": 121,
+        "Assets": 90,
+        "Liabilities": 84,
+        "NetCashProvidedByUsedInOperatingActivities": 102,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 122
+      }
+    },
+    {
+      "ticker": "GS",
+      "company_cik": "0000886982",
+      "facts_before": 0,
+      "facts_after": 1368,
+      "facts_inserted": 1368,
+      "would_insert": 1368,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1368,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 172,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 231,
+        "EarningsPerShareDiluted": 230,
+        "CashAndCashEquivalentsAtCarryingValue": 180,
+        "Assets": 208,
+        "Liabilities": 153,
+        "NetCashProvidedByUsedInOperatingActivities": 74,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 120
+      }
+    },
+    {
+      "ticker": "HD",
+      "company_cik": "0000354950",
+      "facts_before": 0,
+      "facts_after": 2118,
+      "facts_inserted": 2118,
+      "would_insert": 2118,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2118,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 316,
+        "GrossProfit": 316,
+        "OperatingIncomeLoss": 228,
+        "NetIncomeLoss": 305,
+        "EarningsPerShareDiluted": 300,
+        "CashAndCashEquivalentsAtCarryingValue": 224,
+        "Assets": 140,
+        "Liabilities": 140,
+        "NetCashProvidedByUsedInOperatingActivities": 149,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "HON",
+      "company_cik": "0000773840",
+      "facts_before": 0,
+      "facts_after": 1774,
+      "facts_inserted": 1774,
+      "would_insert": 1774,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1774,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 327,
+        "GrossProfit": 118,
+        "OperatingIncomeLoss": 52,
+        "NetIncomeLoss": 324,
+        "EarningsPerShareDiluted": 324,
+        "CashAndCashEquivalentsAtCarryingValue": 220,
+        "Assets": 138,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 123,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 148
+      }
+    },
+    {
+      "ticker": "JNJ",
+      "company_cik": "0000200406",
+      "facts_before": 0,
+      "facts_after": 1905,
+      "facts_inserted": 1905,
+      "would_insert": 1905,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1905,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 146,
+        "GrossProfit": 313,
+        "OperatingIncomeLoss": 52,
+        "NetIncomeLoss": 270,
+        "EarningsPerShareDiluted": 313,
+        "CashAndCashEquivalentsAtCarryingValue": 220,
+        "Assets": 143,
+        "Liabilities": 138,
+        "NetCashProvidedByUsedInOperatingActivities": 155,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 155
+      }
+    },
+    {
+      "ticker": "JPM",
+      "company_cik": "0000019617",
+      "facts_before": 333,
+      "facts_after": 1279,
+      "facts_inserted": 946,
+      "would_insert": 946,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1279,
+      "already_present": 333,
+      "inserted_by_metric": {
+        "Revenues": 158,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 130,
+        "EarningsPerShareDiluted": 125,
+        "CashAndCashEquivalentsAtCarryingValue": 16,
+        "Assets": 206,
+        "Liabilities": 147,
+        "NetCashProvidedByUsedInOperatingActivities": 164,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "KO",
+      "company_cik": "0000021344",
+      "facts_before": 0,
+      "facts_after": 1777,
+      "facts_inserted": 1777,
+      "would_insert": 1777,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1777,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 106,
+        "GrossProfit": 233,
+        "OperatingIncomeLoss": 233,
+        "NetIncomeLoss": 233,
+        "EarningsPerShareDiluted": 229,
+        "CashAndCashEquivalentsAtCarryingValue": 279,
+        "Assets": 144,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 155,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 165
+      }
+    },
+    {
+      "ticker": "LLY",
+      "company_cik": "0000059478",
+      "facts_before": 0,
+      "facts_after": 1328,
+      "facts_inserted": 1328,
+      "would_insert": 1328,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1328,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 294,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 262,
+        "EarningsPerShareDiluted": 249,
+        "CashAndCashEquivalentsAtCarryingValue": 221,
+        "Assets": 142,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 160,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "MA",
+      "company_cik": "0001141391",
+      "facts_before": 0,
+      "facts_after": 1889,
+      "facts_inserted": 1889,
+      "would_insert": 1889,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1889,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 359,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 305,
+        "NetIncomeLoss": 102,
+        "EarningsPerShareDiluted": 305,
+        "CashAndCashEquivalentsAtCarryingValue": 232,
+        "Assets": 138,
+        "Liabilities": 138,
+        "NetCashProvidedByUsedInOperatingActivities": 155,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 155
+      }
+    },
+    {
+      "ticker": "MCD",
+      "company_cik": "0000063908",
+      "facts_before": 0,
+      "facts_after": 2121,
+      "facts_inserted": 2121,
+      "would_insert": 2121,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2121,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 305,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 305,
+        "NetIncomeLoss": 310,
+        "EarningsPerShareDiluted": 305,
+        "CashAndCashEquivalentsAtCarryingValue": 292,
+        "Assets": 154,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 225,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 225
+      }
+    },
+    {
+      "ticker": "META",
+      "company_cik": "0001326801",
+      "facts_before": 279,
+      "facts_after": 1452,
+      "facts_inserted": 1173,
+      "would_insert": 1173,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1452,
+      "already_present": 279,
+      "inserted_by_metric": {
+        "Revenues": 103,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 186,
+        "NetIncomeLoss": 101,
+        "EarningsPerShareDiluted": 96,
+        "CashAndCashEquivalentsAtCarryingValue": 194,
+        "Assets": 117,
+        "Liabilities": 117,
+        "NetCashProvidedByUsedInOperatingActivities": 131,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 128
+      }
+    },
+    {
+      "ticker": "MRK",
+      "company_cik": "0000310158",
+      "facts_before": 0,
+      "facts_after": 1098,
+      "facts_inserted": 1098,
+      "would_insert": 1098,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1098,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 134,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 230,
+        "EarningsPerShareDiluted": 225,
+        "CashAndCashEquivalentsAtCarryingValue": 208,
+        "Assets": 138,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 136,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 27
+      }
+    },
+    {
+      "ticker": "MS",
+      "company_cik": "0000895421",
+      "facts_before": 0,
+      "facts_after": 1561,
+      "facts_inserted": 1561,
+      "would_insert": 1561,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1561,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 316,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 315,
+        "EarningsPerShareDiluted": 315,
+        "CashAndCashEquivalentsAtCarryingValue": 216,
+        "Assets": 140,
+        "Liabilities": 140,
+        "NetCashProvidedByUsedInOperatingActivities": 119,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "MSFT",
+      "company_cik": "0000789019",
+      "facts_before": 378,
+      "facts_after": 2544,
+      "facts_inserted": 2166,
+      "would_insert": 2166,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2544,
+      "already_present": 378,
+      "inserted_by_metric": {
+        "Revenues": 212,
+        "GrossProfit": 306,
+        "OperatingIncomeLoss": 278,
+        "NetIncomeLoss": 214,
+        "EarningsPerShareDiluted": 214,
+        "CashAndCashEquivalentsAtCarryingValue": 266,
+        "Assets": 142,
+        "Liabilities": 134,
+        "NetCashProvidedByUsedInOperatingActivities": 170,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 230
+      }
+    },
+    {
+      "ticker": "NVDA",
+      "company_cik": "0001045810",
+      "facts_before": 372,
+      "facts_after": 2120,
+      "facts_inserted": 1748,
+      "would_insert": 1748,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2120,
+      "already_present": 372,
+      "inserted_by_metric": {
+        "Revenues": 184,
+        "GrossProfit": 305,
+        "OperatingIncomeLoss": 225,
+        "NetIncomeLoss": 190,
+        "EarningsPerShareDiluted": 185,
+        "CashAndCashEquivalentsAtCarryingValue": 219,
+        "Assets": 138,
+        "Liabilities": 86,
+        "NetCashProvidedByUsedInOperatingActivities": 161,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 55
+      }
+    },
+    {
+      "ticker": "PEP",
+      "company_cik": "0000077476",
+      "facts_before": 0,
+      "facts_after": 1783,
+      "facts_inserted": 1783,
+      "would_insert": 1783,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1783,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 238,
+        "GrossProfit": 166,
+        "OperatingIncomeLoss": 238,
+        "NetIncomeLoss": 238,
+        "EarningsPerShareDiluted": 238,
+        "CashAndCashEquivalentsAtCarryingValue": 214,
+        "Assets": 147,
+        "Liabilities": 142,
+        "NetCashProvidedByUsedInOperatingActivities": 162,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "TSLA",
+      "company_cik": "0001318605",
+      "facts_before": 288,
+      "facts_after": 1958,
+      "facts_inserted": 1670,
+      "would_insert": 1670,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1958,
+      "already_present": 288,
+      "inserted_by_metric": {
+        "Revenues": 216,
+        "GrossProfit": 282,
+        "OperatingIncomeLoss": 202,
+        "NetIncomeLoss": 174,
+        "EarningsPerShareDiluted": 62,
+        "CashAndCashEquivalentsAtCarryingValue": 242,
+        "Assets": 124,
+        "Liabilities": 124,
+        "NetCashProvidedByUsedInOperatingActivities": 104,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 140
+      }
+    },
+    {
+      "ticker": "UNH",
+      "company_cik": "0000731766",
+      "facts_before": 0,
+      "facts_after": 1926,
+      "facts_inserted": 1926,
+      "would_insert": 1926,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1926,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 268,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 268,
+        "NetIncomeLoss": 266,
+        "EarningsPerShareDiluted": 268,
+        "CashAndCashEquivalentsAtCarryingValue": 244,
+        "Assets": 160,
+        "Liabilities": 140,
+        "NetCashProvidedByUsedInOperatingActivities": 158,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 154
+      }
+    },
+    {
+      "ticker": "UPS",
+      "company_cik": "0001090727",
+      "facts_before": 0,
+      "facts_after": 1951,
+      "facts_inserted": 1951,
+      "would_insert": 1951,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1951,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 323,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 313,
+        "NetIncomeLoss": 310,
+        "EarningsPerShareDiluted": 313,
+        "CashAndCashEquivalentsAtCarryingValue": 228,
+        "Assets": 154,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 155,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 155
+      }
+    },
+    {
+      "ticker": "V",
+      "company_cik": "0001403161",
+      "facts_before": 228,
+      "facts_after": 1330,
+      "facts_inserted": 1102,
+      "would_insert": 1102,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 1330,
+      "already_present": 228,
+      "inserted_by_metric": {
+        "Revenues": 115,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 229,
+        "NetIncomeLoss": 113,
+        "EarningsPerShareDiluted": 0,
+        "CashAndCashEquivalentsAtCarryingValue": 220,
+        "Assets": 136,
+        "Liabilities": 136,
+        "NetCashProvidedByUsedInOperatingActivities": 153,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 0
+      }
+    },
+    {
+      "ticker": "WMT",
+      "company_cik": "0000104169",
+      "facts_before": 366,
+      "facts_after": 2207,
+      "facts_inserted": 1841,
+      "would_insert": 1841,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 2207,
+      "already_present": 366,
+      "inserted_by_metric": {
+        "Revenues": 480,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 229,
+        "NetIncomeLoss": 197,
+        "EarningsPerShareDiluted": 185,
+        "CashAndCashEquivalentsAtCarryingValue": 229,
+        "Assets": 207,
+        "Liabilities": 0,
+        "NetCashProvidedByUsedInOperatingActivities": 157,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 157
+      }
+    },
+    {
+      "ticker": "XOM",
+      "company_cik": "0002115436",
+      "facts_before": 0,
+      "facts_after": 22,
+      "facts_inserted": 22,
+      "would_insert": 22,
+      "status": "updated",
+      "error": null,
+      "http_status": null,
+      "source_observations": 22,
+      "already_present": 0,
+      "inserted_by_metric": {
+        "Revenues": 4,
+        "GrossProfit": 0,
+        "OperatingIncomeLoss": 0,
+        "NetIncomeLoss": 4,
+        "EarningsPerShareDiluted": 4,
+        "CashAndCashEquivalentsAtCarryingValue": 2,
+        "Assets": 2,
+        "Liabilities": 2,
+        "NetCashProvidedByUsedInOperatingActivities": 2,
+        "PaymentsToAcquirePropertyPlantAndEquipment": 2
+      }
+    }
+  ],
+  "normalized_metric_coverage_after_sync": {
+    "source_metric_companies": {
+      "Revenues": 35,
+      "GrossProfit": 15,
+      "OperatingIncomeLoss": 26,
+      "NetIncomeLoss": 35,
+      "EarningsPerShareDiluted": 34,
+      "CashAndCashEquivalentsAtCarryingValue": 35,
+      "Assets": 35,
+      "Liabilities": 25,
+      "NetCashProvidedByUsedInOperatingActivities": 35,
+      "PaymentsToAcquirePropertyPlantAndEquipment": 25
+    },
+    "quarter": {
+      "revenue": {
+        "available": 34,
+        "unavailable": 1,
+        "not_applicable": 0
+      },
+      "gross_profit": {
+        "available": 8,
+        "unavailable": 23,
+        "not_applicable": 4
+      },
+      "operating_income": {
+        "available": 23,
+        "unavailable": 12,
+        "not_applicable": 0
+      },
+      "net_income": {
+        "available": 32,
+        "unavailable": 3,
+        "not_applicable": 0
+      },
+      "diluted_eps": {
+        "available": 34,
+        "unavailable": 1,
+        "not_applicable": 0
+      },
+      "cash_and_equivalents": {
+        "available": 30,
+        "unavailable": 5,
+        "not_applicable": 0
+      },
+      "total_assets": {
+        "available": 35,
+        "unavailable": 0,
+        "not_applicable": 0
+      },
+      "total_liabilities": {
+        "available": 25,
+        "unavailable": 10,
+        "not_applicable": 0
+      },
+      "operating_cash_flow": {
+        "available": 5,
+        "unavailable": 30,
+        "not_applicable": 0
+      },
+      "capital_expenditures": {
+        "available": 3,
+        "unavailable": 32,
+        "not_applicable": 0
+      },
+      "free_cash_flow": {
+        "available": 3,
+        "unavailable": 32,
+        "not_applicable": 0
+      },
+      "revenue_growth_yoy": {
+        "available": 33,
+        "unavailable": 2,
+        "not_applicable": 0
+      },
+      "gross_margin": {
+        "available": 4,
+        "unavailable": 27,
+        "not_applicable": 4
+      },
+      "operating_margin": {
+        "available": 13,
+        "unavailable": 22,
+        "not_applicable": 0
+      },
+      "net_margin": {
+        "available": 21,
+        "unavailable": 14,
+        "not_applicable": 0
+      }
+    },
+    "annual": {
+      "revenue": {
+        "available": 32,
+        "unavailable": 3,
+        "not_applicable": 0
+      },
+      "gross_profit": {
+        "available": 8,
+        "unavailable": 23,
+        "not_applicable": 4
+      },
+      "operating_income": {
+        "available": 23,
+        "unavailable": 12,
+        "not_applicable": 0
+      },
+      "net_income": {
+        "available": 31,
+        "unavailable": 4,
+        "not_applicable": 0
+      },
+      "diluted_eps": {
+        "available": 33,
+        "unavailable": 2,
+        "not_applicable": 0
+      },
+      "cash_and_equivalents": {
+        "available": 29,
+        "unavailable": 6,
+        "not_applicable": 0
+      },
+      "total_assets": {
+        "available": 34,
+        "unavailable": 1,
+        "not_applicable": 0
+      },
+      "total_liabilities": {
+        "available": 24,
+        "unavailable": 11,
+        "not_applicable": 0
+      },
+      "operating_cash_flow": {
+        "available": 34,
+        "unavailable": 1,
+        "not_applicable": 0
+      },
+      "capital_expenditures": {
+        "available": 21,
+        "unavailable": 14,
+        "not_applicable": 0
+      },
+      "free_cash_flow": {
+        "available": 21,
+        "unavailable": 14,
+        "not_applicable": 0
+      },
+      "revenue_growth_yoy": {
+        "available": 31,
+        "unavailable": 4,
+        "not_applicable": 0
+      },
+      "gross_margin": {
+        "available": 4,
+        "unavailable": 27,
+        "not_applicable": 4
+      },
+      "operating_margin": {
+        "available": 14,
+        "unavailable": 21,
+        "not_applicable": 0
+      },
+      "net_margin": {
+        "available": 20,
+        "unavailable": 15,
+        "not_applicable": 0
+      }
+    }
+  },
+  "completed_at": "2026-10-04T14:09:52.916426+00:00",
+  "xom": {
+    "catalog_cik": "0002115436",
+    "supported_observations": 22,
+    "predecessor_requested": false,
+    "limitations": "Limited successor response; annual/fiscal identity unavailable where unsupported."
+  }
+}

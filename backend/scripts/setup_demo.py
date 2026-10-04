@@ -87,7 +87,7 @@ def ensure_filing_metadata(session) -> bool:
     """Insert only this accession's real facts; never use the replacing importer."""
     from app.models import FinancialFact
     from app.sec_client import get_company_facts
-    from app.sec_importer import METRIC_SOURCES, build_metric_data
+    from app.sec_importer import merge_company_facts
 
     existing = session.scalar(select(FinancialFact).where(
         FinancialFact.company_cik == DEMO_CIK,
@@ -100,22 +100,14 @@ def ensure_filing_metadata(session) -> bool:
     facts = get_company_facts(DEMO_CIK)
     if str(facts.get("cik", "")).zfill(10) != DEMO_CIK:
         raise DemoSetupError("SEC Company Facts did not match the demo company's CIK.")
-    # Filter BEFORE deduplication: later filings must not displace our fixed fixture.
+    # Scope the source to the fixed fixture, then use the shared insert-only merge.
     scoped = deepcopy(facts)
     for concept in scoped.get("facts", {}).get("us-gaap", {}).values():
         for unit, items in concept.get("units", {}).items():
             concept["units"][unit] = [item for item in items
                                      if item.get("accn") == DEMO_ACCESSION
                                      and item.get("form") == DEMO_FORM]
-    added = 0
-    for metric, source in METRIC_SOURCES.items():
-        for item in build_metric_data(scoped, metric, source["facts"], source["unit"]):
-            for field in ("period_start", "period_end", "filed"):
-                item[field] = date.fromisoformat(item[field]) if item[field] else None
-            if item["filed"] is None:
-                raise DemoSetupError("SEC demo facts are missing the filing date.")
-            session.add(FinancialFact(company_cik=DEMO_CIK, **item))
-            added += 1
+    added = merge_company_facts(session, DEMO_CIK, scoped)["facts_inserted"]
     if not added:
         raise DemoSetupError("The fixed demo accession was not found in SEC Company Facts. No alternative or fabricated filing was used.")
     session.commit()
