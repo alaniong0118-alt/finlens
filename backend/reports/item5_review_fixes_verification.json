@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-10-04T08:29:58.484152+00:00",
+  "before": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 3251,
+      "filing_chunks": 3175,
+      "embeddings": 3175,
+      "indexed_companies": 35,
+      "indexed_accessions": 35
+    },
+    "table_sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "8be8dfd4d532d5cc79b6a66f03b1db06197bbfbb6dd515f03f8b55c265e46581",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    },
+    "aapl_chunk_count": 37,
+    "aapl_sha256": "f28402dbb3a83108596885c192e425550d38190857d06b6f2cd2a8152493f1be"
+  },
+  "after": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 3251,
+      "filing_chunks": 3175,
+      "embeddings": 3175,
+      "indexed_companies": 35,
+      "indexed_accessions": 35
+    },
+    "table_sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "8be8dfd4d532d5cc79b6a66f03b1db06197bbfbb6dd515f03f8b55c265e46581",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    },
+    "aapl_chunk_count": 37,
+    "aapl_sha256": "f28402dbb3a83108596885c192e425550d38190857d06b6f2cd2a8152493f1be"
+  },
+  "validation": {
+    "status": "passed",
+    "healthy_database_mutated": false,
+    "all_fingerprints_identical": true,
+    "valid_embeddings": 3175,
+    "default_read_only_skip": {
+      "catalog_total": 35,
+      "selected_total": 35,
+      "skipped": 35,
+      "newly_indexed": 0,
+      "resumed": 0,
+      "failed": 0,
+      "final_ready": 35,
+      "openai_calls": 0
+    },
+    "skip_check_sec_ingestion_embedding_calls": 0,
+    "companies_http": {
+      "http_status": 200,
+      "company_count": 35,
+      "ready_count": 35,
+      "all_indexed_filing_counts_one": true,
+      "aapl": {
+        "ticker": "AAPL",
+        "has_indexed_filing": true,
+        "indexed_filing_count": 1
+      }
+    },
+    "tests": {
+      "focused": {
+        "passed": 15,
+        "deselected": 23
+      },
+      "catalog_demo_availability": {
+        "passed": 61
+      },
+      "full_backend": {
+        "passed": 102,
+        "subtests_passed": 44,
+        "opt_in_database_tests": true,
+        "provider_mocked": true
+      }
+    },
+    "compile": "passed",
+    "fastapi_import": "passed",
+    "alembic_head": "d7b834408ba8",
+    "alembic_check": "No new upgrade operations detected.",
+    "real_openai_calls": 0,
+    "real_sec_downloads": 0,
+    "git_diff_check": "passed",
+    "documentation_references": {
+      "status": "passed",
+      "checked_internal_file_links": 34
+    },
+    "untracked_whitespace_check": "passed"
+  },
+  "verified_at": "2026-10-04T08:40:09.935865+00:00"
+}

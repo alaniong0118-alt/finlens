@@ -15,6 +15,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import FilingChunk
 from app.answer_service import _get_openai_client
+from app.config import openai_model
 
 ACCESSION = "0000320193-26-000020"
 BASE = f"/companies/AAPL/filings/{ACCESSION}"
@@ -38,8 +39,12 @@ class DatabaseRegression(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.before = database_fingerprint()
-        if cls.before[:2] != (37, 37):
-            raise AssertionError(f"Expected existing 37/37 dataset; got {cls.before[:2]}")
+        with SessionLocal() as session:
+            fixture = session.execute(select(func.count(), func.count(FilingChunk.embedding)).where(
+                FilingChunk.company_cik == "0000320193", FilingChunk.accession_number == ACCESSION,
+            )).one()
+        if fixture != (37, 37):
+            raise AssertionError(f"Expected existing AAPL 37/37 fixture; got {fixture}")
         cls.client = TestClient(app)
         # Entire integration suite is unable to create a real provider client.
         cls.provider_patch = patch("app.answer_service._get_openai_client")
@@ -77,7 +82,11 @@ class DatabaseRegression(unittest.TestCase):
         visa = self.client.get("/companies/V/sources").json()
         indexed = [item for item in apple if item["has_filing_chunks"]]
         self.assertEqual([item["accession_number"] for item in indexed], [ACCESSION])
-        self.assertTrue(all(not item["has_filing_chunks"] for item in visa))
+        with SessionLocal() as session:
+            visa_indexed = set(session.scalars(select(FilingChunk.accession_number).where(
+                FilingChunk.company_cik == "0001403161",
+            )).all())
+        self.assertEqual({item["accession_number"] for item in visa if item["has_filing_chunks"]}, visa_indexed)
         self.assertIn("sec_url", apple[0])
 
     def test_existing_keyword_and_semantic(self):
@@ -108,7 +117,7 @@ class DatabaseRegression(unittest.TestCase):
         self.assertTrue(data["answer"].endswith("[source_1]"))
         self.assertEqual(data["citations"][0]["accession_number"], ACCESSION)
         self.assertEqual(data["citations"][0]["chunk_id"], "chunk_0018")
-        self.assertEqual(data["model"], "gpt-6-astra")
+        self.assertEqual(data["model"], openai_model())
         self.assertTrue({
             "ticker", "company_name", "accession_number", "question", "answer",
             "claims", "citations", "evidence_status", "model",
@@ -193,7 +202,8 @@ class DatabaseRegression(unittest.TestCase):
         with SessionLocal() as session:
             rows = session.execute(select(
                 func.vector_dims(FilingChunk.embedding), func.count(),
-            ).group_by(func.vector_dims(FilingChunk.embedding))).all()
+            ).where(FilingChunk.company_cik == "0000320193", FilingChunk.accession_number == ACCESSION)
+              .group_by(func.vector_dims(FilingChunk.embedding))).all()
         self.assertEqual(rows, [(384, 37)])
 
 

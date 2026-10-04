@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-10-04T07:54:59.736205+00:00",
+  "dry_run": false,
+  "catalog_total": 35,
+  "selected_total": 5,
+  "skipped": 0,
+  "newly_indexed": 5,
+  "resumed": 0,
+  "failed": 0,
+  "final_ready": 6,
+  "openai_calls": 0,
+  "companies": [
+    {
+      "ticker": "JNJ",
+      "company_cik": "0000200406",
+      "accession_number": "0000200406-26-000153",
+      "form": "10-Q",
+      "filed": "2026-07-23",
+      "primary_document": "jnj-20260628.htm",
+      "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000153/0000200406-26-000153-index.html",
+      "chunk_count": 74,
+      "embedding_count": 74,
+      "status": "indexed"
+    },
+    {
+      "ticker": "JPM",
+      "company_cik": "0000019617",
+      "accession_number": "0001628280-26-054343",
+      "form": "10-Q",
+      "filed": "2026-08-06",
+      "primary_document": "jpm-20260630.htm",
+      "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026054343/0001628280-26-054343-index.html",
+      "chunk_count": 278,
+      "embedding_count": 278,
+      "status": "indexed"
+    },
+    {
+      "ticker": "MSFT",
+      "company_cik": "0000789019",
+      "accession_number": "0001193125-26-191507",
+      "form": "10-Q",
+      "filed": "2026-04-29",
+      "primary_document": "msft-20260331.htm",
+      "sec_url": "https://www.sec.gov/Archives/edgar/data/789019/000119312526191507/0001193125-26-191507-index.html",
+      "chunk_count": 92,
+      "embedding_count": 92,
+      "status": "indexed"
+    },
+    {
+      "ticker": "WMT",
+      "company_cik": "0000104169",
+      "accession_number": "0000104169-26-000154",
+      "form": "10-Q",
+      "filed": "2026-08-28",
+      "primary_document": "wmt-20260731.htm",
+      "sec_url": "https://www.sec.gov/Archives/edgar/data/104169/000010416926000154/0000104169-26-000154-index.html",
+      "chunk_count": 57,
+      "embedding_count": 57,
+      "status": "indexed"
+    },
+    {
+      "ticker": "XOM",
+      "company_cik": "0002115436",
+      "accession_number": "0000034088-26-000093",
+      "form": "10-Q",
+      "filed": "2026-08-03",
+      "primary_document": "xom-20260630.htm",
+      "sec_url": "https://www.sec.gov/Archives/edgar/data/2115436/000003408826000093/0000034088-26-000093-index.html",
+      "chunk_count": 41,
+      "embedding_count": 41,
+      "status": "indexed"
+    }
+  ]
+}

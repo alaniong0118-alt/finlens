@@ -2,7 +2,6 @@
 from copy import deepcopy
 from datetime import date
 import json
-import math
 import os
 import sys
 
@@ -60,7 +59,7 @@ def demo_chunks(session):
 
 
 def validate_chunks(chunks, *, require_embeddings=False) -> None:
-    from app.embedding_service import EMBEDDING_DIMENSION
+    from app.embedding_service import validate_embedding
     from app.sec_client import build_filing_url
 
     if not chunks:
@@ -77,10 +76,11 @@ def validate_chunks(chunks, *, require_embeddings=False) -> None:
         if chunk.embedding is None:
             if require_embeddings:
                 raise DemoSetupError("Demo embeddings are incomplete. Run setup_demo again to resume.")
-        elif (len(chunk.embedding) != EMBEDDING_DIMENSION
-              or not all(math.isfinite(float(v)) for v in chunk.embedding)
-              or not any(float(v) != 0 for v in chunk.embedding)):
-            raise DemoSetupError("An existing demo embedding is invalid; inspect it before replacement.")
+        else:
+            try:
+                validate_embedding(chunk.embedding)
+            except ValueError as exc:
+                raise DemoSetupError("An existing demo embedding is invalid; inspect it before replacement.") from exc
 
 
 def ensure_filing_metadata(session) -> bool:

@@ -1,4 +1,6 @@
 from functools import lru_cache
+from array import array
+import math
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,6 +9,20 @@ from app.models import FilingChunk
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMENSION = 384
+
+
+def validate_embedding(vector) -> None:
+    """Validate the float32 representation stored by pgvector, without changing it."""
+    if len(vector) != EMBEDDING_DIMENSION:
+        raise ValueError(f"Embedding must have {EMBEDDING_DIMENSION} dimensions.")
+    try:
+        values = array("f", vector)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Embedding values must be finite float32 numbers.") from exc
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("Embedding values must be finite float32 numbers.")
+    if math.hypot(*values) <= 0:
+        raise ValueError("Embedding norm must be greater than zero.")
 
 
 @lru_cache(maxsize=1)
@@ -52,15 +68,26 @@ def embed_filing_chunks(
         stmt = stmt.where(FilingChunk.accession_number == accession_number)
     stmt = stmt.order_by(FilingChunk.id)
 
-    chunks = list(session.scalars(stmt).all())
-    embedded_count = 0
-    for offset in range(0, len(chunks), batch_size):
-        batch = chunks[offset : offset + batch_size]
-        vectors = embed_texts([chunk.text for chunk in batch])
-        for chunk, vector in zip(batch, vectors, strict=True):
-            chunk.embedding = vector
-        session.flush()
-        embedded_count += len(batch)
+    try:
+        chunks = list(session.scalars(stmt).all())
+        embedded_count = 0
+        for offset in range(0, len(chunks), batch_size):
+            batch = chunks[offset : offset + batch_size]
+            vectors = embed_texts([chunk.text for chunk in batch])
+            if len(vectors) != len(batch):
+                raise ValueError("Encoder output count does not match the chunk batch.")
+            # Validate the entire batch before assignment or flush. Existing
+            # non-null vectors are excluded by the scoped query above.
+            for vector in vectors:
+                validate_embedding(vector)
+            for chunk, vector in zip(batch, vectors, strict=True):
+                chunk.embedding = vector
+            session.flush()
+            embedded_count += len(batch)
 
-    session.commit()
-    return embedded_count
+        session.commit()
+        return embedded_count
+    except BaseException:
+        # Also clear flushed, uncommitted batches after an interruption.
+        session.rollback()
+        raise

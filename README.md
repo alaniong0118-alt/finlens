@@ -229,9 +229,31 @@ The reproducible fixture is official AAPL 10-Q `0000320193-26-000020`, not a dyn
 
 See [backend setup details](backend/README.md#reproducible-demo-setup) and [Windows notes](README-WINDOWS.md). Live answers require a private key, an accessible model, and available API credits. Existing `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` values take precedence over the FINLENS aliases.
 
+## Catalog filing indexing
+
+After configuring the database, schema, and SEC contact as in Quick Start, run from `backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.index_catalog
+# Discover a subset without changing the database:
+.\.venv\Scripts\python.exe -m scripts.index_catalog --ticker MSFT --ticker XOM --dry-run --report reports/discovery.json
+# Retry only an affected company:
+.\.venv\Scripts\python.exe -m scripts.index_catalog --ticker MSFT
+```
+
+This indexes the stored catalog using official SEC submissions: latest exact 10-Q first, latest exact 10-K as fallback. Existing complete filings are skipped; existing chunks with missing embeddings are resumed without downloading again. It preserves company identities, financial facts, existing chunks and vectors. Run one indexing process at a time. No OpenAI key or call is involved; MiniLM runs locally and may need its initial model download.
+
+New indexed filings appear in `/companies/{ticker}/sources` even without imported metrics. Availability follows persisted embeddings automatically. Indexed coverage does not prove retrieval quality or factual support of generated answers across every company.
+
+Recorded Item 5 acceptance: **35/35 Ready**, 35 accessions, **3,175 chunks / 3,175 embeddings**. Original 3,251 financial facts and AAPL's 37 chunks/vectors are preserved. Representative AAPL/MSFT/JPM/JNJ/XOM/WMT search/context lineage passed; default rerun skipped all companies without mutations. See [batch report](backend/reports/catalog_indexing_batch.json), [rerun report](backend/reports/catalog_indexing.json), and [database/API verification](backend/reports/catalog_indexing_verification.json). Real LLM claim auditing remains pending.
+
+Latest backend regression after the Item 5 review fixes: **102 tests and 44 subtests passed**, including the opt-in read-only local AAPL suite with a mocked provider. Alembic check is clean. The [review-fix verification](backend/reports/item5_review_fixes_verification.json) records unchanged database fingerprints. Frontend was unchanged; its historical verification above was not repeated.
+
+The default machine-readable report is `backend/reports/catalog_indexing.json`; `--report` keeps a separately named run. Each result records identity, accession/form/date/primary document, official SEC URL, chunk/vector counts, action, and safe failure category. Diagnostic counts may be null when database reads fail; an unavailable final readiness check adds `catalog_error` and null `final_ready`. Exit 0 means the selected scope succeeded; exit 1 means a company failed, database readiness could not be checked, or the command could not start/write its report. Other companies continue after individual failures. Re-running resumes from the database; no reset or replacement is performed. Valid complete accessions are skipped independently of malformed/incomplete siblings, which appear in `accession_diagnostics`. Generated vectors are validated before persistence; failed embedding transactions retain committed chunks for recovery. Inspect invalid existing data before retrying. Network retries are bounded; wait and check SEC access/contact configuration after persistent failures. See [data policy](docs/data-sources.md#baseline-catalog-indexing).
+
 ## Limitations
 
-- Recorded retrieval validation covers one Apple 10-Q, `0000320193-26-000020`, not general company/period performance.
+- Historical detailed retrieval evaluation covers Apple 10-Q `0000320193-26-000020`; representative indexing smoke checks do not establish general company/period retrieval quality.
 - No database dump, dependencies, or model cache is distributed; this is not a preloaded hosted demo.
 - Lexical ranking scans one filing; larger datasets need indexed candidates.
 - Flattened tables and overlap complicate period and numerical-column interpretation.

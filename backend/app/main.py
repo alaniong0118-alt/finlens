@@ -331,11 +331,12 @@ def get_company_sources(
 
         grouped: dict[str, dict] = {}
 
-        searchable_accessions = set(session.scalars(
-            select(FilingChunk.accession_number)
+        indexed_metadata = session.execute(
+            select(FilingChunk.accession_number, FilingChunk.form, FilingChunk.filed)
             .where(FilingChunk.company_cik == company.cik)
             .distinct()
-        ).all())
+        ).all()
+        searchable_accessions = {row.accession_number for row in indexed_metadata}
 
         for fact in facts:
             accession = fact.accession_number
@@ -375,6 +376,14 @@ def get_company_sources(
             ):
                 item["period_end"] = fact.period_end
 
+        # Filing indexing does not import financial facts. Expose chunk-backed
+        # sources without inventing financial periods or metrics.
+        for accession, form, filed in indexed_metadata:
+            grouped.setdefault(accession, {
+                "accession_number": accession, "form": form, "filed": filed,
+                "period_start": None, "period_end": None, "metrics": set(),
+            })
+
         sources = []
 
         for item in grouped.values():
@@ -398,7 +407,7 @@ def get_company_sources(
                 )
             )
 
-        return sources
+        return sorted(sources, key=lambda source: (str(source.filed or ""), source.accession_number), reverse=True)
 @app.get(
     "/companies/{ticker}/filings/{accession_number}/text"
 )

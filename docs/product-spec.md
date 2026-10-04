@@ -38,7 +38,7 @@ Each factual claim must be traceable through citation ID, actual supplied SOURCE
 
 - Company Ready means at least one matching chunk with a non-null usable embedding. `indexed_filing_count` counts distinct accessions over those chunks, not chunk rows; availability updates automatically when data arrives.
 - Preserve the current stable company order and select the first Ready company by default; fall back to the first company only when none is Ready. Do not hide unindexed companies or determine availability with per-company HTTP requests.
-- The existing sources response marks `has_filing_chunks` from chunk presence, while company Ready also requires embeddings. These fields have different semantics; future indexing/evaluation must account for incomplete embedding coverage and sources currently derived from financial facts.
+- The sources response merges fact-backed and chunk-backed filing metadata. Chunk-only filings have empty metrics and unknown financial period fields. `has_filing_chunks` describes chunk presence, while company Ready also requires embeddings; these fields have different semantics. Catalog indexing validates every selected filing's vectors before reporting completion.
 - Not indexed is a data state with a clear recovery action. Ask remains disabled; switching company/filing clears stale answers/errors and guards against late requests. Retain labels, keyboard focus, responsive layouts, and text status indicators.
 
 ## Boundaries and acceptance

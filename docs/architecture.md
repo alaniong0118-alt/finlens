@@ -61,6 +61,14 @@ Complete chunks/vectors are validated with no network/model call. Missing vector
 
 The existing parser, retrieval thresholds, answer API, embedding model, and vector dimensions are unchanged. The setup is a single public filing fixture, not multi-company ingestion.
 
+## Catalog filing indexing
+
+`backend/scripts/index_catalog.py` delegates to `catalog_indexing_service.py`. It reads the stored company catalog, validates existing chunks/vectors, skips complete coverage without network/model calls, and resumes missing embeddings. For companies without chunks, `sec_client.py` discovers an exact 10-Q/10-K through official submissions metadata. The existing `sec_filing_service.py` accepts that metadata and a non-replacing persistence option, reusing the same parser and chunker. Existing legacy callers retain their original interface.
+
+Chunks commit per filing before scoped embedding work. A company failure rolls back its current transaction and is classified in the report; subsequent companies continue. Committed chunks can be resumed without re-downloading. No financial fact import, schema change, OpenAI dependency, availability override, or new ingestion store is involved. Invalid persisted metadata/vectors are reported rather than replaced. The database is the recovery source of truth; report files describe each run.
+
+`/sources` merges metadata from facts and chunks in three bounded queries (company, facts, distinct chunk metadata), exposing indexed filings even without financial facts. Financial period fields remain unknown in that case. `/companies` retains its one-query distinct-accession availability aggregation. See [indexing usage](../README.md#catalog-filing-indexing) and [source selection policy](data-sources.md#baseline-catalog-indexing).
+
 ## Verification boundary
 
 Recorded: 41 backend tests, 6 frontend tests, lint/build passing, Alembic clean, 37 chunks/37 vectors, and citation lineage checked. Provider mocks test deterministic behavior. Real requests encountered exhausted credits; no successful real claim audit is claimed.

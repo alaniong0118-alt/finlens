@@ -5,6 +5,7 @@ from app.models import Company, FinancialFact, FilingChunk
 from app.sec_client import (
     build_filing_url,
     get_filing_raw_text,
+    FilingMetadata,
 )
 from app.sec_parser import (
     chunk_filing_text,
@@ -16,8 +17,19 @@ def ingest_filing_chunks(
     session: Session,
     company: Company,
     accession_number: str,
+    *,
+    metadata: FilingMetadata | None = None,
+    preserve_existing: bool = False,
 ) -> int:
-    filing = session.scalar(
+    if preserve_existing:
+        existing = session.scalars(select(FilingChunk).where(
+            FilingChunk.company_cik == company.cik,
+            FilingChunk.accession_number == accession_number,
+        )).all()
+        if existing:
+            return len(existing)
+
+    filing = metadata or session.scalar(
         select(FinancialFact)
         .where(
             FinancialFact.company_cik == company.cik,
@@ -36,6 +48,9 @@ def ingest_filing_chunks(
         )
 
     form = filing.form
+
+    if metadata and (metadata.company_cik != company.cik or metadata.accession_number != accession_number):
+        raise ValueError("Filing metadata does not match the requested identity.")
 
     if not form:
         raise ValueError(
@@ -56,14 +71,18 @@ def ingest_filing_chunks(
         parsed["text"]
     )
 
-    session.execute(
-        delete(FilingChunk).where(
-            FilingChunk.company_cik
-            == company.cik,
-            FilingChunk.accession_number
-            == accession_number,
+    if metadata and parsed["filename"] != metadata.primary_document:
+        raise ValueError("Primary document does not match SEC submissions metadata.")
+    if not chunks:
+        raise ValueError("Filing contains no usable text chunks.")
+
+    if not preserve_existing:
+        session.execute(
+            delete(FilingChunk).where(
+                FilingChunk.company_cik == company.cik,
+                FilingChunk.accession_number == accession_number,
+            )
         )
-    )
 
     sec_url = build_filing_url(
         company.cik,
