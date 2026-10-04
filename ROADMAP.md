@@ -16,14 +16,16 @@ Current DB/API inspection: 35 companies, 3,251 financial facts, 3,175 filing chu
 
 OpenAI integration and citation identity checks exist. [Recorded acceptance](backend/reports/final_verification.md) and [evaluation](backend/reports/rag_evaluation.json) show exhausted API credits and no completed real claim audit. Historical test results are scoped evidence, not proof across future companies or filings.
 
+**Item 6 — Standardized Financial Metrics Layer: completed within existing-data scope.** Central registry, date-aware selection, Decimal formulas, typed summary/history APIs and input/source provenance are implemented without modifying facts or schema. The real 35-company audit found structured facts for ten companies only: revenue/net income/YoY revenue growth/net margin available for 10/35, EPS for 9/35, remaining definitions unavailable (JPM gross profit/margin not applicable). Conditional primary concepts/formulas have fixture coverage, not claimed issuer data coverage. All original table hashes remain unchanged; 35 focused tests, 137 backend tests and 44 subtests passed. See [contracts](docs/financial-metrics.md) and [coverage/source verification](backend/reports/financial_metrics_verification.json). Research Mode frontend/dashboard work has not started.
+
 ## Phases and exit gates
 
-Phase 1 is **completed** within baseline coverage scope; Phases 2–7 remain **planned**. Preserve working foundations; prioritize usable data and research before broader AI features. Financial Metrics Layer has not started.
+Phases 1 and 2 are **completed** within their documented baseline/existing-data scope; Phases 3–7 remain **planned**. Preserve working foundations; broader structured-data coverage requires a separately scoped acquisition plan.
 
 | Phase | Deliverable | Completion gate |
 |---|---|---|
 | 1. Curated catalog and baseline filing coverage | Completed: 35 curated SEC-reporting public companies, each with one usable indexed SEC filing. Verified identity, coverage, indexing/rerun outcomes are recorded. | 35/35 Ready by the DB-derived definition; safe rerun, failure-isolation tests, original-data preservation, and representative lineage checks passed. |
-| 2. Financial Metrics Layer | A stable metric vocabulary and API over SEC concepts; deterministic metrics, ratios, period alignment, and provenance. | Representative company/industry fixtures verify units, fiscal periods, missing values, restatements, and formulas. Raw XBRL concepts are retained as provenance rather than the public API contract. |
+| 2. Financial Metrics Layer | Completed: canonical registry and typed API over existing SEC facts, period-aware selection, deterministic calculations and source/input provenance. | Unit/period/restatement/formula fixtures, 35-company coverage audit, representative available/missing-source checks, bounded queries and preservation passed. Broader issuer/concept data coverage remains limited and explicit. |
 | 3. Complete Research Mode | Metrics, historical trends, charts, comparisons, filing discovery, hybrid search, evidence excerpts, and official SEC links in the frontend. | The end-to-end research workflow is useful with no LLM or OpenAI key. Calculations are deterministic and source-backed; missing data is visible. |
 | 4. Flagship depth and formal evaluation | Deeper 10-Q/10-K coverage for 8–10 flagship companies; versioned retrieval and data-quality evaluation across companies and fiscal periods. | Coverage is explicit; measured retrieval relevance, numerical/period accuracy, provenance, and abstention meet documented thresholds, including negative and ambiguous questions. |
 | 5. Optional AI Analysis | Retain grounded single-filing Q&A; add multi-filing and cross-company synthesis only after Phases 2–4 provide reliable inputs and evaluated retrieval. | Research Mode survives missing credentials/provider failures. Real claim-level audits pass within the declared scope; no unresolved NOT_SUPPORTED claims. Source/company/period boundaries hold across filings. |
@@ -39,6 +41,8 @@ Target revenue, gross profit, operating income, net income, EPS, cash, assets, l
 ### Data and evaluation gates
 
 Basic indexing is distinct from deeper coverage. Track both without counting chunks as filings. Bulk jobs must be resumable and protect existing facts/vectors; review the existing replacing importer before using it in a catalog workflow. See [data sources](docs/data-sources.md).
+
+**Item 7 prerequisite — structured-data ingestion safety (not started):** Before expanding FinancialFact coverage from 10/35 to 35/35, audit/fix the current importer's destructive per-metric replacement and early cross-concept deduplication. Preserve original rows and candidate scope/restatement provenance, with idempotency, recovery and fingerprint validation. This is future work; Item 6 review fixes do not invoke or change ingestion. The Item 6 paragraph above records initial validation; current scope-aware coverage and follow-up checks are in the [verification report](backend/reports/financial_metrics_verification.json) and [metric contracts](docs/financial-metrics.md).
 
 Establish evaluation fixtures and baselines as data expands, not only at the end of Phase 4. Record dataset/version, question classes, expected evidence, scope, quality thresholds, failure examples, and runtime. A valid citation ID proves identity, not factual support. Preserve reports instead of overwriting historical outcomes.
 

@@ -251,6 +251,19 @@ Latest backend regression after the Item 5 review fixes: **102 tests and 44 subt
 
 The default machine-readable report is `backend/reports/catalog_indexing.json`; `--report` keeps a separately named run. Each result records identity, accession/form/date/primary document, official SEC URL, chunk/vector counts, action, and safe failure category. Diagnostic counts may be null when database reads fail; an unavailable final readiness check adds `catalog_error` and null `final_ready`. Exit 0 means the selected scope succeeded; exit 1 means a company failed, database readiness could not be checked, or the command could not start/write its report. Other companies continue after individual failures. Re-running resumes from the database; no reset or replacement is performed. Valid complete accessions are skipped independently of malformed/incomplete siblings, which appear in `accession_diagnostics`. Generated vectors are validated before persistence; failed embedding transactions retain committed chunks for recovery. Inspect invalid existing data before retrying. Network retries are bounded; wait and check SEC access/contact configuration after persistent failures. See [data policy](docs/data-sources.md#baseline-catalog-indexing).
 
+## Standardized financial metrics
+
+Research APIs work without an OpenAI key:
+
+```text
+GET /companies/AAPL/financials/summary?period=quarter
+GET /companies/MSFT/financials/metrics/revenue?period=annual&limit=10
+```
+
+Fifteen canonical definitions provide date-aware summaries/history, Decimal calculations, explicit missing values and SEC fact/input provenance. Current data supports reported revenue/net income/compatible YoY growth for 10/35 companies, EPS for 9/35 and approved net margins for 3/35. Customer-contract revenue is explicitly labelled; it cannot establish a consolidated margin denominator alone. EPS histories expose unverified share-basis comparability. All 35 filing-ready companies are audited, including missing structured data for the 25 additions. Values serialize as decimal strings; ratios use `0.25` for 25%. See [metric contracts](docs/financial-metrics.md) and [coverage/preservation verification](backend/reports/financial_metrics_verification.json).
+
+Item 6 review-fix verification: **66 focused tests**, **168 backend tests and 44 subtests** passed, including the provider-mocked database suite. Permanent fiscal-calendar, revenue-scope, EPS and history-content regressions cover the review findings. Twenty-six real HTTP histories (716 observations), ten summaries, two-SELECT summaries and Alembic checks passed; all database fingerprints are unchanged. The linked report retains initial validation separately. This is backend Research Mode infrastructure; dashboard/chart work and live LLM auditing remain pending.
+
 ## Limitations
 
 - Historical detailed retrieval evaluation covers Apple 10-Q `0000320193-26-000020`; representative indexing smoke checks do not establish general company/period retrieval quality.

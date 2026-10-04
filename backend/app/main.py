@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import distinct, func, select, text
@@ -30,6 +30,8 @@ from app.answer_service import (
     answer_filing_question,
 )
 from app.models import Company, FinancialFact, FilingChunk
+from app.financial_metrics_service import load_financial_metrics, UnknownCompany, UnknownMetric
+from app.financial_metric_schemas import NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
 from app.schemas import (
     CompanyResponse,
     FinancialSourceResponse,
@@ -138,6 +140,27 @@ def get_companies() -> list[CompanyResponse]:
             )
             for company, count in rows
         ]
+
+
+@app.get("/companies/{ticker}/financials/summary", response_model=NormalizedFinancialSummary)
+def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
+    with SessionLocal() as session:
+        try:
+            return load_financial_metrics(session, ticker).summary(period)
+        except UnknownCompany:
+            raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
+
+
+@app.get("/companies/{ticker}/financials/metrics/{metric}", response_model=NormalizedMetricHistory)
+def normalized_metric_history(ticker: str, metric: str, period: PeriodKind = "quarter",
+                              limit: int = Query(default=40, ge=1, le=200)):
+    with SessionLocal() as session:
+        try:
+            return load_financial_metrics(session, ticker).history(metric, period, limit)
+        except UnknownCompany:
+            raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
+        except UnknownMetric:
+            raise HTTPException(404, detail={"code": "unknown_metric", "metric": metric})
 
 
 @app.get(

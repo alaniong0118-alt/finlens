@@ -17,7 +17,7 @@ Arbitrary scraped pages, search snippets, and model knowledge are not authoritat
 
 ## Current stored provenance
 
-`FinancialFact` retains company CIK, canonical metric, source string identifying the SEC concept, value/unit, period start/end/type, fiscal year/period, form, filed date, accession, frame, and creation timestamp. Creation time is not a guarantee of source refresh time. The broader normalized metric API and explicit refresh/derivation lineage remain planned.
+`FinancialFact` retains company CIK, canonical metric, source string identifying the SEC concept, value/unit, period start/end/type, fiscal year/period, form, filed date, accession, frame, and creation timestamp. Creation time is not a guarantee of source refresh time. The [normalized metric API](financial-metrics.md) exposes selected/alternative source rows and deterministic derivation inputs without modifying stored facts. Filing-context fiscal labels remain separate from normalized observation labels; explicit refresh workflows remain planned.
 
 `FilingChunk` retains company CIK, accession, form, filed date, filename, chunk identity/index, cleaned-text offsets, text, official SEC URL, and optional embedding. Offsets refer to cleaned text, not raw HTML byte positions. Flattened tables can lose numerical-column relationships; extraction success is not proof of interpretation accuracy.
 

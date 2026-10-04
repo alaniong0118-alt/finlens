@@ -10,7 +10,8 @@ FinLens helps users inspect public-company financial information and SEC filings
 
 - A local Next.js workspace selects a company and indexed filing, accepts a question, and renders optional generated answers with claims and citations. Empty, loading, Not indexed, insufficient-evidence, and error states are explicit.
 - FastAPI already provides company metadata, financial summary/snapshot/history, filing sources, keyword/semantic search, hybrid context, and optional answers. Financial/search/context APIs do not require OpenAI; the frontend does not yet expose a complete research workflow without generated answers.
-- Financial import supports revenue, net income, and diluted EPS, with existing growth/margin analysis. This is a foundation for the broader standardized Metrics Layer, not its completed contract.
+- Financial import supports revenue, net income, and diluted EPS. The standardized [Metrics Layer](financial-metrics.md) exposes 15 canonical definitions with typed summaries/history, deterministic calculations, explicit unavailable results and SEC provenance. Current real coverage is limited to the stored concepts; additional definitions/formulas are validated with fixtures.
+- Reported revenue carries its economic basis; component-only observations do not establish consolidated margins. Ambiguous fiscal years remain null, and EPS histories explicitly mark share-basis comparability unverified.
 - Indexed availability is derived from stored evidence. Recorded coverage and acceptance limitations live in the roadmap and linked reports, not in hardcoded company rules.
 
 ## Target Research Mode
@@ -26,7 +27,7 @@ The core journey must work with no LLM or OpenAI key:
 - Important financial values preserve company, source, unit, period, filing/form, filed date, and relevant update/derivation lineage. Clicking evidence leads to an official source.
 - Missing AI credentials, quota exhaustion, or provider outage must leave Research Mode usable. The planned UI explains optional AI availability in user terms, rather than making API configuration its main interaction.
 
-These are future acceptance contracts; this documentation task does not implement them.
+The standardized financial API is implemented; the complete Research Mode frontend, charts and comparisons remain future work.
 
 ## Optional AI Analysis
 

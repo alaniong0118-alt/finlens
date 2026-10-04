@@ -8,6 +8,7 @@ Ingestion and answering are separate. Questions read stored chunks scoped by com
 |---|---|
 | API and error mapping | `backend/app/main.py` |
 | SEC / metric import | `sec_client.py`, `sec_importer.py` |
+| Canonical financial metrics | `financial_metric_registry.py`, `financial_metrics_service.py`, `financial_metric_schemas.py` |
 | Document extraction / cleanup / chunking | `sec_parser.py` |
 | Persistence / embeddings | `sec_filing_service.py`, `embedding_service.py` |
 | Retrieval / evidence | `filing_search_service.py`, `evidence_policy.py` |
@@ -68,6 +69,10 @@ The existing parser, retrieval thresholds, answer API, embedding model, and vect
 Chunks commit per filing before scoped embedding work. A company failure rolls back its current transaction and is classified in the report; subsequent companies continue. Committed chunks can be resumed without re-downloading. No financial fact import, schema change, OpenAI dependency, availability override, or new ingestion store is involved. Invalid persisted metadata/vectors are reported rather than replaced. The database is the recovery source of truth; report files describe each run.
 
 `/sources` merges metadata from facts and chunks in three bounded queries (company, facts, distinct chunk metadata), exposing indexed filings even without financial facts. Financial period fields remain unknown in that case. `/companies` retains its one-query distinct-accession availability aggregation. See [indexing usage](../README.md#catalog-filing-indexing) and [source selection policy](data-sources.md#baseline-catalog-indexing).
+
+## Standardized financial metrics
+
+The read-only metrics service loads a company's stored facts once, resolves original concepts and revenue economic scope, selects compatible date-based periods and calculates Decimal ratios/FCF with input provenance. Ambiguous years remain null; unapproved revenue bases cannot produce consolidated margins or incompatible YoY growth. EPS history exposes unverified share-basis comparability. Dedicated typed `/financials/summary` and `/financials/metrics/{metric}` routes preserve legacy financial APIs. No normalized table, migration, ingestion change or AI dependency is required. Coverage is independent of filing readiness: current structured facts cover ten companies and three base metrics only. See [metric contracts and limitations](financial-metrics.md) and [all-company verification](../backend/reports/financial_metrics_verification.json).
 
 ## Verification boundary
 
