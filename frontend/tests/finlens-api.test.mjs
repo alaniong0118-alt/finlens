@@ -4,9 +4,11 @@ import {
   FinLensApiError,
   citationForClaim,
   describeApiError,
+  firstReadyCompany,
   getAnswer,
   getCompanies,
   getFilingSources,
+  readyCompanyCount,
   searchableFilings,
 } from "../lib/finlens-api.ts";
 
@@ -24,12 +26,28 @@ test("loads companies from the live API path", async (context) => {
   const calls = [];
   context.mock.method(globalThis, "fetch", async (url, options) => {
     calls.push({ url, options });
-    return jsonResponse([{ id: 1, ticker: "AAPL", name: "Apple Inc." }]);
+    return jsonResponse([{ id: 1, ticker: "AAPL", name: "Apple Inc.", cik: "0000320193", exchange: "NASDAQ", has_indexed_filing: true, indexed_filing_count: 1 }]);
   });
   const companies = await getCompanies();
   assert.equal(companies[0].ticker, "AAPL");
+  assert.equal(companies[0].has_indexed_filing, true);
+  assert.equal(companies[0].indexed_filing_count, 1);
+  assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "/api/finlens/companies");
   assert.equal(calls[0].options.cache, "no-store");
+});
+
+test("selects the first Ready company in stable order and counts readiness", () => {
+  const companies = [
+    { ticker: "MSFT", has_indexed_filing: false, indexed_filing_count: 0 },
+    { ticker: "AAPL", has_indexed_filing: true, indexed_filing_count: 1 },
+    { ticker: "NVDA", has_indexed_filing: true, indexed_filing_count: 2 },
+  ];
+  assert.equal(firstReadyCompany(companies).ticker, "AAPL");
+  assert.equal(readyCompanyCount(companies), 2);
+  assert.equal(firstReadyCompany([companies[0]]).ticker, "MSFT");
+  assert.equal(readyCompanyCount([companies[0]]), 0);
+  assert.equal(firstReadyCompany([]), undefined);
 });
 
 test("uses the existing source API and keeps only searchable filings", async (context) => {

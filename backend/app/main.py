@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, text
+from sqlalchemy import distinct, func, select, text
 from app.sec_client import (
     build_filing_url,
     build_filing_raw_url,
@@ -106,12 +106,38 @@ def database_health() -> DatabaseHealthResponse:
     response_model=list[CompanyResponse],
 )
 def get_companies() -> list[CompanyResponse]:
+    indexed_filings = (
+        select(
+            FilingChunk.company_cik.label("company_cik"),
+            func.count(distinct(FilingChunk.accession_number)).label(
+                "indexed_filing_count"
+            ),
+        )
+        .where(FilingChunk.embedding.is_not(None))
+        .group_by(FilingChunk.company_cik)
+        .subquery()
+    )
     with SessionLocal() as session:
-        companies = session.scalars(
-            select(Company).order_by(Company.ticker)
+        rows = session.execute(
+            select(
+                Company,
+                func.coalesce(indexed_filings.c.indexed_filing_count, 0),
+            )
+            .outerjoin(indexed_filings, Company.cik == indexed_filings.c.company_cik)
+            .order_by(Company.ticker)
         ).all()
-
-        return list(companies)
+        return [
+            CompanyResponse(
+                id=company.id,
+                ticker=company.ticker,
+                name=company.name,
+                cik=company.cik,
+                exchange=company.exchange,
+                has_indexed_filing=count > 0,
+                indexed_filing_count=count,
+            )
+            for company, count in rows
+        ]
 
 
 @app.get(

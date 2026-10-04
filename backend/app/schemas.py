@@ -45,6 +45,8 @@ class CompanyResponse(BaseModel):
     name: str
     cik: str
     exchange: str
+    has_indexed_filing: bool
+    indexed_filing_count: int
 
 
 class MetricPeriodResponse(BaseModel):

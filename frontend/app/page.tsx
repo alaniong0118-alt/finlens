@@ -7,6 +7,8 @@ import {
   getAnswer,
   getCompanies,
   getFilingSources,
+  firstReadyCompany,
+  readyCompanyCount,
   searchableFilings,
   type Company,
   type FilingAnswer,
@@ -45,6 +47,7 @@ export default function Home() {
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const sourceRequestId = useRef(0);
   const questionInput = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -53,7 +56,7 @@ export default function Home() {
       .then((data) => {
         if (!active) return;
         setCompanies(data);
-        setTicker(data[0]?.ticker ?? "");
+        setTicker(firstReadyCompany(data)?.ticker ?? "");
       })
       .catch((error: unknown) => {
         if (active) setCompanyError(describeApiError(error));
@@ -66,28 +69,30 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
+    const thisRequest = ++sourceRequestId.current;
     setFilings([]);
     setAccession("");
     setFilingError(null);
-    if (!ticker) {
+    const selectedCompany = companies.find((item) => item.ticker === ticker);
+    if (!selectedCompany?.has_indexed_filing) {
       setFilingLoading(false);
       return;
     }
     setFilingLoading(true);
     getFilingSources(ticker)
       .then((data) => {
-        if (!active) return;
+        if (!active || sourceRequestId.current !== thisRequest) return;
         setFilings(data);
         setAccession(searchableFilings(data)[0]?.accession_number ?? "");
       })
       .catch((error: unknown) => {
-        if (active) setFilingError(describeApiError(error));
+        if (active && sourceRequestId.current === thisRequest) setFilingError(describeApiError(error));
       })
       .finally(() => {
-        if (active) setFilingLoading(false);
+        if (active && sourceRequestId.current === thisRequest) setFilingLoading(false);
       });
     return () => { active = false; };
-  }, [ticker]);
+  }, [ticker, companies]);
 
   const company = useMemo(
     () => companies.find((item) => item.ticker === ticker),
@@ -98,7 +103,7 @@ export default function Home() {
     () => indexedFilings.find((item) => item.accession_number === accession),
     [indexedFilings, accession],
   );
-  const canAsk = Boolean(accession && question.trim() && !askLoading && !filingLoading);
+  const canAsk = Boolean(company?.has_indexed_filing && filing && question.trim() && !askLoading && !filingLoading);
 
   function resetAnswer() {
     requestId.current += 1;
@@ -110,7 +115,7 @@ export default function Home() {
   async function ask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const currentQuestion = question.trim();
-    if (!accession || !ticker || !currentQuestion || askLoading) return;
+    if (!company?.has_indexed_filing || !filing || !accession || !ticker || !currentQuestion || askLoading || filingLoading) return;
 
     const thisRequest = ++requestId.current;
     setAskLoading(true);
@@ -183,6 +188,11 @@ export default function Home() {
                   value={ticker}
                   onChange={(event) => {
                     resetAnswer();
+                    sourceRequestId.current += 1;
+                    setFilings([]);
+                    setAccession("");
+                    setFilingError(null);
+                    setFilingLoading(false);
                     setTicker(event.target.value);
                   }}
                   disabled={companyLoading || Boolean(companyError)}
@@ -191,12 +201,19 @@ export default function Home() {
                   {companyLoading && <option value="">Loading companies…</option>}
                   {!companyLoading && companies.length === 0 && <option value="">No companies available</option>}
                   {companies.map((item) => (
-                    <option key={item.id} value={item.ticker}>{item.ticker} — {item.name}</option>
+                    <option key={item.id} value={item.ticker}>
+                      {item.ticker} — {item.name} · {item.has_indexed_filing ? "Ready" : "Not indexed"}
+                    </option>
                   ))}
                 </select>
                 {company && (
                   <p className="mt-2 text-xs text-slate-500">
                     {company.exchange} · CIK {company.cik}
+                  </p>
+                )}
+                {!companyLoading && !companyError && companies.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {readyCompanyCount(companies)} of {companies.length} companies ready for filing Q&amp;A
                   </p>
                 )}
                 {companyError && <p role="alert" className="mt-2 text-sm text-red-700">{companyError}</p>}
@@ -213,7 +230,7 @@ export default function Home() {
                     resetAnswer();
                     setAccession(event.target.value);
                   }}
-                  disabled={filingLoading || indexedFilings.length === 0}
+                  disabled={!company?.has_indexed_filing || filingLoading || indexedFilings.length === 0}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm text-slate-900 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15 disabled:bg-slate-100"
                 >
                   {filingLoading && <option value="">Loading filings…</option>}
@@ -235,6 +252,29 @@ export default function Home() {
                   <p className="mt-2 text-xs text-slate-500">
                     Available record: {filing.form ?? "SEC filing"} filed {formatDate(filing.filed)}
                   </p>
+                )}
+                {company && !company.has_indexed_filing && (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                    <p className="font-semibold text-[#102a35]">Not indexed for filing Q&amp;A</p>
+                    <p className="mt-1">FinLens has company data for this issuer, but no SEC filing has been prepared for evidence-grounded Q&amp;A yet.</p>
+                    {firstReadyCompany(companies)?.has_indexed_filing && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetAnswer();
+                          sourceRequestId.current += 1;
+                          setFilings([]);
+                          setAccession("");
+                          setFilingError(null);
+                          setFilingLoading(false);
+                          setTicker(firstReadyCompany(companies)!.ticker);
+                        }}
+                        className="mt-2 font-semibold text-teal-800 underline decoration-teal-300 underline-offset-4 hover:text-teal-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                      >
+                        Choose a Ready company
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -340,11 +380,6 @@ export default function Home() {
                     ))}
                   </ol>
                   <p className="mt-5 max-w-sm text-xs leading-5 text-slate-500">When the retrieved evidence is insufficient, FinLens abstains rather than generating an answer.</p>
-                  {!filingLoading && ticker && indexedFilings.length === 0 && (
-                    <p className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      This company has no filing text indexed for Q&amp;A yet. Select a company with an indexed filing.
-                    </p>
-                  )}
                 </div>
               )}
 

@@ -6,7 +6,17 @@ export type Company = {
   name: string;
   cik: string;
   exchange: string;
+  has_indexed_filing: boolean;
+  indexed_filing_count: number;
 };
+
+export function firstReadyCompany(companies: Company[]): Company | undefined {
+  return companies.find((company) => company.has_indexed_filing) ?? companies[0];
+}
+
+export function readyCompanyCount(companies: Company[]): number {
+  return companies.filter((company) => company.has_indexed_filing).length;
+}
 
 export type FilingSource = {
   accession_number: string;
