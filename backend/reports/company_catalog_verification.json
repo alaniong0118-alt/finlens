@@ -1,0 +1,1075 @@
+{
+  "source_url": "https://www.sec.gov/files/company_tickers_exchange.json",
+  "retrieved_at_utc": "2026-10-04T07:32:39.860392+00:00",
+  "response_sha256": "a7c2a7cbec590c0b293bfe945b097dd9a4bac8c2e6cd9fca35e8f51a65f21d19",
+  "http_status": 200,
+  "normalization": "SEC name preserved verbatim; CIK zero-padded to 10 digits; exchange uppercased; existing 10 records unchanged.",
+  "added_companies": [
+    {
+      "sec_record": {
+        "cik": 70858,
+        "name": "BANK OF AMERICA CORP /DE/",
+        "ticker": "BAC",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "BAC",
+        "name": "BANK OF AMERICA CORP /DE/",
+        "cik": "0000070858",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 886982,
+        "name": "GOLDMAN SACHS GROUP INC",
+        "ticker": "GS",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "GS",
+        "name": "GOLDMAN SACHS GROUP INC",
+        "cik": "0000886982",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 895421,
+        "name": "MORGAN STANLEY",
+        "ticker": "MS",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "MS",
+        "name": "MORGAN STANLEY",
+        "cik": "0000895421",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 1141391,
+        "name": "Mastercard Inc",
+        "ticker": "MA",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "MA",
+        "name": "Mastercard Inc",
+        "cik": "0001141391",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 4962,
+        "name": "AMERICAN EXPRESS CO",
+        "ticker": "AXP",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "AXP",
+        "name": "AMERICAN EXPRESS CO",
+        "cik": "0000004962",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 909832,
+        "name": "COSTCO WHOLESALE CORP /NEW",
+        "ticker": "COST",
+        "exchange": "Nasdaq"
+      },
+      "catalog_record": {
+        "ticker": "COST",
+        "name": "COSTCO WHOLESALE CORP /NEW",
+        "cik": "0000909832",
+        "exchange": "NASDAQ"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 354950,
+        "name": "HOME DEPOT, INC.",
+        "ticker": "HD",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "HD",
+        "name": "HOME DEPOT, INC.",
+        "cik": "0000354950",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 21344,
+        "name": "COCA COLA CO",
+        "ticker": "KO",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "KO",
+        "name": "COCA COLA CO",
+        "cik": "0000021344",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 77476,
+        "name": "PEPSICO INC",
+        "ticker": "PEP",
+        "exchange": "Nasdaq"
+      },
+      "catalog_record": {
+        "ticker": "PEP",
+        "name": "PEPSICO INC",
+        "cik": "0000077476",
+        "exchange": "NASDAQ"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 63908,
+        "name": "MCDONALDS CORP",
+        "ticker": "MCD",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "MCD",
+        "name": "MCDONALDS CORP",
+        "cik": "0000063908",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 1744489,
+        "name": "Walt Disney Co",
+        "ticker": "DIS",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "DIS",
+        "name": "Walt Disney Co",
+        "cik": "0001744489",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 200406,
+        "name": "JOHNSON & JOHNSON",
+        "ticker": "JNJ",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "JNJ",
+        "name": "JOHNSON & JOHNSON",
+        "cik": "0000200406",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 59478,
+        "name": "ELI LILLY & Co",
+        "ticker": "LLY",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "LLY",
+        "name": "ELI LILLY & Co",
+        "cik": "0000059478",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 310158,
+        "name": "Merck & Co., Inc.",
+        "ticker": "MRK",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "MRK",
+        "name": "Merck & Co., Inc.",
+        "cik": "0000310158",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 1551152,
+        "name": "AbbVie Inc.",
+        "ticker": "ABBV",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "ABBV",
+        "name": "AbbVie Inc.",
+        "cik": "0001551152",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 731766,
+        "name": "UNITEDHEALTH GROUP INC",
+        "ticker": "UNH",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "UNH",
+        "name": "UNITEDHEALTH GROUP INC",
+        "cik": "0000731766",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 2115436,
+        "name": "ExxonMobil Holdings Corp",
+        "ticker": "XOM",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "XOM",
+        "name": "ExxonMobil Holdings Corp",
+        "cik": "0002115436",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 93410,
+        "name": "CHEVRON CORP",
+        "ticker": "CVX",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "CVX",
+        "name": "CHEVRON CORP",
+        "cik": "0000093410",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 1163165,
+        "name": "CONOCOPHILLIPS",
+        "ticker": "COP",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "COP",
+        "name": "CONOCOPHILLIPS",
+        "cik": "0001163165",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 18230,
+        "name": "CATERPILLAR INC",
+        "ticker": "CAT",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "CAT",
+        "name": "CATERPILLAR INC",
+        "cik": "0000018230",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 40545,
+        "name": "GENERAL ELECTRIC CO",
+        "ticker": "GE",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "GE",
+        "name": "GENERAL ELECTRIC CO",
+        "cik": "0000040545",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 773840,
+        "name": "HONEYWELL INTERNATIONAL INC",
+        "ticker": "HON",
+        "exchange": "Nasdaq"
+      },
+      "catalog_record": {
+        "ticker": "HON",
+        "name": "HONEYWELL INTERNATIONAL INC",
+        "cik": "0000773840",
+        "exchange": "NASDAQ"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 1090727,
+        "name": "UNITED PARCEL SERVICE INC",
+        "ticker": "UPS",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "UPS",
+        "name": "UNITED PARCEL SERVICE INC",
+        "cik": "0001090727",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 1467858,
+        "name": "General Motors Co",
+        "ticker": "GM",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "GM",
+        "name": "General Motors Co",
+        "cik": "0001467858",
+        "exchange": "NYSE"
+      }
+    },
+    {
+      "sec_record": {
+        "cik": 37996,
+        "name": "FORD MOTOR CO",
+        "ticker": "F",
+        "exchange": "NYSE"
+      },
+      "catalog_record": {
+        "ticker": "F",
+        "name": "FORD MOTOR CO",
+        "cik": "0000037996",
+        "exchange": "NYSE"
+      }
+    }
+  ],
+  "before": {
+    "observed_at_utc": "2026-10-04T07:34:11.639033+00:00",
+    "counts": {
+      "companies": 10,
+      "financial_facts": 3251,
+      "filing_chunks": 37,
+      "embeddings": 37
+    },
+    "existing_companies": [
+      {
+        "id": 1,
+        "ticker": "NVDA",
+        "name": "NVIDIA Corporation",
+        "cik": "0001045810",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 2,
+        "ticker": "AAPL",
+        "name": "Apple Inc.",
+        "cik": "0000320193",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 3,
+        "ticker": "MSFT",
+        "name": "Microsoft Corporation",
+        "cik": "0000789019",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 4,
+        "ticker": "AMZN",
+        "name": "Amazon.com, Inc.",
+        "cik": "0001018724",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 5,
+        "ticker": "GOOGL",
+        "name": "Alphabet Inc.",
+        "cik": "0001652044",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 6,
+        "ticker": "META",
+        "name": "Meta Platforms, Inc.",
+        "cik": "0001326801",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 7,
+        "ticker": "TSLA",
+        "name": "Tesla, Inc.",
+        "cik": "0001318605",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 8,
+        "ticker": "JPM",
+        "name": "JPMorgan Chase & Co.",
+        "cik": "0000019617",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 9,
+        "ticker": "V",
+        "name": "Visa Inc.",
+        "cik": "0001403161",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 10,
+        "ticker": "WMT",
+        "name": "Walmart Inc.",
+        "cik": "0000104169",
+        "exchange": "NYSE"
+      }
+    ],
+    "table_sha256": {
+      "financial_facts": "8be8dfd4d532d5cc79b6a66f03b1db06197bbfbb6dd515f03f8b55c265e46581",
+      "filing_chunks": "f28402dbb3a83108596885c192e425550d38190857d06b6f2cd2a8152493f1be"
+    }
+  },
+  "after_first_seed": {
+    "observed_at_utc": "2026-10-04T07:37:58.050456+00:00",
+    "counts": {
+      "companies": 35,
+      "financial_facts": 3251,
+      "filing_chunks": 37,
+      "embeddings": 37
+    },
+    "table_sha256": {
+      "financial_facts": "8be8dfd4d532d5cc79b6a66f03b1db06197bbfbb6dd515f03f8b55c265e46581",
+      "filing_chunks": "f28402dbb3a83108596885c192e425550d38190857d06b6f2cd2a8152493f1be"
+    },
+    "all_companies": [
+      {
+        "id": 1,
+        "ticker": "NVDA",
+        "name": "NVIDIA Corporation",
+        "cik": "0001045810",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 2,
+        "ticker": "AAPL",
+        "name": "Apple Inc.",
+        "cik": "0000320193",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 3,
+        "ticker": "MSFT",
+        "name": "Microsoft Corporation",
+        "cik": "0000789019",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 4,
+        "ticker": "AMZN",
+        "name": "Amazon.com, Inc.",
+        "cik": "0001018724",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 5,
+        "ticker": "GOOGL",
+        "name": "Alphabet Inc.",
+        "cik": "0001652044",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 6,
+        "ticker": "META",
+        "name": "Meta Platforms, Inc.",
+        "cik": "0001326801",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 7,
+        "ticker": "TSLA",
+        "name": "Tesla, Inc.",
+        "cik": "0001318605",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 8,
+        "ticker": "JPM",
+        "name": "JPMorgan Chase & Co.",
+        "cik": "0000019617",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 9,
+        "ticker": "V",
+        "name": "Visa Inc.",
+        "cik": "0001403161",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 10,
+        "ticker": "WMT",
+        "name": "Walmart Inc.",
+        "cik": "0000104169",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 11,
+        "ticker": "BAC",
+        "name": "BANK OF AMERICA CORP /DE/",
+        "cik": "0000070858",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 12,
+        "ticker": "GS",
+        "name": "GOLDMAN SACHS GROUP INC",
+        "cik": "0000886982",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 13,
+        "ticker": "MS",
+        "name": "MORGAN STANLEY",
+        "cik": "0000895421",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 14,
+        "ticker": "MA",
+        "name": "Mastercard Inc",
+        "cik": "0001141391",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 15,
+        "ticker": "AXP",
+        "name": "AMERICAN EXPRESS CO",
+        "cik": "0000004962",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 16,
+        "ticker": "COST",
+        "name": "COSTCO WHOLESALE CORP /NEW",
+        "cik": "0000909832",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 17,
+        "ticker": "HD",
+        "name": "HOME DEPOT, INC.",
+        "cik": "0000354950",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 18,
+        "ticker": "KO",
+        "name": "COCA COLA CO",
+        "cik": "0000021344",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 19,
+        "ticker": "PEP",
+        "name": "PEPSICO INC",
+        "cik": "0000077476",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 20,
+        "ticker": "MCD",
+        "name": "MCDONALDS CORP",
+        "cik": "0000063908",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 21,
+        "ticker": "DIS",
+        "name": "Walt Disney Co",
+        "cik": "0001744489",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 22,
+        "ticker": "JNJ",
+        "name": "JOHNSON & JOHNSON",
+        "cik": "0000200406",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 23,
+        "ticker": "LLY",
+        "name": "ELI LILLY & Co",
+        "cik": "0000059478",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 24,
+        "ticker": "MRK",
+        "name": "Merck & Co., Inc.",
+        "cik": "0000310158",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 25,
+        "ticker": "ABBV",
+        "name": "AbbVie Inc.",
+        "cik": "0001551152",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 26,
+        "ticker": "UNH",
+        "name": "UNITEDHEALTH GROUP INC",
+        "cik": "0000731766",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 27,
+        "ticker": "XOM",
+        "name": "ExxonMobil Holdings Corp",
+        "cik": "0002115436",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 28,
+        "ticker": "CVX",
+        "name": "CHEVRON CORP",
+        "cik": "0000093410",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 29,
+        "ticker": "COP",
+        "name": "CONOCOPHILLIPS",
+        "cik": "0001163165",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 30,
+        "ticker": "CAT",
+        "name": "CATERPILLAR INC",
+        "cik": "0000018230",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 31,
+        "ticker": "GE",
+        "name": "GENERAL ELECTRIC CO",
+        "cik": "0000040545",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 32,
+        "ticker": "HON",
+        "name": "HONEYWELL INTERNATIONAL INC",
+        "cik": "0000773840",
+        "exchange": "NASDAQ"
+      },
+      {
+        "id": 33,
+        "ticker": "UPS",
+        "name": "UNITED PARCEL SERVICE INC",
+        "cik": "0001090727",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 34,
+        "ticker": "GM",
+        "name": "General Motors Co",
+        "cik": "0001467858",
+        "exchange": "NYSE"
+      },
+      {
+        "id": 35,
+        "ticker": "F",
+        "name": "FORD MOTOR CO",
+        "cik": "0000037996",
+        "exchange": "NYSE"
+      }
+    ],
+    "legacy_rows_unchanged": true,
+    "business_tables_unchanged": true
+  },
+  "after_repeat_seed": {
+    "observed_at_utc": "2026-10-04T07:38:37.283577+00:00",
+    "counts": {
+      "companies": 35,
+      "financial_facts": 3251,
+      "filing_chunks": 37,
+      "embeddings": 37
+    },
+    "table_sha256": {
+      "financial_facts": "8be8dfd4d532d5cc79b6a66f03b1db06197bbfbb6dd515f03f8b55c265e46581",
+      "filing_chunks": "f28402dbb3a83108596885c192e425550d38190857d06b6f2cd2a8152493f1be"
+    },
+    "all_company_rows_unchanged": true,
+    "legacy_rows_unchanged": true,
+    "business_tables_unchanged": true
+  },
+  "http_smoke": {
+    "url": "http://127.0.0.1:8000/companies",
+    "http_status": 200,
+    "company_count": 35,
+    "aapl_ready": true,
+    "aapl_indexed_filing_count": 1,
+    "added_not_indexed_count": 25,
+    "ready_company_count": 1,
+    "response_matches_database_query": true,
+    "company_listing_select_count": 1,
+    "companies": [
+      {
+        "id": 2,
+        "ticker": "AAPL",
+        "name": "Apple Inc.",
+        "cik": "0000320193",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": true,
+        "indexed_filing_count": 1
+      },
+      {
+        "id": 25,
+        "ticker": "ABBV",
+        "name": "AbbVie Inc.",
+        "cik": "0001551152",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 4,
+        "ticker": "AMZN",
+        "name": "Amazon.com, Inc.",
+        "cik": "0001018724",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 15,
+        "ticker": "AXP",
+        "name": "AMERICAN EXPRESS CO",
+        "cik": "0000004962",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 11,
+        "ticker": "BAC",
+        "name": "BANK OF AMERICA CORP /DE/",
+        "cik": "0000070858",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 30,
+        "ticker": "CAT",
+        "name": "CATERPILLAR INC",
+        "cik": "0000018230",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 29,
+        "ticker": "COP",
+        "name": "CONOCOPHILLIPS",
+        "cik": "0001163165",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 16,
+        "ticker": "COST",
+        "name": "COSTCO WHOLESALE CORP /NEW",
+        "cik": "0000909832",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 28,
+        "ticker": "CVX",
+        "name": "CHEVRON CORP",
+        "cik": "0000093410",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 21,
+        "ticker": "DIS",
+        "name": "Walt Disney Co",
+        "cik": "0001744489",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 35,
+        "ticker": "F",
+        "name": "FORD MOTOR CO",
+        "cik": "0000037996",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 31,
+        "ticker": "GE",
+        "name": "GENERAL ELECTRIC CO",
+        "cik": "0000040545",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 34,
+        "ticker": "GM",
+        "name": "General Motors Co",
+        "cik": "0001467858",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 5,
+        "ticker": "GOOGL",
+        "name": "Alphabet Inc.",
+        "cik": "0001652044",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 12,
+        "ticker": "GS",
+        "name": "GOLDMAN SACHS GROUP INC",
+        "cik": "0000886982",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 17,
+        "ticker": "HD",
+        "name": "HOME DEPOT, INC.",
+        "cik": "0000354950",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 32,
+        "ticker": "HON",
+        "name": "HONEYWELL INTERNATIONAL INC",
+        "cik": "0000773840",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 22,
+        "ticker": "JNJ",
+        "name": "JOHNSON & JOHNSON",
+        "cik": "0000200406",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 8,
+        "ticker": "JPM",
+        "name": "JPMorgan Chase & Co.",
+        "cik": "0000019617",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 18,
+        "ticker": "KO",
+        "name": "COCA COLA CO",
+        "cik": "0000021344",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 23,
+        "ticker": "LLY",
+        "name": "ELI LILLY & Co",
+        "cik": "0000059478",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 14,
+        "ticker": "MA",
+        "name": "Mastercard Inc",
+        "cik": "0001141391",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 20,
+        "ticker": "MCD",
+        "name": "MCDONALDS CORP",
+        "cik": "0000063908",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 6,
+        "ticker": "META",
+        "name": "Meta Platforms, Inc.",
+        "cik": "0001326801",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 24,
+        "ticker": "MRK",
+        "name": "Merck & Co., Inc.",
+        "cik": "0000310158",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 13,
+        "ticker": "MS",
+        "name": "MORGAN STANLEY",
+        "cik": "0000895421",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 3,
+        "ticker": "MSFT",
+        "name": "Microsoft Corporation",
+        "cik": "0000789019",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 1,
+        "ticker": "NVDA",
+        "name": "NVIDIA Corporation",
+        "cik": "0001045810",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 19,
+        "ticker": "PEP",
+        "name": "PEPSICO INC",
+        "cik": "0000077476",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 7,
+        "ticker": "TSLA",
+        "name": "Tesla, Inc.",
+        "cik": "0001318605",
+        "exchange": "NASDAQ",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 26,
+        "ticker": "UNH",
+        "name": "UNITEDHEALTH GROUP INC",
+        "cik": "0000731766",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 33,
+        "ticker": "UPS",
+        "name": "UNITED PARCEL SERVICE INC",
+        "cik": "0001090727",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 9,
+        "ticker": "V",
+        "name": "Visa Inc.",
+        "cik": "0001403161",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 10,
+        "ticker": "WMT",
+        "name": "Walmart Inc.",
+        "cik": "0000104169",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      },
+      {
+        "id": 27,
+        "ticker": "XOM",
+        "name": "ExxonMobil Holdings Corp",
+        "cik": "0002115436",
+        "exchange": "NYSE",
+        "has_indexed_filing": false,
+        "indexed_filing_count": 0
+      }
+    ]
+  },
+  "tests": {
+    "command": ".venv/Scripts/python.exe -m pytest tests/test_company_catalog.py tests/test_company_availability.py tests/test_setup_demo.py -q",
+    "working_directory": "backend",
+    "passed": 23,
+    "failed": 0,
+    "network_or_provider_calls": false
+  },
+  "status": "item_4_completed",
+  "scope": {
+    "seed_runs": 2,
+    "inserted_companies": 25,
+    "existing_company_rows_preserved": 10,
+    "sec_ticker_metadata_requests": 1,
+    "filing_or_company_fact_requests": 0,
+    "embedding_generation_calls": 0,
+    "llm_calls": 0,
+    "migrations_added": 0,
+    "item_5_started": false
+  },
+  "self_review": {
+    "git_diff_check": "passed",
+    "new_file_whitespace_check": "passed",
+    "internal_documentation_references_checked": 65,
+    "scope_check": "catalog_only"
+  }
+}

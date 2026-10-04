@@ -25,7 +25,7 @@ Important future metrics must preserve original concept/source, company identity
 
 ## Acquisition and coverage rules
 
-Verify SEC reporting identity by CIK, ticker, and issuer; do not infer identity from company-name similarity. The approximately 30–40 company catalog and 8–10 flagship set are future curated selections. Track form, accession, period, parse/chunk/embedding completion, and failures per filing. One accession counts as one filing regardless of chunk count.
+Verify SEC reporting identity by CIK, ticker, and issuer; do not infer identity from company-name similarity. The current catalog has 35 curated issuers; the 25 additions use canonical SEC names, padded CIKs, and exchange metadata verified in the [catalog source record](../backend/reports/company_catalog_verification.json). Original company rows are preserved. The 8–10 flagship selection and broader filing coverage remain future work. Track form, accession, period, parse/chunk/embedding completion, and failures per filing. One accession counts as one filing regardless of chunk count.
 
 Use the existing SEC client contact User-Agent configuration and review current published SEC access requirements when implementing new acquisition workflows. Prefer caching/reuse, bounded concurrency/retry, resumable stages, and safe reruns; distinguish acquisition from interactive research requests. Preserve persisted chunks/embeddings. New jobs require an ExecPlan and must audit the existing replacing importer before bulk use.
 

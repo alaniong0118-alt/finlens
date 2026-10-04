@@ -8,17 +8,21 @@ This is the authoritative milestone/status document. [Product spec](docs/product
 
 Completed foundations: Item 1 fresh-clone demo setup, Item 2 database-derived indexed availability, and Item 3 research-interface polish (commits `5566344`, `004cdc5`, `641febb`).
 
-Current read-only DB/API inspection: 10 companies, 3,251 financial facts, 37 filing chunks and 37 embeddings; AAPL is the only Ready company, with one distinct indexed accession. Financial history/summary/snapshot and filing search/context APIs exist without OpenAI. The frontend currently centers on single-filing AI Q&A; a complete Research Mode UI, broad normalized metrics, and charts/comparisons remain planned.
+**Item 4 — Curated Company Catalog: completed.** The existing seed now contains exactly 35 selected SEC-reporting issuers. All 25 additions were verified against official SEC ticker/name/CIK/exchange metadata; the original 10 company rows were retained unchanged. See [catalog verification](backend/reports/company_catalog_verification.json) for source records, preservation fingerprints, seed/rerun results, tests, and HTTP checks.
 
-OpenAI integration and citation identity checks exist. [Recorded acceptance](backend/reports/final_verification.md) and [evaluation](backend/reports/rag_evaluation.json) show exhausted API credits and no completed real claim audit. Historical test results are scoped evidence, not proof across future companies or filings. This documentation setup does not begin any feature phase.
+Current DB/API inspection: 35 companies, 3,251 financial facts, 37 filing chunks and 37 embeddings; AAPL remains the only Ready company, with one distinct indexed accession. The 25 new issuers are Not indexed. Financial history/summary/snapshot and filing search/context APIs exist without OpenAI. The frontend currently centers on single-filing AI Q&A; a complete Research Mode UI, broad normalized metrics, and charts/comparisons remain planned.
+
+**Item 5 — Baseline filing indexing: pending; not started.** Catalog expansion did not fetch filings, modify facts, or generate embeddings. Phase 1 is partially complete: catalog breadth is delivered; universal filing readiness is still future work. Item numbers identify delivery milestones and are distinct from the broader phase numbers below.
+
+OpenAI integration and citation identity checks exist. [Recorded acceptance](backend/reports/final_verification.md) and [evaluation](backend/reports/rag_evaluation.json) show exhausted API credits and no completed real claim audit. Historical test results are scoped evidence, not proof across future companies or filings.
 
 ## Phases and exit gates
 
-All phases below are **planned**. Preserve working foundations; prioritize usable data and research before broader AI features.
+Phase 1 has completed its catalog submilestone; its indexing submilestone and Phases 2–7 remain **planned**. Preserve working foundations; prioritize usable data and research before broader AI features.
 
 | Phase | Deliverable | Completion gate |
 |---|---|---|
-| 1. Curated catalog and baseline filing coverage | Approximately 30–40 curated SEC-reporting public companies, then at least one usable indexed SEC filing for every visible company. Record inclusion criteria, verified ticker/CIK identity, coverage, and ingestion failures. | Every visible company is Ready by the DB-derived definition; reruns are safe, failures isolated, and source lineage checked. Transitional Not indexed states remain honest. |
+| 1. Curated catalog and baseline filing coverage | Catalog complete: 35 curated SEC-reporting public companies. Next, at least one usable indexed SEC filing for every visible company; indexing remains pending. Record verified identity, coverage, and ingestion failures. | Every visible company is Ready by the DB-derived definition; reruns are safe, failures isolated, and source lineage checked. Transitional Not indexed states remain honest. |
 | 2. Financial Metrics Layer | A stable metric vocabulary and API over SEC concepts; deterministic metrics, ratios, period alignment, and provenance. | Representative company/industry fixtures verify units, fiscal periods, missing values, restatements, and formulas. Raw XBRL concepts are retained as provenance rather than the public API contract. |
 | 3. Complete Research Mode | Metrics, historical trends, charts, comparisons, filing discovery, hybrid search, evidence excerpts, and official SEC links in the frontend. | The end-to-end research workflow is useful with no LLM or OpenAI key. Calculations are deterministic and source-backed; missing data is visible. |
 | 4. Flagship depth and formal evaluation | Deeper 10-Q/10-K coverage for 8–10 flagship companies; versioned retrieval and data-quality evaluation across companies and fiscal periods. | Coverage is explicit; measured retrieval relevance, numerical/period accuracy, provenance, and abstention meet documented thresholds, including negative and ambiguous questions. |

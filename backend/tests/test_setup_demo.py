@@ -131,7 +131,7 @@ def test_empty_database_no_openai_and_no_model_cache(session, external_calls):
     assert result["action"] == "ingested"
     assert result["chunks"] == result["embeddings"] > 0
     assert result["openai_required"] is False
-    assert len(list(session.scalars(select(Company)))) == 10  # existing seed list only
+    assert len(list(session.scalars(select(Company)))) == 35  # catalog only; one demo filing
     facts = list(session.scalars(select(FinancialFact)))
     assert len(facts) == 1 and facts[0].value == 100
     assert facts[0].accession_number == demo.DEMO_ACCESSION
