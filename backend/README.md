@@ -2,8 +2,7 @@
 
 This milestone retrieves existing PostgreSQL filing chunks and generates answers
 with server-validated, claim-level citations. Existing keyword and semantic search
-endpoints remain available. No ingestion, schema migration, or vector regeneration
-is required.
+endpoints remain available. Existing indexed databases need no re-ingestion. Fresh clones use the reproducible demo command below.
 
 ## Request flow
 
@@ -203,4 +202,28 @@ record actual latency/model behavior. Automated provider tests use cost-free moc
 
 ## Public checkout configuration
 
-Set `DATABASE_URL` privately in `backend/.env`; SQLAlchemy and Alembic use the same URL. Compose reads `POSTGRES_PASSWORD` from ignored root `.env`. Set `SEC_CONTACT_EMAIL` privately before SEC requests. No dump is distributed; see [fresh-checkout data preparation](../docs/architecture.md#data-preparation-on-a-fresh-checkout). Preserve existing private env files.
+Set `DATABASE_URL` privately in `backend/.env`; SQLAlchemy and Alembic use the same URL. Compose reads `POSTGRES_PASSWORD` from ignored root `.env`. Set `SEC_CONTACT_EMAIL` privately before SEC requests. No dump is distributed; use `python -m scripts.setup_demo` after migrations. Preserve existing private env files.
+
+## Reproducible demo setup
+
+After configuring private `DATABASE_URL` and real `SEC_CONTACT_EMAIL` in `backend/.env`, start PostgreSQL with `docker compose up -d postgres` from the root. The root `.env` supplies `POSTGRES_PASSWORD`. Then, from backend with dependencies installed:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m scripts.setup_demo
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+With the venv activated, the setup command is simply `python -m scripts.setup_demo`.
+
+OpenAI API key is only required for live generated answers. Setup never imports/calls the answer service or OpenAI client. The fixed public fixture is AAPL 10-Q `0000320193-26-000020`.
+
+The command checks connectivity, required tables/columns, Alembic head, and pgvector; reuses the existing company seed list; adds only this accession's missing real SEC facts; and invokes existing ingestion/parser/embedding services. It does not call the replacing company importer. Complete data bypasses downloads/model loading. Missing vectors are backfilled only for this company/accession. No unrelated facts, chunks, or existing vectors are deleted. Existing malformed data causes a clear error instead of silent replacement.
+
+Contact validation occurs before SEC network work. Missing/invalid or placeholder contact produces `SEC_CONTACT_EMAIL is required for SEC requests. Set it in backend/.env.` Offline complete/backfill paths do not require contact. The first MiniLM use downloads weights; do not set offline model flags until cached. SEC/network/model errors return a nonzero exit code without echoing secrets. Rerun after resolving the cause; chunks persist if embedding was interrupted.
+
+Unit verification: `python -m pytest tests/test_setup_demo.py -q`. Tests use an in-memory database and mock SEC/encoder calls, including an empty-data fresh-clone simulation. They do not download SEC or model files. Local acceptance uses the real existing database fast path and compares fingerprints of all business tables.
+
+Default fresh-clone ports: backend **8000**, frontend **3000**; `frontend/.env.example` targets 8000. Follow the [Quick Start](../README.md#quick-start); no manual accession or internal service calls are necessary.
+
+Fresh Docker data directories run `docker/postgres/init-pgvector.sql` to enable pgvector before the existing Alembic revisions. Existing volumes are not reinitialized or removed.

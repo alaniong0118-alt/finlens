@@ -1,24 +1,23 @@
 # FinLens on Windows
 
-Use the [root README](README.md#local-setup) for current setup and verification status. This replaces the old empty-foundation guide.
+Follow the root [Quick Start](README.md#quick-start): clone, copy examples, fill private database/contact values, start Docker PostgreSQL, install dependencies, migrate, run `python -m scripts.setup_demo`, then start both services.
 
-Install Python, Node.js/npm, Git, and Docker Desktop with Docker Compose. Create private root `.env` with `POSTGRES_PASSWORD`. On a fresh checkout, copy `backend/.env.example` to `backend/.env`, then privately add matching `DATABASE_URL` and real `SEC_CONTACT_EMAIL`. Configure the API key/model only for live answers. Do not overwrite an existing configured env file.
+The walkthrough uses the venv executable directly, so PowerShell activation is optional. Default ports are **backend 8000 / frontend 3000**. The frontend example targets `http://127.0.0.1:8000`.
 
-Follow the root README commands for PostgreSQL, dependencies, migrations, seeding, Uvicorn, and Next.js. A fresh database needs explicit [data preparation](docs/architecture.md#data-preparation-on-a-fresh-checkout); it does not contain the recorded fixture.
+The setup command prepares one official Apple filing and local embeddings without an OpenAI key. Complete data is reused; missing vectors are resumed. Set your real SEC contact before initial downloading. Do not enable offline model flags before the first MiniLM download.
 
-## Alternate ports and production
+## Production preview (optional)
 
-For existing acceptance ports, start Uvicorn with `--port 8001`. Stop Next.js dev before building, then:
+From frontend after dependencies are installed:
 
 ```powershell
-cd frontend
-$env:FINLENS_API_BASE_URL='http://127.0.0.1:8001'
+$env:FINLENS_API_BASE_URL='http://127.0.0.1:8000'
 npm run build
-npm run start -- --hostname 127.0.0.1 --port 3001
+npm run start -- --hostname 127.0.0.1 --port 3000
 ```
 
-The production proxy target is built into rewrites; rebuild after changing it. Restart the backend after changing private configuration.
+Stop the process already using port 3000 first. Development uses `.next`; production uses `.next-prod`. The production proxy target is built into rewrites, so rebuild after changing it. Restart the backend after changing private configuration.
 
-Use Ctrl+C for backend/frontend and `docker compose down` to stop PostgreSQL while preserving its named volume. Do not remove the volume to update the repository.
+Use Ctrl+C for backend/frontend and `docker compose down` to stop PostgreSQL while preserving its volume. Do not remove the volume to update the repository or change a password.
 
-Recorded tests/build/lineage pass. Real answers and full claim audit remain incomplete because credits were unavailable; see [verification](backend/reports/final_verification.md).
+Recorded RAG tests/build/lineage pass. Real generated answers and claim audit remain incomplete because API credits were unavailable; setup does not require those calls.

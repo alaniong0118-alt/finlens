@@ -1,4 +1,7 @@
+from contextlib import nullcontext
+
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Company
@@ -68,8 +71,8 @@ COMPANIES = [
 ]
 
 
-def seed_companies() -> None:
-    with SessionLocal() as session:
+def seed_companies(session: Session | None = None, *, quiet: bool = False) -> None:
+    with (nullcontext(session) if session is not None else SessionLocal()) as session:
         for data in COMPANIES:
             existing = session.scalar(
                 select(Company).where(Company.ticker == data["ticker"])
@@ -77,9 +80,11 @@ def seed_companies() -> None:
 
             if existing is None:
                 session.add(Company(**data))
-                print(f"Added {data['ticker']}")
+                if not quiet:
+                    print(f"Added {data['ticker']}")
             else:
-                print(f"Skipped {data['ticker']} (already exists)")
+                if not quiet:
+                    print(f"Skipped {data['ticker']} (already exists)")
 
         session.commit()
 

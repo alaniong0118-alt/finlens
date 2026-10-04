@@ -1,0 +1,141 @@
+{
+  "final_fingerprints_match": true,
+  "browser_verification": {
+    "url": "http://127.0.0.1:3000/",
+    "company": "AAPL",
+    "indexed_filing": true,
+    "negative_evidence_status": "insufficient",
+    "openai_key_blank_in_backend_process": true
+  },
+  "security": {
+    "public_files_scanned": 72,
+    "secret_findings": 0,
+    "forbidden_artifacts": 0,
+    "sql_allowlist": "docker/postgres/init-pgvector.sql (extension DDL only)"
+  },
+  "fresh_clone_scope": {
+    "empty_database_orchestration": "Real ORM/parser/services in unit tests; SEC/encoder mocked",
+    "empty_postgresql_migrations": "Actual isolated tmpfs PostgreSQL container",
+    "dependency_install": "Quick Start walkthrough; local existing venv/node_modules reused",
+    "fresh_network_download": "Not repeated; SEC and MiniLM availability remain external prerequisites"
+  },
+  "before": {
+    "companies": {
+      "count": 10,
+      "sha256": "9d8fcca835924911aa3ea9501d0f6f1865b3786843408f7a1c30131d1a123580"
+    },
+    "financial_facts": {
+      "count": 3251,
+      "sha256": "79d9abcdc3b180abeb9d86203311126f156f0e50c229766e4ee83d170ec78ad0"
+    },
+    "filing_chunks": {
+      "count": 37,
+      "sha256": "f85d2f77e46b93577570adc93b4759962525fe8ec0d28e03b7d7c6c990059700"
+    },
+    "embedding_count": 37
+  },
+  "after": {
+    "companies": {
+      "count": 10,
+      "sha256": "9d8fcca835924911aa3ea9501d0f6f1865b3786843408f7a1c30131d1a123580"
+    },
+    "financial_facts": {
+      "count": 3251,
+      "sha256": "79d9abcdc3b180abeb9d86203311126f156f0e50c229766e4ee83d170ec78ad0"
+    },
+    "filing_chunks": {
+      "count": 37,
+      "sha256": "f85d2f77e46b93577570adc93b4759962525fe8ec0d28e03b7d7c6c990059700"
+    },
+    "embedding_count": 37
+  },
+  "all_business_data_unchanged": true,
+  "openai_key_blank_in_subprocess": true,
+  "offline_model_mode": true,
+  "runs": [
+    {
+      "exit_code": 0,
+      "stdout": "{\n  \"status\": \"ready\",\n  \"action\": \"already_complete\",\n  \"ticker\": \"AAPL\",\n  \"accession_number\": \"0000320193-26-000020\",\n  \"form\": \"10-Q\",\n  \"chunks\": 37,\n  \"embeddings\": 37,\n  \"new_embeddings\": 0,\n  \"metadata_downloaded\": false,\n  \"openai_required\": false\n}\nDemo ready. OpenAI API key is only required for live generated answers.\n"
+    },
+    {
+      "exit_code": 0,
+      "stdout": "{\n  \"status\": \"ready\",\n  \"action\": \"already_complete\",\n  \"ticker\": \"AAPL\",\n  \"accession_number\": \"0000320193-26-000020\",\n  \"form\": \"10-Q\",\n  \"chunks\": 37,\n  \"embeddings\": 37,\n  \"new_embeddings\": 0,\n  \"metadata_downloaded\": false,\n  \"openai_required\": false\n}\nDemo ready. OpenAI API key is only required for live generated answers.\n"
+    }
+  ],
+  "http_checks": [
+    {
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "path": "/dbz",
+      "status": 200
+    },
+    {
+      "path": "/companies",
+      "status": 200
+    },
+    {
+      "path": "/companies/AAPL/sources",
+      "status": 200
+    },
+    {
+      "path": "search",
+      "status": 200,
+      "results": 5
+    },
+    {
+      "path": "semantic-search",
+      "status": 200,
+      "results": 5
+    },
+    {
+      "path": "context",
+      "status": 200,
+      "results": 5
+    },
+    {
+      "path": "answer negative",
+      "status": 200,
+      "evidence_status": "insufficient"
+    },
+    {
+      "path": "answer without key",
+      "status": 503,
+      "error_code": "LLM_UNAVAILABLE"
+    },
+    {
+      "path": "frontend /",
+      "status": 200
+    },
+    {
+      "path": "frontend /api/finlens/companies",
+      "status": 200
+    },
+    {
+      "path": "frontend /api/finlens/companies/AAPL/sources",
+      "status": 200
+    }
+  ],
+  "tests": {
+    "new_setup_tests": 15,
+    "backend_total": 56,
+    "subtests": 44,
+    "test_model_override": "gpt-6-astra only in regression process; no private configuration or model strategy changed"
+  },
+  "alembic": {
+    "head": "d7b834408ba8",
+    "check": "No new upgrade operations detected"
+  },
+  "fresh_postgres_verification": {
+    "isolated_tmpfs_container": true,
+    "existing_volume_mounted": false,
+    "pgvector_init": true,
+    "alembic_upgrade_head": "passed",
+    "alembic_check": "passed",
+    "no_secret_cli_error": "SEC_CONTACT_EMAIL required",
+    "rows_after_rejected_setup": 0,
+    "real_sec_download": false,
+    "real_model_download": false
+  }
+}

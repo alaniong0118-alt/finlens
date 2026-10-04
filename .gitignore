@@ -31,10 +31,14 @@ build/
 coverage/
 .turbo/
 .cache/
+.huggingface/
+model_cache/
+hf_cache/
 *.tsbuildinfo
 
 # Local database files, dumps, backups, logs and scratch files
 *.sql
+!docker/postgres/init-pgvector.sql
 *.dump
 *.backup
 *.sqlite

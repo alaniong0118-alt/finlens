@@ -1,4 +1,5 @@
 import os
+import re
 
 import httpx
 
@@ -9,11 +10,21 @@ load_backend_env()
 
 SEC_BASE_URL = "https://data.sec.gov"
 
-# Set SEC_CONTACT_EMAIL privately to a real contact before using SEC network APIs.
-SEC_HEADERS = {
-    "User-Agent": f"FinLens/0.1 (research project; contact: {os.getenv('SEC_CONTACT_EMAIL', 'YOUR_EMAIL@example.com')})",
-    "Accept-Encoding": "gzip, deflate",
-}
+def get_sec_headers() -> dict[str, str]:
+    """Require an explicit contact; never send a placeholder address to SEC."""
+    contact = os.getenv("SEC_CONTACT_EMAIL", "").strip()
+    domain = contact.rsplit("@", 1)[-1].lower()
+    if (
+        not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", contact)
+        or domain in {"example.com", "example.org", "example.net"}
+        or domain.endswith((".example", ".invalid", ".test"))
+        or "your_email" in contact.lower()
+    ):
+        raise ValueError("SEC_CONTACT_EMAIL is required for SEC requests.\nSet it in backend/.env.")
+    return {
+        "User-Agent": f"FinLens/0.1 (research project; contact: {contact})",
+        "Accept-Encoding": "gzip, deflate",
+    }
 
 
 def get_company_facts(cik: str) -> dict:
@@ -26,7 +37,7 @@ def get_company_facts(cik: str) -> dict:
     )
 
     with httpx.Client(
-        headers=SEC_HEADERS,
+        headers=get_sec_headers(),
         timeout=30.0,
         follow_redirects=True,
     ) as client:
@@ -73,7 +84,7 @@ def get_filing_raw_text(
     )
 
     with httpx.Client(
-        headers=SEC_HEADERS,
+        headers=get_sec_headers(),
         timeout=30.0,
         follow_redirects=True,
     ) as client:

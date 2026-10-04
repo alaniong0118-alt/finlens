@@ -53,17 +53,16 @@ SQLAlchemy and Alembic share private `DATABASE_URL`. Compose reads `POSTGRES_PAS
 
 ## Data preparation on a fresh checkout
 
-No database dump is distributed. Migrations and seeding do not recreate the recorded 37-chunk fixture.
+After env configuration and `alembic upgrade head`, run `python -m scripts.setup_demo` from backend. See the root [Quick Start](../README.md#quick-start). No database dump or manual internal service calls are needed.
 
-1. Configure private database and SEC contact; start PostgreSQL, apply migrations, and run `backend/seed_companies.py`.
-2. Call `app.sec_importer.import_company(company_cik)` from the backend environment. It downloads Company Facts and replaces imported metrics for the selected company.
-3. Read `/companies/{ticker}/sources` and choose an actual accession/form. Do not assume the historical AAPL fixture is latest.
-4. Load the `Company` in a SQLAlchemy session and call `app.sec_filing_service.ingest_filing_chunks(session, company, accession_number)`. It downloads the filing and replaces its chunks.
-5. Call `app.embedding_service.embed_filing_chunks(session, company_cik, accession_number)` to persist vectors.
-6. Confirm indexed sources, then use search/context/answer.
+The command validates schema and Alembic head, reuses company seeding, and prepares the fixed official AAPL 10-Q `0000320193-26-000020`. It filters Company Facts by accession before reusing the existing metric normalizer/deduplicator, inserts only this filing's absent facts, then calls the existing chunk ingestion and embedding services. It does not invoke the replacing company importer.
 
-These existing functions have network/write effects; use them deliberately. Repository preparation did not run them. There is no automated dataset bootstrap.
+Complete chunks/vectors are validated with no network/model call. Missing vectors are backfilled within the company/accession scope. Missing or invalid SEC contact is rejected before SEC requests; OpenAI credentials are never required. The first encoder use may download MiniLM. Errors do not reset the database; reruns resume from stored chunks.
+
+The existing parser, retrieval thresholds, answer API, embedding model, and vector dimensions are unchanged. The setup is a single public filing fixture, not multi-company ingestion.
 
 ## Verification boundary
 
 Recorded: 41 backend tests, 6 frontend tests, lint/build passing, Alembic clean, 37 chunks/37 vectors, and citation lineage checked. Provider mocks test deterministic behavior. Real requests encountered exhausted credits; no successful real claim audit is claimed.
+
+Fresh Docker data directories run `docker/postgres/init-pgvector.sql` to enable pgvector before the existing Alembic revisions. Existing volumes are not reinitialized or removed.

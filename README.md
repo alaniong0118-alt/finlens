@@ -8,6 +8,73 @@ A student engineering project focused on inspectable financial answers. The scop
 
 SEC filings contain useful evidence, but reading them involves long documents, inconsistent XBRL concepts, fiscal periods, and tables. Generated answers can confuse periods, invent causes, or cite unrelated passages. FinLens separates data preparation, retrieval, evidence selection, generation, and citation validation. Users choose a company and an indexed filing before asking a question. The goal is traceable answers and explicit abstention.
 
+## Quick Start
+
+Windows PowerShell is the supported walkthrough. Install **Git, Python, Node.js/npm, and Docker Desktop** first; start Docker Desktop and wait until its engine is ready. PostgreSQL runs in Docker—no separate PostgreSQL installation is needed. First setup needs internet access for dependencies, SEC data, and the MiniLM model.
+
+### 1. Clone and configure
+
+```powershell
+git clone https://github.com/alaniong0118-alt/finlens.git
+cd finlens
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env.local
+```
+
+Copy examples only on a fresh clone; preserve existing configured files. Edit the private files with your editor:
+
+| File | Required value |
+|---|---|
+| `.env` | `POSTGRES_PASSWORD`: choose a local database password |
+| `backend/.env` | `DATABASE_URL`: `postgresql+psycopg://finlens:<URL-encoded-password>@127.0.0.1:5432/finlens`, using the same password |
+| `backend/.env` | `SEC_CONTACT_EMAIL`: your real contact email for the SEC User-Agent |
+| `frontend/.env.local` | Keep `FINLENS_API_BASE_URL=http://127.0.0.1:8000` |
+
+Replace the angle-bracket placeholder; do not paste it literally. URL-encode special characters in the database URL password (the root password is the original, unencoded value). Existing PostgreSQL volumes retain their original password: changing an env file does not change a database user's password.
+
+**OpenAI API key is only required for live generated answers.** Leave `OPENAI_API_KEY` blank for setup, company/filing selection, retrieval, context, and insufficient-evidence responses. Optional model/effort fields do not affect demo preparation. Never put backend credentials in frontend configuration.
+
+### 2. Prepare the demo and start the backend
+
+From the repository root:
+
+```powershell
+docker compose up -d postgres
+docker compose ps
+cd backend
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m scripts.setup_demo
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Wait for PostgreSQL to report **healthy** before migrations. On a new Docker data directory, the included initialization SQL creates the pgvector extension before Alembic adds vector columns. Existing volumes are retained and are not reinitialized. These commands use the venv executable directly; activation is unnecessary. `requirements-dev.txt` includes the runtime dependencies and pytest for local verification.
+
+`setup_demo` seeds the existing company list, prepares one fixed official Apple 10-Q, and generates local MiniLM embeddings. It prints `status: ready`, the accession, and chunk/embedding counts. The first model download can take time. A repeat run reuses complete data; interrupted embedding work resumes without downloading the SEC filing again. There is no OpenAI call or API charge in this command.
+
+### 3. Start the frontend
+
+In a second PowerShell window, from the repository root:
+
+```powershell
+cd frontend
+npm ci
+npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+Open **http://127.0.0.1:3000**. Select **AAPL**, then its indexed **10-Q**. The frontend supports selection and question entry without an OpenAI key. A supported generation request will report that the answer service needs a key; it will not fabricate an answer.
+
+To view retrieved evidence without generating an answer, open:
+
+- [Context for revenue growth](http://127.0.0.1:8000/companies/AAPL/filings/0000320193-26-000020/context?q=revenue%20growth&limit=5)
+- [API documentation](http://127.0.0.1:8000/docs)
+
+Context/evidence is available through these existing API endpoints; this setup task does not add a new frontend evidence viewer. The question “What clinical trial results did Apple report?” returns insufficient evidence without a model call.
+
+Default ports throughout this walkthrough are **backend 8000 / frontend 3000**. Keep both terminals running. Stop them with Ctrl+C; `docker compose down` stops PostgreSQL while preserving its named volume. Never remove the volume to update the project.
+
 ## Key features
 
 - Financial history and filing selection from stored SEC data.
@@ -113,6 +180,8 @@ Five real attempts returned application HTTP 502; a diagnostic confirmed provide
 
 See [verification](backend/reports/final_verification.md) and [evaluation](backend/reports/rag_evaluation.json). Reports distinguish real retrieval, mocked provider tests, SDK attempts, and unfinished audits. The MVP is **not fully verified**.
 
+Fresh-clone setup adds 15 orchestration tests; the combined backend run passed **56 tests and 44 subtests**. Empty PostgreSQL initialization/migrations also passed in an isolated temporary container. See [setup verification](backend/reports/setup_demo_verification.json). SEC/model downloads are mocked in unit tests; existing local data was verified twice without downloading it again.
+
 ### Test commands
 
 ```powershell
@@ -134,41 +203,21 @@ npm run build
 
 Root-level backend `test_*.py` files include exploratory SEC/network scripts; the maintained suite is under `backend/tests`. Billable evaluation requires `python -m scripts.evaluate_rag --real-answers`. Retrieval and mock success are not real answer verification.
 
-## Local setup
+## Setup behavior and troubleshooting
 
-Prerequisites: Python, Node.js/npm, and Docker Compose. Commands use PowerShell. Preserve existing private configuration when updating a checkout.
+The reproducible fixture is official AAPL 10-Q `0000320193-26-000020`, not a dynamically changing latest filing or fabricated data. The recorded local fixture has 37 chunks and 37 embeddings. No database dump is distributed.
 
-1. Create private root `.env` with `POSTGRES_PASSWORD`. Compose requires a local password; no public password is provided.
-2. On a **fresh checkout**, copy `backend/.env.example` to `backend/.env`. Privately add `DATABASE_URL` using `postgresql+psycopg://finlens:<URL-encoded-password>@localhost:5432/finlens`, matching the database password. Add real `SEC_CONTACT_EMAIL` before SEC requests.
-3. Set `OPENAI_API_KEY` privately only for live answers. Set `FINLENS_LLM_MODEL` to an accessible Responses API model and `FINLENS_LLM_REASONING_EFFORT` to a supported effort. Blank values use implementation defaults; account model access is unverified. Existing `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` take precedence.
-4. Root/backend examples contain only three blank AI variables. Database credentials are supplied privately.
+- **Complete data:** validate and exit; no SEC request, model loading, or re-ingestion.
+- **Missing embeddings:** generate only missing vectors for this filing; retain existing vectors and unrelated data.
+- **Missing filing:** fetch its real SEC facts and raw document through existing services, then parse/chunk/embed. If SEC does not return this accession, fail clearly; never substitute another filing.
+- **Older custom database without pgvector:** the initialization SQL runs only for new Docker data directories. Have its database owner enable the `vector` extension, then rerun migrations; do not reset the existing volume.
+- **Missing schema:** run `python -m alembic upgrade head` from backend; setup does not create/reset tables or migrations.
+- **Missing/invalid SEC contact:** set `SEC_CONTACT_EMAIL` in `backend/.env`. It is required before SEC requests. Complete/backfill-only runs need no SEC connection.
+- **SEC 403/429 or network failure:** verify your real contact and network access, wait, then rerun. There is no bypass or unlimited retry loop.
+- **Model unavailable:** allow the first MiniLM download and sufficient disk space. Do not enable `HF_HUB_OFFLINE` before the model is cached. An interrupted model download can be retried; persisted chunks are reused.
+- **Database connection failure:** verify Docker is healthy and the private URL matches the existing database password; do not delete the volume.
 
-From the root:
-
-```powershell
-docker compose up -d postgres
-cd backend
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe seed_companies.py
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-In another terminal, from the root:
-
-```powershell
-cd frontend
-npm ci
-# Optional: copy frontend/.env.example to .env.local to change the API origin.
-npm run dev
-```
-
-Open `http://localhost:3000`; API docs: `http://127.0.0.1:8000/docs`. See [Windows notes](README-WINDOWS.md).
-
-**A fresh clone does not contain the local dataset.** Migrations create schema and seeding creates company records, not the 37/37 fixture. Preparing data requires explicit Company Facts import, accession selection, chunk ingestion, and embedding: see [data preparation](docs/architecture.md#data-preparation-on-a-fresh-checkout). Ingestion replaces a filing's chunks; do not run it merely to use an existing dataset.
-
-Without a key, retrieval/context work on indexed data; qualifying answers return HTTP 503. Insufficient retrieval returns HTTP 200 without calling a model. Stop Next.js dev before a production build because both share `.next`.
+See [backend setup details](backend/README.md#reproducible-demo-setup) and [Windows notes](README-WINDOWS.md). Live answers require a private key, an accessible model, and available API credits. Existing `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` values take precedence over the FINLENS aliases.
 
 ## Limitations
 

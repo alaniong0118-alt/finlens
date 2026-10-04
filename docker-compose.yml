@@ -11,6 +11,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - finlens-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/00-pgvector.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U finlens -d finlens"]
       interval: 5s
