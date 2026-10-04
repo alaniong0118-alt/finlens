@@ -8,6 +8,16 @@ A student engineering project focused on inspectable financial answers. The scop
 
 SEC filings contain useful evidence, but reading them involves long documents, inconsistent XBRL concepts, fiscal periods, and tables. Generated answers can confuse periods, invent causes, or cite unrelated passages. FinLens separates data preparation, retrieval, evidence selection, generation, and citation validation. Users choose a company and an indexed filing before asking a question. The goal is traceable answers and explicit abstention.
 
+## Project documentation
+
+The current demo is a foundation for a broader Research Mode that remains useful without an LLM; AI Analysis is an optional enhancement. Planned capabilities are distinct from the recorded implementation and acceptance results below.
+
+- [Roadmap and milestone status](ROADMAP.md)
+- [Product specification](docs/product-spec.md) and [AI-is-optional decision](docs/decisions/003-ai-is-optional.md)
+- [Current architecture](docs/architecture.md) and [technical challenges](docs/technical-challenges.md)
+- [Engineering standards](docs/engineering-standards.md) and [data-source policy](docs/data-sources.md)
+- [Repository instructions](AGENTS.md) and [ExecPlan standard](.agent/PLANS.md)
+
 ## Quick Start
 
 Windows PowerShell is the supported walkthrough. Install **Git, Python, Node.js/npm, and Docker Desktop** first; start Docker Desktop and wait until its engine is ready. PostgreSQL runs in Docker—no separate PostgreSQL installation is needed. First setup needs internet access for dependencies, SEC data, and the MiniLM model.
@@ -235,8 +245,4 @@ Placeholder: add real filing-selection, context, insufficient-evidence, and cita
 
 ## Future work
 
-- Complete five-question real-LLM acceptance and audit every factual claim.
-- Evaluate more companies, filings, numerical questions, and fiscal periods.
-- Improve table-aware extraction and provide a reproducible public fixture.
-- Evaluate injection and unsupported claims with real outputs.
-- Measure retrieval and abstention before expanding scope.
+Follow the [roadmap](ROADMAP.md) for curated company coverage, normalized financial metrics, complete Research Mode, formal evaluation, optional AI analysis, hardening, and portfolio release. Real LLM acceptance remains pending and will run only when credits are intentionally available; it does not gate work on Research Mode.
