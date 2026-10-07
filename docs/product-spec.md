@@ -31,6 +31,16 @@ The Item 8 UI shows six primary metrics and secondary balance-sheet/cash-flow de
 
 Light/Dark/System themes persist locally, follow OS preference in System mode, and use semantic colors across charts, controls and evidence. Mobile stacks panels, reflows cards, expands source details to full card width and contains table scrolling. Labels, visible keyboard focus, live async states, source disclosures and chart text equivalents remain part of acceptance.
 
+### Deterministic Research Answers
+
+Clear single-metric latest-value questions receive a Research Answer before supporting evidence, without AI. Supported concepts are the 15 existing canonical metrics: revenue/sales, gross profit, operating income, net income, diluted EPS, cash/equivalents, assets, liabilities, operating cash flow, CapEx, FCF, YoY revenue growth, and gross/operating/net margins. Bounded synonyms are explicit; this is not general natural-language answering. Questions about causes, segments, explicit historical dates, future periods, multiple metrics, comparisons or ambiguous concepts continue through existing selected-filing evidence research.
+
+Quarterly/annual requests use the existing summary period and cannot substitute another duration or older available value. Latest available chooses the newest normalized metric observation across actual period kinds; equal end dates prefer a direct shorter period. YTD remains labelled as YTD, Q4 is never synthesized, and instant values are labelled as-of. Newest unavailable observations retain their reason. No source coverage or economic-basis rule is relaxed.
+
+The selected company is authoritative. Recognized other catalog names/tickers receive mismatch guidance; unknown wording falls back conservatively without switching company. Answers disclose rounded display value, actual dates and filing metadata, with exact source values/concepts/accessions, alternatives, formulas and operand provenance behind View provenance. Revenue basis and EPS comparability warnings remain visible. Recognized unavailable/not-applicable questions receive an explanation from the metric service, never zero.
+
+Direct answers do not depend on indexed filings or context retrieval. One answer request and one selected-filing context request settle independently; answer/evidence failures and optional AI failure cannot erase the other valid research result. Company/filing changes and question edits invalidate old responses. Narrative supporting passages may concern another period/accession and do not establish validation of the structured answer. No company-wide or multi-filing retrieval is introduced.
+
 ## Optional AI Analysis
 
 AI can explain or synthesize retrieved evidence, with bounded context and claim-level citations. It does not calculate deterministic financial values or fill gaps using unsupported model knowledge. Multi-filing and cross-company analysis must wait for mature metric, coverage, and retrieval/evaluation layers. See [ADR 003](decisions/003-ai-is-optional.md).

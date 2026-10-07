@@ -89,7 +89,7 @@ function context(ticker, query = 'revenue growth') {
 }
 function companyPath(ticker, suffix) { return `/companies/${ticker}/${suffix}`; }
 
-async function mount(ctx, configured = false) {
+async function mount(ctx, configured = false, catalog = companies) {
   const requests = [];
   // Intentionally ignore AbortSignal when resolving: cancellation can race with
   // response delivery. This exercises rendered-state protection, not the mock.
@@ -139,13 +139,14 @@ async function mount(ctx, configured = false) {
     await release(request(companyPath(ticker, 'financials/metrics/revenue')), history(ticker, value));
     await release(request(companyPath(ticker, 'sources')), [filing(ticker)]);
   }
-  async function search(ticker, query = 'revenue growth') {
+  async function search(ticker, query = 'revenue growth', pendingAnswer = false) {
     await change(host.querySelector('textarea'), query);
-    await click('Search SEC evidence');
+    await click('Research question');
+    if (!pendingAnswer) await release(request(companyPath(ticker, 'research-answer')), { ticker, question: query, matched: false, status: 'not_matched' });
     return request(companyPath(ticker, `filings/${filing(ticker).accession_number}/context`));
   }
   await release(request('/capabilities'), { research_mode: true, ai_analysis_configured: configured });
-  await release(request('/companies'), companies);
+  await release(request('/companies'), catalog);
   return { host, requests, request, release, change, click, select, snapshot, trends, evidence, completeCompany, search };
 }
 
@@ -203,7 +204,7 @@ test('mounted AI failure retains retrieved evidence and usable Research Mode', a
   assert.match(app.trends().textContent, /\$1B/);
   assert.ok(!app.host.querySelector('[role="alert"]'), 'AI failure must not replace research with an application alert');
   assert.doesNotMatch(app.host.textContent, /quota|private internal details|Something went wrong/);
-  assert.equal([...app.host.querySelectorAll('button')].find(button => button.textContent === 'Search SEC evidence').disabled, false);
+  assert.equal([...app.host.querySelectorAll('button')].find(button => button.textContent === 'Research question').disabled, false);
 });
 
 test('mounted no-key success renders summary, history, provenance and SEC evidence', async ctx => {
@@ -218,7 +219,7 @@ test('mounted no-key success renders summary, history, provenance and SEC eviden
   assert.equal(app.host.querySelector('.evidence-card a').href, filing('AAPL').sec_url);
   assert.match(app.host.querySelector('.ai-panel').textContent, /Not configured/);
   assert.equal([...app.host.querySelectorAll('button')].find(button => button.textContent === 'Generate AI analysis').disabled, true);
-  assert.equal(app.requests.filter(request => request.init.method === 'POST').length, 0);
+  assert.equal(app.requests.filter(request => request.path.endsWith('/answer')).length, 0);
 });
 
 test('mounted snapshot period change rejects a late response without relying on remounting', async ctx => {
@@ -255,4 +256,134 @@ test('mounted query edit invalidates pending evidence in the same filing scope',
   assert.deepEqual(app.evidence(), []);
   assert.match(app.host.textContent, /Explore the filing evidence/);
   assert.doesNotMatch(app.host.textContent, /AAPL test evidence/);
+});
+
+function directAnswer(ticker, question, status = 'available') {
+  const observation = point(ticker, '109417000000');
+  if (status !== 'available') {
+    observation.status = status; observation.value = null;
+    observation.reason = 'Current/prior revenue economic bases are not explicitly comparable.';
+    observation.provenance = [];
+  }
+  return { ticker, company_name: `${ticker} fixture`, question, matched: true, status,
+    metric: 'revenue', metric_label: 'Revenue', period_intent: 'quarter',
+    formatted_value: status === 'available' ? '$109.42B' : null,
+    answer_text: status === 'available' ? `${ticker} fixture latest available quarterly revenue was $109.42B for the quarter ended March 31, 2025.` : `Quarterly revenue growth is unavailable. ${observation.reason}`,
+    explanation: observation.reason, observation, comparability: null, selection_policy: 'fixture' };
+}
+
+test('mounted direct answer arrives before slow evidence, discloses exact provenance, and survives evidence failure', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const query = "What was Apple's latest quarterly revenue?";
+  const pendingEvidence = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  const answer = app.host.querySelector('.direct-answer');
+  assert.match(answer.textContent, /Research Answer.*\$109\.42B/);
+  assert.deepEqual(app.evidence(), [], 'Direct answer is usable while evidence is still pending');
+  const disclosure = answer.querySelector('details');
+  assert.equal(disclosure.open, false);
+  await act(async () => disclosure.querySelector('summary').click());
+  assert.equal(disclosure.open, true);
+  assert.match(disclosure.textContent, /Exact API value:.*109417000000 USD/);
+  assert.match(disclosure.textContent, /Accession AAPL-test-accession/);
+  assert.equal(disclosure.querySelector('a').href, filing('AAPL').sec_url);
+  await app.release(pendingEvidence, { detail: 'Local evidence failure fixture' }, 500);
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109\.42B/);
+  assert.match(app.host.querySelector('[role="alert"]').textContent, /Local evidence failure/);
+  assert.equal(app.requests.filter(request => request.path.endsWith('/answer')).length, 0);
+});
+
+test('mounted unavailable answer explains source incompatibility before supporting evidence', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const query = 'latest quarterly revenue growth';
+  const evidence = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query, 'unavailable'));
+  await app.release(evidence, context('AAPL', query));
+  const answer = app.host.querySelector('.direct-answer');
+  assert.match(answer.textContent, /Unavailable.*economic bases are not explicitly comparable/);
+  assert.doesNotMatch(answer.textContent, /\$0|\$109/);
+  assert.ok(answer.compareDocumentPosition(app.host.querySelector('.evidence-card')) & Node.DOCUMENT_POSITION_FOLLOWING);
+});
+
+test('mounted answer failure preserves evidence fallback without a fabricated direct result', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const query = "What is Apple's main product?";
+  const evidence = await app.search('AAPL', query, true);
+  await app.release(evidence, context('AAPL', query));
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), { detail: 'Answer fixture unavailable' }, 503);
+  assert.match(app.evidence().join(''), /AAPL test evidence/);
+  assert.ok(!app.host.querySelector('.direct-answer'));
+  assert.match(app.host.textContent, /Direct financial answer unavailable/);
+});
+
+test('mounted optional AI failure retains both deterministic answer and SEC evidence', async ctx => {
+  const app = await mount(ctx, true);
+  await app.completeCompany('AAPL', '1000000000');
+  const query = 'latest quarterly revenue';
+  const evidence = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  await app.release(evidence, context('AAPL', query));
+  const priorAnswer = app.host.querySelector('.direct-answer').textContent;
+  const priorEvidence = app.evidence();
+  await app.click('Generate AI analysis');
+  await app.release(app.request(companyPath('AAPL', `filings/${filing('AAPL').accession_number}/answer`)), { detail: 'Test provider failure' }, 502);
+  assert.equal(app.host.querySelector('.direct-answer').textContent, priorAnswer);
+  assert.deepEqual(app.evidence(), priorEvidence);
+});
+
+test('mounted company switch removes completed answer and rejects pending old answer even if cancellation is ignored', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const query = 'latest revenue';
+  const evidence = await app.search('AAPL', query, true);
+  await app.release(evidence, context('AAPL', query));
+  const oldAnswer = app.request(companyPath('AAPL', 'research-answer'));
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  assert.equal(oldAnswer.init.signal.aborted, true);
+  await app.release(oldAnswer, directAnswer('AAPL', query));
+  assert.ok(!app.host.querySelector('.direct-answer'));
+  await app.completeCompany('JPM', '2000000000');
+  const newEvidence = await app.search('JPM', query, true);
+  await app.release(app.request(companyPath('JPM', 'research-answer')), directAnswer('JPM', query));
+  await app.release(newEvidence, context('JPM', query));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /JPM fixture/);
+  assert.doesNotMatch(app.host.querySelector('.direct-answer').textContent, /AAPL/);
+  await app.change(app.host.querySelector('#company'), 'AAPL');
+  assert.ok(!app.host.querySelector('.direct-answer'), 'Completed answer disappears immediately on switch');
+});
+
+test('mounted query edit rejects late direct answer and company mismatch displays guidance', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const query = 'latest revenue';
+  const evidence = await app.search('AAPL', query, true);
+  const oldAnswer = app.request(companyPath('AAPL', 'research-answer'));
+  await app.change(app.host.querySelector('textarea'), 'gross margin');
+  await app.release(oldAnswer, directAnswer('AAPL', query));
+  await app.release(evidence, context('AAPL', query));
+  assert.ok(!app.host.querySelector('.direct-answer'));
+  assert.deepEqual(app.evidence(), []);
+  const mismatchQuery = "What was Microsoft's revenue?";
+  const nextEvidence = await app.search('AAPL', mismatchQuery, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), { ticker: 'AAPL', question: mismatchQuery, matched: false, status: 'company_mismatch', explanation: 'This workspace is selected for Apple fixture. Select Microsoft to research it.' });
+  await app.release(nextEvidence, context('AAPL', mismatchQuery));
+  assert.ok(!app.host.querySelector('.direct-answer'));
+  assert.match(app.host.textContent, /This workspace is selected for Apple/);
+});
+
+test('mounted company with no indexed filing can receive a direct answer without context or AI requests', async ctx => {
+  const app = await mount(ctx, false, [{ ...companies[0], has_indexed_filing: false, indexed_filing_count: 0 }]);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'sources')), []);
+  assert.match(app.host.textContent, /Not indexed for filing research/);
+  const query = 'latest quarterly revenue';
+  await app.change(app.host.querySelector('textarea'), query);
+  await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109\.42B/);
+  assert.equal(app.requests.filter(request => /\/context$|\/answer$/.test(request.path)).length, 0);
 });

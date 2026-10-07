@@ -6,8 +6,8 @@ import { describeApiError, getFinancialSummary, getMetricHistory, type Company, 
 import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, officialSecUrl,
   periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS } from "@/lib/research";
 
-export function MetricProvenance({ point }: { point: NormalizedMetric }) {
-  return <details className="provenance"><summary>Sources and details</summary>
+export function MetricProvenance({ point, summary = "Sources and details" }: { point: NormalizedMetric; summary?: string }) {
+  return <details className="provenance"><summary>{summary}</summary>
     <div className="details-body">
       <p>{periodLabel(point.period)}</p>
       {point.value !== null && <p>Exact API value: <span className="mono">{point.value} {point.unit}</span></p>}

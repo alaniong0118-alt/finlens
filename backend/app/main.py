@@ -34,6 +34,7 @@ from app.answer_service import (
 from app.models import Company, FinancialFact, FilingChunk
 from app.financial_metrics_service import load_financial_metrics, UnknownCompany, UnknownMetric
 from app.financial_metric_schemas import NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
+from app.research_answer_service import ResearchAnswer, ResearchAnswerRequest, answer_research_question
 from app.schemas import (
     CompanyResponse,
     FinancialSourceResponse,
@@ -156,6 +157,15 @@ def get_companies() -> list[CompanyResponse]:
             )
             for company, count in rows
         ]
+
+
+@app.post("/companies/{ticker}/research-answer", response_model=ResearchAnswer)
+def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
+    with SessionLocal() as session:
+        try:
+            return answer_research_question(session, ticker, request.question)
+        except UnknownCompany:
+            raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
 
 
 @app.get("/companies/{ticker}/financials/summary", response_model=NormalizedFinancialSummary)

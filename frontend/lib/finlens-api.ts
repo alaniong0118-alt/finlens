@@ -210,6 +210,22 @@ export type FilingContext = {
   context: string; citations: Citation[]; evidence_status: "sufficient" | "insufficient";
 };
 
+export type ResearchAnswer = {
+  ticker: string; company_name: string; question: string; matched: boolean;
+  status: "available" | "unavailable" | "not_applicable" | "not_matched" | "company_mismatch";
+  metric: string | null; metric_label: string | null;
+  period_intent: "quarter" | "annual" | "latest_available" | null;
+  formatted_value: string | null; answer_text: string | null; explanation: string | null;
+  observation: NormalizedMetric | null; comparability: MetricHistory["comparability"] | null;
+  selection_policy: string;
+};
+
+export function getResearchAnswer(ticker: string, question: string, signal?: AbortSignal): Promise<ResearchAnswer> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/research-answer`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }), signal,
+  });
+}
+
 export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
   return requestJson("/capabilities", { signal });
 }

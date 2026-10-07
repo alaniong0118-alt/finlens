@@ -11,7 +11,7 @@ export const PERIOD_LABELS: Record<PeriodKind, string> = {
   nine_months: "Nine-month YTD", instant: "As of date",
 };
 export const SNAPSHOT_METRICS = ["revenue", "revenue_growth_yoy", "net_income", "diluted_eps", "operating_income", "net_margin"];
-export const AI_UNAVAILABLE = "AI analysis is currently unavailable. The SEC evidence below is still available in Research Mode.";
+export const AI_UNAVAILABLE = "AI analysis is currently unavailable. The SEC evidence and any direct financial answer are still available in Research Mode.";
 
 export function formatDate(value: string | null): string {
   if (!value) return "Unknown date";

@@ -1,0 +1,13 @@
+{
+  "counts": {
+    "companies": 35,
+    "financial_facts": 58881,
+    "filing_chunks": 3175,
+    "embeddings": 3175
+  },
+  "sha256": {
+    "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+    "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+    "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+  }
+}

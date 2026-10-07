@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -17,7 +17,11 @@ function component(path) {
   if (cache.has(path)) return cache.get(path);
   const exports = {};
   const output = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const localRequire = (name) => name.startsWith('@/') ? component(fileURLToPath(new URL(`../${name.slice(2)}.ts`, import.meta.url))) : require(name);
+  const localRequire = (name) => {
+    if (!name.startsWith('@/')) return require(name);
+    const base = fileURLToPath(new URL(`../${name.slice(2)}`, import.meta.url));
+    return component(['.tsx', '.ts'].map(extension => base + extension).find(existsSync));
+  };
   new Function('require', 'exports', output)(localRequire, exports);
   cache.set(path, exports);
   return exports;

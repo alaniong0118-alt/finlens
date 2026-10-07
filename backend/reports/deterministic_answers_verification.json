@@ -1,0 +1,807 @@
+{
+  "verified_at": "2026-10-07T10:17:23.144365+00:00",
+  "api_url": "http://127.0.0.1:8021",
+  "source_validation": "Exact typed HTTP results equal existing FinancialMetrics; every selected/alternative source and derived input checked against stored rows.",
+  "capabilities": {
+    "research_mode": true,
+    "ai_analysis_configured": false
+  },
+  "http_cases": [
+    {
+      "ticker": "AAPL",
+      "question": "What was Apple's latest quarterly revenue?",
+      "http_status": 200,
+      "elapsed_ms": 168.75,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What was Apple's latest quarterly revenue?",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": "$109.42B",
+        "answer_text": "Apple Inc.'s latest available quarterly revenue was $109.42B for the quarter ended June 27, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "109417000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-03-29",
+            "end": "2026-06-27",
+            "fiscal_year": 2026,
+            "fiscal_period": "Q3",
+            "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1853,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "109417000000.0000",
+              "unit": "USD",
+              "period_start": "2026-03-29",
+              "period_end": "2026-06-27",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q3",
+              "frame": "CY2026Q2",
+              "filed": "2026-07-31",
+              "form": "10-Q",
+              "accession_number": "0000320193-26-000020",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/0000320193-26-000020-index.html",
+              "stored_at": "2026-10-03T07:27:26.732615"
+            }
+          ],
+          "alternatives": [],
+          "inputs": [],
+          "revenue_basis": "customer_contract"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "JPM",
+      "question": "What is JPMorgan's latest quarterly revenue?",
+      "http_status": 200,
+      "elapsed_ms": 64.07,
+      "result": {
+        "ticker": "JPM",
+        "company_name": "JPMorgan Chase & Co.",
+        "question": "What is JPMorgan's latest quarterly revenue?",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": "$57.35B",
+        "answer_text": "JPMorgan Chase & Co.'s latest available quarterly revenue was $57.35B for the quarter ended June 30, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "57347000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-04-01",
+            "end": "2026-06-30",
+            "fiscal_year": 2026,
+            "fiscal_period": "Q2",
+            "fiscal_label_basis": "ytd_start_with_observed_calendar_year_pattern"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 5034,
+              "canonical_metric": "revenue",
+              "company_cik": "0000019617",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenuesNetOfInterestExpense",
+              "value": "57347000000.0000",
+              "unit": "USD",
+              "period_start": "2026-04-01",
+              "period_end": "2026-06-30",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q2",
+              "frame": "CY2026Q2",
+              "filed": "2026-08-06",
+              "form": "10-Q",
+              "accession_number": "0001628280-26-054343",
+              "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026054343/0001628280-26-054343-index.html",
+              "stored_at": "2026-10-03T07:33:17.263490"
+            }
+          ],
+          "alternatives": [],
+          "inputs": [],
+          "revenue_basis": "net_interest"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "COST",
+      "question": "What was Costco's latest quarterly revenue growth?",
+      "http_status": 200,
+      "elapsed_ms": 117.72,
+      "result": {
+        "ticker": "COST",
+        "company_name": "COSTCO WHOLESALE CORP /NEW",
+        "question": "What was Costco's latest quarterly revenue growth?",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue_growth_yoy",
+        "metric_label": "Revenue growth YoY",
+        "period_intent": "quarter",
+        "formatted_value": null,
+        "answer_text": "Quarterly revenue growth YoY for COSTCO WHOLESALE CORP /NEW is unavailable. Current/prior revenue economic bases are not explicitly comparable.",
+        "explanation": "Current/prior revenue economic bases are not explicitly comparable.",
+        "observation": {
+          "metric": "revenue_growth_yoy",
+          "unit": "ratio",
+          "status": "unavailable",
+          "value": null,
+          "reason": "Current/prior revenue economic bases are not explicitly comparable.",
+          "period": {
+            "kind": "quarter",
+            "start": "2026-02-16",
+            "end": "2026-05-10",
+            "fiscal_year": 2026,
+            "fiscal_period": "Q3",
+            "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+          },
+          "formula": "(revenue - prior_comparable_revenue) / prior_comparable_revenue",
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "JNJ",
+      "question": "What was JNJ's latest quarterly net income?",
+      "http_status": 200,
+      "elapsed_ms": 92.9,
+      "result": {
+        "ticker": "JNJ",
+        "company_name": "JOHNSON & JOHNSON",
+        "question": "What was JNJ's latest quarterly net income?",
+        "matched": true,
+        "status": "available",
+        "metric": "net_income",
+        "metric_label": "Net income",
+        "period_intent": "quarter",
+        "formatted_value": "$5.53B",
+        "answer_text": "JOHNSON & JOHNSON's latest available quarterly net income was $5.53B for the quarter ended June 28, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "net_income",
+          "unit": "USD",
+          "status": "available",
+          "value": "5534000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-03-30",
+            "end": "2026-06-28",
+            "fiscal_year": null,
+            "fiscal_period": "Q2",
+            "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 6037,
+              "canonical_metric": "net_income",
+              "company_cik": "0000200406",
+              "stored_metric": "NetIncomeLoss",
+              "original_concept": "NetIncomeLoss",
+              "value": "5534000000.0000",
+              "unit": "USD",
+              "period_start": "2026-03-30",
+              "period_end": "2026-06-28",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q2",
+              "frame": "CY2026Q2",
+              "filed": "2026-07-23",
+              "form": "10-Q",
+              "accession_number": "0000200406-26-000153",
+              "source": "SEC Company Facts API: NetIncomeLoss",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000153/0000200406-26-000153-index.html",
+              "stored_at": "2026-10-04T13:51:11.140948"
+            }
+          ],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "XOM",
+      "question": "What was XOM's latest quarterly revenue?",
+      "http_status": 200,
+      "elapsed_ms": 7.37,
+      "result": {
+        "ticker": "XOM",
+        "company_name": "ExxonMobil Holdings Corp",
+        "question": "What was XOM's latest quarterly revenue?",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": "$116.02B",
+        "answer_text": "ExxonMobil Holdings Corp's latest available quarterly revenue was $116.02B for the quarter ended June 30, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "116017000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-04-01",
+            "end": "2026-06-30",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 7165,
+              "canonical_metric": "revenue",
+              "company_cik": "0002115436",
+              "stored_metric": "Revenues",
+              "original_concept": "Revenues",
+              "value": "116017000000.0000",
+              "unit": "USD",
+              "period_start": "2026-04-01",
+              "period_end": "2026-06-30",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q2",
+              "frame": "CY2026Q2",
+              "filed": "2026-08-03",
+              "form": "10-Q",
+              "accession_number": "0000034088-26-000093",
+              "source": "SEC Company Facts API: Revenues",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/2115436/000003408826000093/0000034088-26-000093-index.html",
+              "stored_at": "2026-10-04T13:52:00.044318"
+            }
+          ],
+          "alternatives": [],
+          "inputs": [],
+          "revenue_basis": "total_revenue"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "XOM",
+      "question": "What was XOM's annual revenue?",
+      "http_status": 200,
+      "elapsed_ms": 6.51,
+      "result": {
+        "ticker": "XOM",
+        "company_name": "ExxonMobil Holdings Corp",
+        "question": "What was XOM's annual revenue?",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": null,
+        "answer_text": "Annual revenue for ExxonMobil Holdings Corp is unavailable. No compatible stored reporting period.",
+        "explanation": "No compatible stored reporting period.",
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "unavailable",
+          "value": null,
+          "reason": "No compatible stored reporting period.",
+          "period": null,
+          "formula": null,
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What was Apple's annual net income?",
+      "http_status": 200,
+      "elapsed_ms": 111.59,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What was Apple's annual net income?",
+        "matched": true,
+        "status": "available",
+        "metric": "net_income",
+        "metric_label": "Net income",
+        "period_intent": "annual",
+        "formatted_value": "$112.01B",
+        "answer_text": "Apple Inc.'s latest available annual net income was $112.01B for the year ended September 27, 2025.",
+        "explanation": null,
+        "observation": {
+          "metric": "net_income",
+          "unit": "USD",
+          "status": "available",
+          "value": "112010000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "annual",
+            "start": "2024-09-29",
+            "end": "2025-09-27",
+            "fiscal_year": 2025,
+            "fiscal_period": "FY",
+            "fiscal_label_basis": "annual_period_end_year"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1971,
+              "canonical_metric": "net_income",
+              "company_cik": "0000320193",
+              "stored_metric": "NetIncomeLoss",
+              "original_concept": "NetIncomeLoss",
+              "value": "112010000000.0000",
+              "unit": "USD",
+              "period_start": "2024-09-29",
+              "period_end": "2025-09-27",
+              "stored_period_type": "annual",
+              "source_fiscal_year": 2025,
+              "source_fiscal_period": "FY",
+              "frame": "CY2025",
+              "filed": "2025-10-31",
+              "form": "10-K",
+              "accession_number": "0000320193-25-000079",
+              "source": "SEC Company Facts API: NetIncomeLoss",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+              "stored_at": "2026-10-03T07:27:26.750876"
+            }
+          ],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What is Apple's latest available revenue?",
+      "http_status": 200,
+      "elapsed_ms": 110.46,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What is Apple's latest available revenue?",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "latest_available",
+        "formatted_value": "$109.42B",
+        "answer_text": "Apple Inc.'s latest available revenue was $109.42B for the quarter ended June 27, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "109417000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-03-29",
+            "end": "2026-06-27",
+            "fiscal_year": 2026,
+            "fiscal_period": "Q3",
+            "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1853,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "109417000000.0000",
+              "unit": "USD",
+              "period_start": "2026-03-29",
+              "period_end": "2026-06-27",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q3",
+              "frame": "CY2026Q2",
+              "filed": "2026-07-31",
+              "form": "10-Q",
+              "accession_number": "0000320193-26-000020",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/0000320193-26-000020-index.html",
+              "stored_at": "2026-10-03T07:27:26.732615"
+            }
+          ],
+          "alternatives": [],
+          "inputs": [],
+          "revenue_basis": "customer_contract"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "JNJ",
+      "question": "What is JNJ's latest diluted EPS?",
+      "http_status": 200,
+      "elapsed_ms": 164.61,
+      "result": {
+        "ticker": "JNJ",
+        "company_name": "JOHNSON & JOHNSON",
+        "question": "What is JNJ's latest diluted EPS?",
+        "matched": true,
+        "status": "available",
+        "metric": "diluted_eps",
+        "metric_label": "Diluted EPS",
+        "period_intent": "latest_available",
+        "formatted_value": "$2.27 per share",
+        "answer_text": "JOHNSON & JOHNSON's latest available diluted eps was $2.27 per share for the quarter ended June 28, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "diluted_eps",
+          "unit": "USD/share",
+          "status": "available",
+          "value": "2.2700",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-03-30",
+            "end": "2026-06-28",
+            "fiscal_year": null,
+            "fiscal_period": "Q2",
+            "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 6350,
+              "canonical_metric": "diluted_eps",
+              "company_cik": "0000200406",
+              "stored_metric": "EarningsPerShareDiluted",
+              "original_concept": "EarningsPerShareDiluted",
+              "value": "2.2700",
+              "unit": "USD/shares",
+              "period_start": "2026-03-30",
+              "period_end": "2026-06-28",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q2",
+              "frame": "CY2026Q2",
+              "filed": "2026-07-23",
+              "form": "10-Q",
+              "accession_number": "0000200406-26-000153",
+              "source": "SEC Company Facts API: EarningsPerShareDiluted",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000153/0000200406-26-000153-index.html",
+              "stored_at": "2026-10-04T13:51:11.141130"
+            }
+          ],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": {
+          "value_basis": "reported_as_filed",
+          "status": "unverified",
+          "reason": "SEC source values are preserved; cross-period stock-split/restatement share-basis comparability is not established."
+        },
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What is Apple's main product?",
+      "http_status": 200,
+      "elapsed_ms": 4.8,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What is Apple's main product?",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported latest financial value questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What clinical trial results did Apple report?",
+      "http_status": 200,
+      "elapsed_ms": 4.18,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What clinical trial results did Apple report?",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported latest financial value questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What drove revenue growth?",
+      "http_status": 200,
+      "elapsed_ms": 4.07,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What drove revenue growth?",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported latest financial value questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What was Microsoft's revenue?",
+      "http_status": 200,
+      "elapsed_ms": 3.98,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What was Microsoft's revenue?",
+        "matched": false,
+        "status": "company_mismatch",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This workspace is selected for Apple Inc. (AAPL). Select the company named in your question or ask about this company.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID."
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "query": "What was Apple's latest quarterly revenue?",
+      "evidence_status": "sufficient",
+      "citation_count": 5
+    },
+    {
+      "query": "What is Apple's main product?",
+      "evidence_status": "sufficient",
+      "citation_count": 1
+    },
+    {
+      "query": "What clinical trial results did Apple report?",
+      "evidence_status": "insufficient",
+      "citation_count": 0
+    }
+  ],
+  "database_before": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "database_after": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "database_unchanged": true,
+  "external_sec_calls": 0,
+  "external_ai_calls": 0,
+  "guard": "Acceptance server forbids SEC transport/OpenAI client construction; no AI answer POST sent.",
+  "validation": {
+    "backend": {
+      "command": "backend/.venv/Scripts/python.exe -m pytest tests/test_research_answers.py tests/test_financial_metrics.py tests/test_capabilities.py tests/test_rag.py -q -p no:cacheprovider",
+      "tests_passed": 161,
+      "subtests_passed": 27,
+      "warnings": "Existing Starlette/httpx and SQLAlchemy utcnow deprecations; no dependency changes."
+    },
+    "frontend": {
+      "command": "npm test",
+      "tests_passed": 34,
+      "mounted_tests": 14,
+      "lint": "npm run lint passed",
+      "build": "npm run build passed in identical disposable frontend source copy, using repository node_modules via junction; type check included; page 110kB / first load 213kB",
+      "warnings": "Existing Node MODULE_TYPELESS_PACKAGE_JSON warning during tests; build emitted no warnings."
+    },
+    "fastapi_import": {
+      "passed": true,
+      "routes": 21
+    },
+    "next_env": {
+      "unchanged": true,
+      "sha256": "B6768A2C7FB9A45BEA5D463A4993FDD8590BD50E5FCAB0C6F84921EE981ACC82"
+    },
+    "git_diff_check": "passed; existing LF/CRLF conversion notices only"
+  },
+  "browser": {
+    "frontend_url": "http://127.0.0.1:3003",
+    "backend_url": "http://127.0.0.1:8021",
+    "build": "final production copy; normal no-key configuration restored after fixtures",
+    "real_company_results": {
+      "AAPL": "$109.42B quarter ended June 27 2026; exact 109417000000.0000 USD; fact 1853; accession 0000320193-26-000020; filed July 31, 2026; direct precedes 5 evidence passages",
+      "JPM": "$57.35B quarter ended June 30, 2026; net_interest basis retained",
+      "COST": "Quarterly revenue growth unavailable; economic bases not explicitly comparable; period May 10, 2026",
+      "JNJ": "$5.53B quarterly net income ended June 28, 2026",
+      "XOM": "$116.02B quarterly revenue ended June 30, 2026; current CIK 2115436; annual revenue unavailable; structured answer retained despite insufficient selected-filing evidence"
+    },
+    "unsupported": "Apple main product -> no direct metric, existing selected-filing evidence (1 passage); clinical trial -> insufficient evidence (0 passages), optional AI disabled",
+    "company_mismatch": "Microsoft revenue underAAPL -> explicit selectedApple guidance, no direct metric; selected-filing evidence remains labelledApple",
+    "stale_company": "Old direct answer count 0 immediately after changing XOM to AAPL; five representative company switches showed only current issuer",
+    "themes": [
+      "Light (actual data-theme light)",
+      "Dark (actual data-theme dark)",
+      "System (actual OS Light)"
+    ],
+    "responsive": {
+      "desktop": {
+        "viewport_width": 1440,
+        "document_client_width": 1425,
+        "document_scroll_width": 1425
+      },
+      "mobile": {
+        "viewport_width": 390,
+        "document_client_width": 375,
+        "document_scroll_width": 375,
+        "provenance": "expanded source concepts/accession wrapped within card"
+      }
+    },
+    "keyboard": "Enter toggled native View provenance and visible focus outline; exact values andSEC links disclosed",
+    "evidence_failure_fixture": "Real direct AAPL $109.42B/provenance persisted when local context 503 controlled fixture; zero passages because retrieval failed; independent error visible",
+    "ai_failure_fixture": "Configured test-only local provider failure; explicitAI POST 502; direct AAPL $109.42B and all 5 real passages unchanged; neutral fallback; OpenAI client forbidden",
+    "final_polish_recheck": "Final build direct AAPL/provenance, keyboard, mobile andDark reviewed; normal no-key backend restored;5 supporting passages present",
+    "boundaries": "Manual browser/keyboard/responsive checks, not exhaustive accessibility audit. Controlled failure fixtures are not live provider success."
+  },
+  "runtime_limitation": "Historical acceptance preserved the then-stale 8000 backend and used 3003/8021. Closure now confirms 3000/8000 serve the new route; isolated 3003/8021 servers are no longer reachable.",
+  "self_review": "Financial selector, canonical registry, schemas of existing metrics, retrieval/evidence policy, provider service, dependencies and database schema unchanged. Question aliases are presentation only. Closed residual vocabulary rejects causal/segment/date/multiple metric/future/ambiguous questions. No-index path, independent failures and late responses covered by mounted tests. Exact stored source values/formulas verified; no values fabricated. OriginalItem8 preserved; no next roadmap work.",
+  "database_final": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "final_preservation_after_browser": true,
+  "closure": {
+    "checked_at": "2026-10-07T15:04:31.455558+00:00",
+    "implementation_and_tests_present": true,
+    "exec_plan_status": "completed",
+    "application_or_test_changes_this_continuation": false,
+    "expensive_validation_repeated": false,
+    "python_syntax_files": 4,
+    "fastapi_import_routes": 21,
+    "internal_references_checked": 83,
+    "internal_reference_errors": 0,
+    "frontend_source_files_equal_accepted_copy": 10,
+    "recorded_fingerprints_before_after_final_equal": true,
+    "database_fingerprints_recomputed": false,
+    "local_runtime": {
+      "frontend": 3000,
+      "backend": 8000,
+      "research_answer_route_registered": true,
+      "prior_acceptance_servers_reachable": false
+    },
+    "frontend_proxy_smoke": {
+      "ticker": "AAPL",
+      "status": "available",
+      "formatted_value": "$109.42B",
+      "value": "109417000000.0000",
+      "period_end": "2026-06-27",
+      "accession": "0000320193-26-000020"
+    },
+    "unrelated_changes_preserved": [
+      "Start-FinLens.ps1",
+      "Stop-FinLens.ps1",
+      "frontend/next-env.d.ts"
+    ],
+    "current_next_env_sha256": "F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0",
+    "historical_next_env_hash_preserved_in_validation": true,
+    "financial_index_data_writes": 0,
+    "external_sec_calls": 0,
+    "external_ai_calls": 0,
+    "git_diff_check": "passed",
+    "commit_or_push": false,
+    "git_status": [
+      " M README.md",
+      " M ROADMAP.md",
+      " M backend/app/main.py",
+      " M docs/architecture.md",
+      " M docs/financial-metrics.md",
+      " M docs/product-spec.md",
+      " M frontend/app/globals.css",
+      " M frontend/components/filing-research.tsx",
+      " M frontend/components/financial-research.tsx",
+      " M frontend/lib/finlens-api.ts",
+      " M frontend/lib/research.ts",
+      " M frontend/next-env.d.ts",
+      " M frontend/tests/finlens-api.test.mjs",
+      " M frontend/tests/research-interactions.test.mjs",
+      " M frontend/tests/research.test.mjs",
+      "?? Start-FinLens.ps1",
+      "?? Stop-FinLens.ps1",
+      "?? backend/app/research_answer_service.py",
+      "?? backend/reports/deterministic_answers_baseline.json",
+      "?? backend/reports/deterministic_answers_final_report.md",
+      "?? backend/reports/deterministic_answers_verification.json",
+      "?? backend/scripts/verify_research_answers.py",
+      "?? backend/tests/test_research_answers.py",
+      "?? docs/exec-plans/completed/2026-10-07-deterministic-research-answers.md",
+      "?? frontend/components/research-answer.tsx"
+    ]
+  }
+}

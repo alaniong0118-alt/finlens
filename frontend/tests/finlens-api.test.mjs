@@ -8,9 +8,25 @@ import {
   getAnswer,
   getCompanies,
   getFilingSources,
+  getResearchAnswer,
   readyCompanyCount,
   searchableFilings,
 } from "../lib/finlens-api.ts";
+
+test("requests one company-scoped deterministic answer with cancellation and no filing or provider input", async context => {
+  const calls = [];
+  context.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, options }); return jsonResponse({ ticker: "AAPL", matched: true });
+  });
+  const controller = new AbortController();
+  const question = "latest quarterly revenue";
+  await getResearchAnswer("AAPL", question, controller.signal);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/finlens/companies/AAPL/research-answer");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { question });
+  assert.equal(calls[0].options.signal, controller.signal);
+});
 
 function jsonResponse(body, status = 200, code = null) {
   return new Response(JSON.stringify(body), {

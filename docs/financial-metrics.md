@@ -84,6 +84,8 @@ Unknown company and unknown metric are HTTP 404 with distinct `detail.code` valu
 
 Each endpoint uses two SELECTs: company lookup and one bounded company fact load. All metric selection/calculation occurs in the service. The coverage verifier loads companies/facts once each and normalizes all 35 in memory. No per-metric SQL, cache or duplicated metrics table exists.
 
+Research Mode also exposes `POST /companies/{ticker}/research-answer` with `{ "question": "What was Apple's latest quarterly revenue?" }`. This bounded value-question wrapper reuses the same service without changing its selector semantics. Explicit quarterly/annual uses summary alignment; latest available selects the newest actual normalized observation (including unavailable), preferring shorter direct periods on equal end dates. Instant values are as-of. Response `observation` is the exact NormalizedMetric contract; EPS also carries the existing as-filed/unverified comparability warning. Display rounding never changes provenance values. Unknown/ambiguous or unsupported causal/segment/date/multiple-metric questions return `not_matched`; recognizable company mismatch returns `company_mismatch`. No provider or indexed filing is required. See [Research Answer scope](product-spec.md#deterministic-research-answers).
+
 ## Verified coverage and limitations
 
 Item 6's historical baseline contained 3,251 facts for ten issuers. Item 7 now has **58,881 observations across 35/35 companies**, retaining every original row unchanged. Supported source revenue/net-income observations exist for 35/35; EPS for 34/35. Current snapshot coverage below is measured after scope/date/unit selection:
