@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +53,11 @@ class DatabaseHealthResponse(BaseModel):
     database: str
 
 
+class CapabilityResponse(BaseModel):
+    research_mode: bool
+    ai_analysis_configured: bool
+
+
 class FilingAnswerRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     question: str = Field(min_length=1, max_length=2000)
@@ -86,6 +93,15 @@ def healthz() -> HealthResponse:
     return HealthResponse(
         status="ok",
         service="finlens-api",
+    )
+
+
+@app.get("/capabilities", response_model=CapabilityResponse)
+def capabilities() -> CapabilityResponse:
+    """Configuration only; does not probe a provider or disclose credentials."""
+    return CapabilityResponse(
+        research_mode=True,
+        ai_analysis_configured=bool(os.getenv("OPENAI_API_KEY", "").strip()),
     )
 
 

@@ -80,7 +80,7 @@ No ticker exceptions or sector guesses are used. Observed `RevenuesNetOfInterest
 
 EPS history alone includes `comparability: {"value_basis": "reported_as_filed", "status": "unverified", "reason": "..."}`. Every value remains the exact selected SEC fact; filing vintages may have different split/restatement share bases. Consumers must not interpret this as a verified comparable trend. No adjustment factors are guessed. Non-EPS histories omit this field; optional metadata serialization supports the existing Pydantic 2.10 minimum.
 
-Unknown company and unknown metric are HTTP 404 with distinct `detail.code` values. A known company/metric without observations returns HTTP 200, `status=unavailable`, null summary values or empty history, and a reason. Invalid period/limit is HTTP 422. Responses use dedicated Pydantic schemas. Legacy `/financial-summary`, `/financial-snapshot` and `/financial-history` contracts are retained; the frontend migration is future work.
+Unknown company and unknown metric are HTTP 404 with distinct `detail.code` values. A known company/metric without observations returns HTTP 200, `status=unavailable`, null summary values or empty history, and a reason. Invalid period/limit is HTTP 422. Responses use dedicated Pydantic schemas. Legacy `/financial-summary`, `/financial-snapshot` and `/financial-history` contracts are retained; Item 8 Research Mode consumes the standardized routes while retaining the legacy APIs.
 
 Each endpoint uses two SELECTs: company lookup and one bounded company fact load. All metric selection/calculation occurs in the service. The coverage verifier loads companies/facts once each and normalizes all 35 in memory. No per-metric SQL, cache or duplicated metrics table exists.
 

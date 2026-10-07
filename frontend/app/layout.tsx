@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "FinLens | SEC Filing Research",
-  description: "Ask financial questions and inspect the SEC filing evidence behind each answer.",
+  description: "Research public-company financial data, historical metrics and SEC evidence. AI analysis is optional.",
 };
 
 export default function RootLayout({
@@ -12,7 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: `(function(){var t='system';try{var p=localStorage.getItem('finlens-theme');if(p==='light'||p==='dark')t=p;}catch(e){}document.documentElement.dataset.theme=t==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;})();` }} /></head>
       <body>{children}</body>
     </html>
   );

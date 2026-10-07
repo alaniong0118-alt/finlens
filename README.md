@@ -2,7 +2,7 @@
 
 FinLens is an evidence-grounded financial research platform that lets users explore public-company SEC filings, ask financial questions, and trace answers back to official SEC evidence.
 
-A student engineering project focused on inspectable financial answers. The scope is local, single-filing research, not investment advice.
+A student engineering project focused on source-backed financial research. Financial snapshots, histories, charts and filing evidence work without an LLM. Optional AI remains scoped to one filing, not investment advice.
 
 ## Project overview, motivation, and problem
 
@@ -10,7 +10,7 @@ SEC filings contain useful evidence, but reading them involves long documents, i
 
 ## Project documentation
 
-The current demo is a foundation for a broader Research Mode that remains useful without an LLM; AI Analysis is an optional enhancement. Planned capabilities are distinct from the recorded implementation and acceptance results below.
+Research Mode is implemented; AI Analysis is an optional enhancement. Comparisons, deeper filing coverage and formal evaluation remain roadmap work, distinct from the recorded acceptance below.
 
 - [Roadmap and milestone status](ROADMAP.md)
 - [Product specification](docs/product-spec.md) and [AI-is-optional decision](docs/decisions/003-ai-is-optional.md)
@@ -43,7 +43,7 @@ Copy examples only on a fresh clone; preserve existing configured files. Edit th
 
 Replace the angle-bracket placeholder; do not paste it literally. URL-encode special characters in the database URL password (the root password is the original, unencoded value). Existing PostgreSQL volumes retain their original password: changing an env file does not change a database user's password.
 
-**OpenAI API key is only required for live generated answers.** Leave `OPENAI_API_KEY` blank for setup, company/filing selection, retrieval, context, and insufficient-evidence responses. Optional model/effort fields do not affect demo preparation. Never put backend credentials in frontend configuration.
+**OpenAI API key is only required for live generated answers.** Leave `OPENAI_API_KEY` blank for Research Mode: stored financial snapshots/history/charts, company/filing selection, evidence retrieval and source links. Optional model/effort fields do not affect demo preparation. Never put backend credentials in frontend configuration.
 
 ### 2. Prepare the demo and start the backend
 
@@ -74,25 +74,27 @@ npm ci
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
-Open **http://127.0.0.1:3000**. Select **AAPL**, then its indexed **10-Q**. The frontend supports selection and question entry without an OpenAI key. A supported generation request will report that the answer service needs a key; it will not fabricate an answer.
+Open **http://127.0.0.1:3000**. Select **AAPL** and inspect the snapshot and selected history. Expand **Sources and details** to inspect exact values and SEC provenance. Choose an indexed filing, enter a topic and select **Search SEC evidence**. This path requires no OpenAI key. Fresh demo setup prepares AAPL only; other companies need the separately documented catalog preparation before they become Ready or have financial data.
 
-To view retrieved evidence without generating an answer, open:
+The frontend displays evidence directly. The same API is inspectable at:
 
 - [Context for revenue growth](http://127.0.0.1:8000/companies/AAPL/filings/0000320193-26-000020/context?q=revenue%20growth&limit=5)
 - [API documentation](http://127.0.0.1:8000/docs)
 
-Context/evidence is available through these existing API endpoints; this setup task does not add a new frontend evidence viewer. The question “What clinical trial results did Apple report?” returns insufficient evidence without a model call.
+The question “What clinical trial results did Apple report?” returns insufficient evidence without a model call. **Generate AI analysis** is a separate explicit action when the backend reports configuration. Configuration does not prove provider availability; an AI failure preserves the evidence and shows neutral fallback copy.
 
 Default ports throughout this walkthrough are **backend 8000 / frontend 3000**. Keep both terminals running. Stop them with Ctrl+C; `docker compose down` stops PostgreSQL while preserving its named volume. Never remove the volume to update the project.
 
 ## Key features
 
-- Financial history and filing selection from stored SEC data.
+- No-key financial snapshots, period-specific histories/charts and expandable source provenance.
+- Filing selection and evidence excerpts from stored SEC data, independent of AI.
 - Primary-document extraction, inline XBRL cleanup, and chunks with offsets.
 - Keyword, semantic, and filing-scoped hybrid retrieval.
 - Bounded SOURCE blocks, retrieval scores, and structured citations.
 - OpenAI Responses API integration with structured output and sanitized errors.
 - Insufficient-evidence responses that skip the model.
+- Light/Dark/System appearance, persisted locally, with responsive and keyboard-accessible controls.
 
 ## System architecture
 
@@ -101,12 +103,16 @@ flowchart TD
     B[Browser] --> N[Next.js]
     N --> A[FastAPI]
     A --> F[Company and Filing Selection]
+    F --> M[Deterministic Metrics and Histories]
+    DB --> M
+    M --> R[Research Mode: Charts and Provenance]
     F --> H[Hybrid Retrieval]
     DB[(PostgreSQL + pgvector)] --> H
     H --> E[Evidence Policy]
     E -->|Qualified sources| C[RAG Context]
+    C --> R
     E -->|Insufficient| I[Abstain without LLM]
-    C --> L[OpenAI Responses API]
+    C -->|Explicit optional AI action| L[OpenAI Responses API]
     L --> V[Claim and Citation Validation]
     V --> D[Database-backed Citations]
     DB --> D
@@ -166,13 +172,13 @@ These controls address specific risks; they do not establish universal injection
 
 ## Frontend, backend, and database
 
-- **Frontend:** company/indexed-filing selectors, question entry, loading/error/insufficient states, and answer/citation rendering. Next.js proxies `/api/finlens` to FastAPI.
+- **Frontend:** Company Research (six snapshot cards, selected history chart/table, provenance), SEC Research (indexed filings and evidence search), and explicit optional AI Analysis (answer/claims/sources). Next.js proxies `/api/finlens` to FastAPI. Light/Dark/System themes use semantic CSS colors; mobile stacks the panels, wraps metadata and contains table scrolling.
 - **Backend:** financial analysis, SEC parsing/import services, independent search/context APIs, and structured answer generation with explicit errors.
 - **Database:** companies, financial facts, and chunks with lineage and `VECTOR(384)` embeddings. Alembic defines the schema.
 
 ## Testing and current verification status
 
-These recorded results come from the completed local milestone; they were not rerun merely to prepare this repository.
+The following table preserves historical MVP verification; later milestone results follow separately.
 
 | Check | Recorded result |
 |---|---|
@@ -262,7 +268,7 @@ GET /companies/MSFT/financials/metrics/revenue?period=annual&limit=10
 
 Fifteen canonical definitions provide date-aware summaries/history, Decimal calculations, explicit missing values and SEC fact/input provenance. Customer-contract revenue is explicitly labelled; it cannot establish a consolidated margin denominator alone. EPS histories expose unverified share-basis comparability. Values serialize as decimal strings; ratios use `0.25` for 25%. See [metric contracts](docs/financial-metrics.md) and [current structured-data verification](backend/reports/structured_financial_verification.json). The [Item 6 report](backend/reports/financial_metrics_verification.json) preserves its earlier 10-company structured-data baseline.
 
-Item 6 review-fix verification: **66 focused tests**, **168 backend tests and 44 subtests** passed, including the provider-mocked database suite. Permanent fiscal-calendar, revenue-scope, EPS and history-content regressions cover the review findings. Twenty-six real HTTP histories (716 observations), ten summaries, two-SELECT summaries and Alembic checks passed; all database fingerprints are unchanged. The linked report retains initial validation separately. This is backend Research Mode infrastructure; dashboard/chart work and live LLM auditing remain pending.
+Item 6 review-fix verification: **66 focused tests**, **168 backend tests and 44 subtests** passed, including the provider-mocked database suite. Permanent fiscal-calendar, revenue-scope, EPS and history-content regressions cover the review findings. Twenty-six real HTTP histories (716 observations), ten summaries, two-SELECT summaries and Alembic checks passed; all database fingerprints are unchanged. The linked report retains initial validation separately. This records backend Research Mode infrastructure; Item 8 now consumes it in the frontend. Live LLM auditing remains pending.
 
 ## Structured financial sync
 
@@ -280,6 +286,12 @@ Item 7 verified **35/35 issuers with structured facts**, **58,881 rows** includi
 
 Item 7 regression: **195 tests and 44 subtests passed**, including 27 sync tests; real content checks passed for 16 summary and 56 history responses across eight industries/issuers, alongside catalog/health checks. Alembic remains clean. See [identity, recovery and limitations](docs/data-sources.md#structured-financial-sync), [rollout/no-op proof](backend/reports/structured_financial_rollout.json), [source/coverage audit](backend/reports/structured_financial_verification.json) and the [completed plan](docs/exec-plans/completed/2026-10-04-structured-financial-coverage.md). No live LLM acceptance is claimed.
 
+## Research Mode verification
+
+Item 8: **19 frontend tests**, **4 focused capability tests**, lint, type checking, production build and FastAPI import passed. Real browser acceptance covered AAPL/JPM/JNJ/XOM/COST, 1440/1280/768/390 widths, Light/Dark/System, no-key evidence retrieval, fiscal-period controls, source disclosures and neutral insufficient evidence. A controlled provider-failure fixture retained the real evidence unchanged, with zero external provider calls. No live AI success is claimed. See [acceptance record](backend/reports/research_mode_verification.json) and [completed plan](docs/exec-plans/completed/2026-10-05-research-mode.md).
+
+Snapshots use one summary request; only the selected metric history is fetched (12 observations). Evidence is fetched on submit (up to five passages); card expansion makes no request. Charts use the existing Recharts dependency, discrete period bars and a source-backed table, preserving missing values and EPS comparability warnings. Approximate display rounding does not replace exact values in provenance.
+
 ## Limitations
 
 - Historical detailed retrieval evaluation covers Apple 10-Q `0000320193-26-000020`; representative indexing smoke checks do not establish general company/period retrieval quality.
@@ -292,8 +304,8 @@ Item 7 regression: **195 tests and 44 subtests passed**, including 27 sync tests
 
 ## Screenshots
 
-Placeholder: add real filing-selection, context, insufficient-evidence, and citation-trace captures. Add an answer screenshot only after a successful real run and audit. No mock screenshot is presented as a live result.
+Real Item 8 captures: [desktop Light](docs/screenshots/research-mode-light.jpg), [desktop Dark](docs/screenshots/research-mode-dark.jpg), and [mobile](docs/screenshots/research-mode-mobile.jpg). These show stored API data and evidence, not generated answers. Add an answer screenshot only after a successful real run and audit; demo video and broader portfolio packaging remain future work.
 
 ## Future work
 
-Follow the [roadmap](ROADMAP.md) for curated company coverage, normalized financial metrics, complete Research Mode, formal evaluation, optional AI analysis, hardening, and portfolio release. Real LLM acceptance remains pending and will run only when credits are intentionally available; it does not gate work on Research Mode.
+Follow the [roadmap](ROADMAP.md) for compatible comparisons, deeper flagship coverage, formal evaluation, optional multi-filing AI, hardening and portfolio release. Real LLM acceptance remains pending and will run only when credits are intentionally available.

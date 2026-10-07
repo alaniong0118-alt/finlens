@@ -1,0 +1,441 @@
+{
+  "milestone": "Item 8 — Research Mode",
+  "verified_at": "2026-10-04T18:49:04.159437+00:00",
+  "status": "completed within requested single-company research scope",
+  "real_llm": false,
+  "external_provider_calls": 0,
+  "database_before": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "database_after": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "database_unchanged": true,
+  "capabilities_no_key": {
+    "research_mode": true,
+    "ai_analysis_configured": false
+  },
+  "catalog": {
+    "companies": 35,
+    "ready": 35,
+    "indexed_filings_each": 1
+  },
+  "representative_companies": {
+    "AAPL": {
+      "http_status": 200,
+      "indexed_accession": "0000320193-26-000020",
+      "summary_period": {
+        "kind": "quarter",
+        "start": "2026-03-29",
+        "end": "2026-06-27",
+        "fiscal_year": 2026,
+        "fiscal_period": "Q3",
+        "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+      },
+      "available_metrics": 9,
+      "snapshot_metrics": {
+        "revenue": {
+          "status": "available",
+          "value": "109417000000.0000",
+          "reason": null,
+          "revenue_basis": "customer_contract"
+        },
+        "operating_income": {
+          "status": "available",
+          "value": "35695000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "net_income": {
+          "status": "available",
+          "value": "29789000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "diluted_eps": {
+          "status": "available",
+          "value": "2.0200",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "revenue_growth_yoy": {
+          "status": "available",
+          "value": "0.1635650176528138159853673061",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "net_margin": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "Selected revenue scope does not establish an approved total/net-interest margin denominator.",
+          "revenue_basis": null
+        }
+      },
+      "revenue_history_observations": 12,
+      "browser_evidence_query": "What drove revenue growth?",
+      "browser_evidence_passages": 5,
+      "browser_no_key_workflow": "passed"
+    },
+    "JPM": {
+      "http_status": 200,
+      "indexed_accession": "0001628280-26-054343",
+      "summary_period": {
+        "kind": "quarter",
+        "start": "2026-04-01",
+        "end": "2026-06-30",
+        "fiscal_year": 2026,
+        "fiscal_period": "Q2",
+        "fiscal_label_basis": "ytd_start_with_observed_calendar_year_pattern"
+      },
+      "available_metrics": 7,
+      "snapshot_metrics": {
+        "revenue": {
+          "status": "available",
+          "value": "57347000000.0000",
+          "reason": null,
+          "revenue_basis": "net_interest"
+        },
+        "operating_income": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "No compatible stored SEC fact for this period, concept and unit.",
+          "revenue_basis": null
+        },
+        "net_income": {
+          "status": "available",
+          "value": "21155000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "diluted_eps": {
+          "status": "available",
+          "value": "7.7000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "revenue_growth_yoy": {
+          "status": "available",
+          "value": "0.2768747773423583897399358746",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "net_margin": {
+          "status": "available",
+          "value": "0.3688946239559174847856034317",
+          "reason": null,
+          "revenue_basis": null
+        }
+      },
+      "revenue_history_observations": 12,
+      "browser_evidence_query": "revenue",
+      "browser_evidence_passages": 5,
+      "browser_no_key_workflow": "passed"
+    },
+    "JNJ": {
+      "http_status": 200,
+      "indexed_accession": "0000200406-26-000153",
+      "summary_period": {
+        "kind": "quarter",
+        "start": "2026-03-30",
+        "end": "2026-06-28",
+        "fiscal_year": null,
+        "fiscal_period": "Q2",
+        "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+      },
+      "available_metrics": 8,
+      "snapshot_metrics": {
+        "revenue": {
+          "status": "available",
+          "value": "25310000000.0000",
+          "reason": null,
+          "revenue_basis": "customer_contract"
+        },
+        "operating_income": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "No compatible stored SEC fact for this period, concept and unit.",
+          "revenue_basis": null
+        },
+        "net_income": {
+          "status": "available",
+          "value": "5534000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "diluted_eps": {
+          "status": "available",
+          "value": "2.2700",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "revenue_growth_yoy": {
+          "status": "available",
+          "value": "0.06599839952828201996377879796",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "net_margin": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "Selected revenue scope does not establish an approved total/net-interest margin denominator.",
+          "revenue_basis": null
+        }
+      },
+      "revenue_history_observations": 12,
+      "browser_evidence_query": "revenue",
+      "browser_evidence_passages": 5,
+      "browser_no_key_workflow": "passed"
+    },
+    "XOM": {
+      "http_status": 200,
+      "indexed_accession": "0000034088-26-000093",
+      "summary_period": {
+        "kind": "quarter",
+        "start": "2026-04-01",
+        "end": "2026-06-30",
+        "fiscal_year": null,
+        "fiscal_period": null,
+        "fiscal_label_basis": "unknown"
+      },
+      "available_metrics": 8,
+      "snapshot_metrics": {
+        "revenue": {
+          "status": "available",
+          "value": "116017000000.0000",
+          "reason": null,
+          "revenue_basis": "total_revenue"
+        },
+        "operating_income": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "No compatible stored SEC fact for this period, concept and unit.",
+          "revenue_basis": null
+        },
+        "net_income": {
+          "status": "available",
+          "value": "14525000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "diluted_eps": {
+          "status": "available",
+          "value": "3.4800",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "revenue_growth_yoy": {
+          "status": "available",
+          "value": "0.4234166809805413098422202046",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "net_margin": {
+          "status": "available",
+          "value": "0.1251971693803494315488247412",
+          "reason": null,
+          "revenue_basis": null
+        }
+      },
+      "revenue_history_observations": 2,
+      "browser_evidence_query": "revenue",
+      "browser_evidence_passages": 5,
+      "browser_no_key_workflow": "passed"
+    },
+    "COST": {
+      "http_status": 200,
+      "indexed_accession": "0000909832-26-000051",
+      "summary_period": {
+        "kind": "quarter",
+        "start": "2026-02-16",
+        "end": "2026-05-10",
+        "fiscal_year": 2026,
+        "fiscal_period": "Q3",
+        "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+      },
+      "available_metrics": 7,
+      "snapshot_metrics": {
+        "revenue": {
+          "status": "available",
+          "value": "70527000000.0000",
+          "reason": null,
+          "revenue_basis": "customer_contract"
+        },
+        "operating_income": {
+          "status": "available",
+          "value": "2815000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "net_income": {
+          "status": "available",
+          "value": "2192000000.0000",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "diluted_eps": {
+          "status": "available",
+          "value": "4.9300",
+          "reason": null,
+          "revenue_basis": null
+        },
+        "revenue_growth_yoy": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "Current/prior revenue economic bases are not explicitly comparable.",
+          "revenue_basis": null
+        },
+        "net_margin": {
+          "status": "unavailable",
+          "value": null,
+          "reason": "Selected revenue scope does not establish an approved total/net-interest margin denominator.",
+          "revenue_basis": null
+        }
+      },
+      "revenue_history_observations": 12,
+      "browser_evidence_query": "revenue",
+      "browser_evidence_passages": 5,
+      "browser_no_key_workflow": "passed"
+    }
+  },
+  "browser": {
+    "audited_original_app": "http://127.0.0.1:3000",
+    "acceptance_app": "http://127.0.0.1:3001",
+    "acceptance_backend": "http://127.0.0.1:8020",
+    "viewport_checks": [
+      {
+        "viewport_width": 1440,
+        "document_width": 1425,
+        "scroll_width": 1425
+      },
+      {
+        "viewport_width": 1280,
+        "document_width": 1265,
+        "scroll_width": 1265
+      },
+      {
+        "viewport_width": 768,
+        "document_width": 753,
+        "scroll_width": 753
+      },
+      {
+        "viewport_width": 390,
+        "document_width": 375,
+        "scroll_width": 375,
+        "chart_width": 303
+      }
+    ],
+    "themes": [
+      "Light",
+      "Dark",
+      "System (resolved to actual OS Dark)"
+    ],
+    "persisted_dark_after_reload": true,
+    "mobile_expanded_source_card_width": 303,
+    "keyboard_checks": [
+      "Theme select keys with visible 3px focus",
+      "Metric provenance Enter disclosure",
+      "Full evidence Enter disclosure"
+    ],
+    "history_checks": [
+      "JNJ EPS annual with reported-as-filed comparability warning",
+      "JNJ assets switches to As of date",
+      "XOM direct quarters: two observations; annual empty",
+      "COST YoY unavailable due incompatible economic basis"
+    ],
+    "rapid_company_switch": [
+      "JPM",
+      "JNJ",
+      "COST"
+    ],
+    "stale_evidence_cleared": true,
+    "negative_question": "What clinical trial results did Apple report?",
+    "negative_evidence_status": "insufficient",
+    "negative_ai_button_disabled": true,
+    "provider_failure_fixture": {
+      "type": "controlled local answer-service failure, real DB retrieval, OpenAI client forbidden",
+      "http_status": 502,
+      "explicit_ai_requests": 1,
+      "external_provider_calls": 0,
+      "evidence_text_unchanged": true,
+      "neutral_copy": true,
+      "fixture_removed": true
+    }
+  },
+  "requests": {
+    "initial_page": [
+      "GET /companies",
+      "GET /capabilities"
+    ],
+    "per_selected_company": [
+      "GET financials/summary",
+      "GET selected metric history (limit=12)",
+      "GET sources"
+    ],
+    "on_submit": "GET selected filing context (limit=5)",
+    "explicit_optional_ai": "POST answer only",
+    "source_disclosure_requests": 0,
+    "no_per_card_fetch": true
+  },
+  "validation": {
+    "frontend_tests": {
+      "passed": 19,
+      "failed": 0,
+      "command": "npm test"
+    },
+    "lint": "passed: npm run lint",
+    "build": {
+      "status": "passed: npm run build",
+      "page_size_kb": 109,
+      "first_load_js_kb": 212,
+      "shared_js_kb": 103,
+      "new_dependencies": 0
+    },
+    "backend_capability_tests": {
+      "passed": 4,
+      "command": ".venv/Scripts/python.exe -m pytest tests/test_capabilities.py -q -p no:cacheprovider"
+    },
+    "fastapi_import": "passed: 20 routes",
+    "full_backend_regression": "not rerun; only configuration metadata changed",
+    "documentation_references": {
+      "status": "passed",
+      "references": 154,
+      "markdown_files": 22
+    },
+    "git_diff_check": "passed (exit 0); untracked text whitespace also checked",
+    "self_review": "passed: unchanged dependency/schema/sync/normalization/retrieval/evidence-policy files; no secrets, fake production data or provider calls added",
+    "preserved_preexisting_change": "frontend/next-env.d.ts references .next/types/routes.d.ts as at task start"
+  },
+  "screenshots": [
+    "docs/screenshots/research-mode-light.jpg",
+    "docs/screenshots/research-mode-dark.jpg",
+    "docs/screenshots/research-mode-mobile.jpg"
+  ],
+  "limitations": [
+    "No successful live AI generation or claim audit is claimed; historical credit blocker remains.",
+    "Single indexed filing per company; compatible comparisons and deeper coverage remain future work.",
+    "Underlying metric scope/date availability, EPS comparability and current-registrant XOM history limitations remain intact.",
+    "Original privileged port 3000 process could not be restarted; final production acceptance used port 3001 with isolated current backend at 8020.",
+    "Keyboard and responsive checks were manual; no full assistive-technology audit.",
+    "Node module-type and Starlette deprecation warnings are pre-existing."
+  ]
+}

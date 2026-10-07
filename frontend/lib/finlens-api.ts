@@ -88,6 +88,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     });
   } catch {
+    if (init?.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
     throw new FinLensApiError(
       "Cannot reach the FinLens backend. Check that it is running.",
       0,
@@ -116,13 +117,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export function getCompanies(): Promise<Company[]> {
-  return requestJson<Company[]>("/companies");
+export function getCompanies(signal?: AbortSignal): Promise<Company[]> {
+  return requestJson<Company[]>("/companies", { signal });
 }
 
-export function getFilingSources(ticker: string): Promise<FilingSource[]> {
+export function getFilingSources(ticker: string, signal?: AbortSignal): Promise<FilingSource[]> {
   return requestJson<FilingSource[]>(
     `/companies/${encodeURIComponent(ticker)}/sources`,
+    { signal },
   );
 }
 
@@ -131,6 +133,7 @@ export function getAnswer(
   accessionNumber: string,
   question: string,
   limit = 5,
+  signal?: AbortSignal,
 ): Promise<FilingAnswer> {
   return requestJson<FilingAnswer>(
     `/companies/${encodeURIComponent(ticker)}/filings/${encodeURIComponent(accessionNumber)}/answer`,
@@ -138,6 +141,7 @@ export function getAnswer(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, limit }),
+      signal,
     },
   );
 }
@@ -158,16 +162,64 @@ export function describeApiError(error: unknown): string {
     return "Something went wrong while loading FinLens. Please try again.";
   }
   if (error.code === "LLM_UNAVAILABLE") {
-    return "The answer service is not configured yet. Set OPENAI_API_KEY in the backend environment.";
+    return "AI analysis is currently unavailable. Your SEC evidence remains available in Research Mode.";
   }
   if (error.code === "LLM_TIMEOUT") {
-    return "The answer service timed out. Please try again.";
+    return "AI analysis timed out. Your SEC evidence remains available in Research Mode.";
   }
   if (error.code === "MALFORMED_MODEL_OUTPUT") {
     return "The model response did not pass citation checks. No answer was shown.";
   }
   if (error.code === "UPSTREAM_FAILURE") {
-    return "The answer provider is unavailable. Please try again later.";
+    return "AI analysis is currently unavailable. Your SEC evidence remains available in Research Mode.";
   }
   return error.message;
+}
+
+export type Capabilities = { research_mode: boolean; ai_analysis_configured: boolean };
+export type PeriodKind = "quarter" | "half_year" | "nine_months" | "annual" | "instant";
+export type FinancialPeriod = {
+  kind: PeriodKind; start: string | null; end: string;
+  fiscal_year: number | null; fiscal_period: string | null; fiscal_label_basis: string;
+};
+export type FactProvenance = {
+  fact_id: number; original_concept: string; value: string; unit: string;
+  period_start: string | null; period_end: string; form: string; filed: string;
+  accession_number: string; sec_url: string; company_cik: string;
+  source_fiscal_year: number | null; source_fiscal_period: string | null;
+};
+export type NormalizedMetric = {
+  metric: string; unit: string; status: "available" | "unavailable" | "not_applicable";
+  value: string | null; reason: string | null; period: FinancialPeriod | null;
+  formula: string | null; revenue_basis?: string;
+  provenance: FactProvenance[]; alternatives: FactProvenance[];
+  inputs: { role: string; metric: string; value: string; unit: string; fact_ids: number[]; revenue_basis?: string }[];
+};
+export type FinancialSummary = {
+  ticker: string; company_name: string; company_cik: string;
+  requested_period: PeriodKind; period: FinancialPeriod | null;
+  metrics: Record<string, NormalizedMetric>; selection_policy: string;
+};
+export type MetricHistory = {
+  ticker: string; company_cik: string; metric: string; unit: string; requested_period: PeriodKind;
+  status: NormalizedMetric["status"]; reason: string | null; history: NormalizedMetric[];
+  comparability?: { value_basis: "reported_as_filed"; status: "unverified"; reason: string };
+};
+export type FilingContext = {
+  ticker: string; company_name: string; accession_number: string; query: string;
+  context: string; citations: Citation[]; evidence_status: "sufficient" | "insufficient";
+};
+
+export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
+  return requestJson("/capabilities", { signal });
+}
+export function getFinancialSummary(ticker: string, period: PeriodKind, signal?: AbortSignal): Promise<FinancialSummary> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/summary?period=${period}`, { signal });
+}
+export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });
+}
+export function getFilingContext(ticker: string, accession: string, query: string, signal?: AbortSignal): Promise<FilingContext> {
+  const params = new URLSearchParams({ q: query, limit: "5" });
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/filings/${encodeURIComponent(accession)}/context?${params}`, { signal });
 }

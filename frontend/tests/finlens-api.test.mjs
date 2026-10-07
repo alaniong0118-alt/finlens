@@ -91,7 +91,7 @@ test("submits the selected company, filing, and question to answer API", async (
   assert.equal(citationForClaim("source_99", result.citations), undefined);
 });
 
-test("maps missing API key into a visible service error", async (context) => {
+test("maps missing AI capability into neutral Research Mode fallback", async (context) => {
   context.mock.method(globalThis, "fetch", async () => jsonResponse(
     { detail: "OPENAI_API_KEY is required to generate an answer." },
     503,
@@ -103,7 +103,8 @@ test("maps missing API key into a visible service error", async (context) => {
       assert.ok(error instanceof FinLensApiError);
       assert.equal(error.status, 503);
       assert.equal(error.code, "LLM_UNAVAILABLE");
-      assert.match(describeApiError(error), /OPENAI_API_KEY/);
+      assert.match(describeApiError(error), /SEC evidence remains available/);
+      assert.doesNotMatch(describeApiError(error), /OPENAI_API_KEY/);
       return true;
     },
   );

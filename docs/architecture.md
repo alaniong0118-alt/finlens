@@ -14,7 +14,9 @@ Ingestion and answering are separate. Questions read stored chunks scoped by com
 | Retrieval / evidence | `filing_search_service.py`, `evidence_policy.py` |
 | Context / answers | `rag_context_service.py`, `answer_service.py` |
 | ORM / migrations | `models.py`, `backend/migrations/` |
-| UI / client | `frontend/app/page.tsx`, `frontend/lib/finlens-api.ts` |
+| Workspace / typed client | `frontend/app/page.tsx`, `frontend/lib/finlens-api.ts` |
+| Research presentation | `frontend/components/company-overview.tsx`, `financial-research.tsx`, `filing-research.tsx`; `frontend/lib/research.ts` |
+| Application theme | `frontend/components/theme-control.tsx`, `frontend/app/layout.tsx`, `globals.css` |
 
 Backend module filenames are relative to `backend/app` unless stated otherwise.
 
@@ -46,7 +48,13 @@ This proves source identity, not factual support. Real acceptance must compare n
 
 ## UI, failures, and configuration
 
-The UI selects companies/filings from FastAPI. `has_filing_chunks` distinguishes indexed from metadata-only filings. Next.js proxies `/api/finlens`. Loading, insufficient, and provider-error states are explicit; links use stored SEC URLs.
+The UI selects companies/filings from FastAPI. `has_filing_chunks` distinguishes indexed from metadata-only filings. Next.js proxies `/api/finlens`. Company Research reads one standardized summary and one selected history (12 points), using existing Recharts bars plus a source-backed table. Six primary cards share the summary; expanding provenance performs no fetch. Dates, units, availability, revenue basis and EPS warnings follow the server contracts; no financial calculations or period selection are recreated in the browser.
+
+SEC Research reads the selected company's source metadata, then GET context only on submit. Presentation parses the existing SOURCE boundaries, keeps rank/citation identity, and shows exact filing excerpts with compact previews/full disclosures. It does not rerank evidence. An explicit optional AI action POSTs to the existing answer endpoint; success renders answer/claims/stored citations. Its separate state cannot remove evidence on failure. Company/filing keys remount scoped state, requests abort on cleanup, and search/AI generation use monotonic request invalidation to discard late results.
+
+`GET /capabilities` returns typed `research_mode` and `ai_analysis_configured` booleans only. It checks nonempty server configuration without database access, SDK construction or a provider probe. A configured key is not an availability guarantee. Missing/unknown capability disables optional generation, and any generation failure displays neutral copy while preserving research. No external provider call occurs during metrics, history, source selection or context retrieval.
+
+Light/Dark/System preference is stored under `finlens-theme`. A static pre-paint script resolves preference/OS appearance; the client handles later media/storage changes. Semantic CSS variables style the entire workspace, including chart axes/tooltips. No theme library or dependency was added. Responsive layouts stack below 1100px, reflow cards, wrap metadata and contain history-table overflow. Chart tables, labelled controls, native disclosures, skip link, live states and focus-visible outlines supply accessible alternatives.
 
 HTTP 503 indicates unavailable local model configuration, 504 timeout, and 502 upstream or malformed-output failure. Raw provider secrets and model content are not echoed. Search/context remain independent of generation.
 
@@ -76,6 +84,6 @@ The read-only metrics service loads a company's stored facts once, resolves orig
 
 ## Verification boundary
 
-Recorded: 41 backend tests, 6 frontend tests, lint/build passing, Alembic clean, 37 chunks/37 vectors, and citation lineage checked. Provider mocks test deterministic behavior. Real requests encountered exhausted credits; no successful real claim audit is claimed.
+Historical MVP: 41 backend tests, 6 frontend tests, lint/build passing, Alembic clean, 37 AAPL chunks/vectors and citation lineage checked. Later Item 7 established current catalog/data coverage; Item 8 adds 19 frontend tests, four focused capability tests and real no-key browser/theme/responsive acceptance. See [Research Mode verification](../backend/reports/research_mode_verification.json). The provider-failure browser fixture is controlled, not a live AI run. Real requests previously encountered exhausted credits; no successful real claim audit is claimed.
 
 Fresh Docker data directories run `docker/postgres/init-pgvector.sql` to enable pgvector before the existing Alembic revisions. Existing volumes are not reinitialized or removed.
