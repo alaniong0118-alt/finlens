@@ -256,7 +256,7 @@ def test_api_errors_schema_no_key_and_query_bound(db):
         response = client.get("/companies/TEST/financials/summary")
     finally:
         event.remove(db[0].bind, "before_cursor_execute", observe)
-    assert response.status_code == 200 and len(statements) == 2
+    assert response.status_code == 200 and len(statements) == 3  # version + existing company/facts reads
     summary = NormalizedFinancialSummary.model_validate(response.json())
     assert summary.metrics["gross_margin"].value is None
     history = client.get("/companies/TEST/financials/metrics/revenue").json()

@@ -1,23 +1,19 @@
 import os
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import distinct, func, select, text
+from sqlalchemy import func, select, text
 from app.sec_client import (
     build_filing_url,
     build_filing_raw_url,
-    get_filing_raw_text,
 )
 from app.database import engine, SessionLocal
 from app.financial_analysis import (
     get_financial_history,
     get_financial_snapshot,
     get_financial_summary,
-)
-from app.sec_parser import (
-    extract_filing_text,
-    chunk_filing_text,
 )
 from app.filing_search_service import (
     search_filing_chunks,
@@ -35,6 +31,9 @@ from app.models import Company, FinancialFact, FilingChunk
 from app.financial_metrics_service import load_financial_metrics, UnknownCompany, UnknownMetric
 from app.financial_metric_schemas import NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
 from app.research_answer_service import ResearchAnswer, ResearchAnswerRequest, answer_research_question
+from app.freshness_service import freshness, read_session, request_scope, require_published, schema_ready, stored_chunks, validate_chunks
+from app.refresh_contracts import Freshness
+from app.models import FilingPublication
 from app.schemas import (
     CompanyResponse,
     FinancialSourceResponse,
@@ -65,6 +64,25 @@ class FilingAnswerRequest(BaseModel):
     limit: int = Field(default=5, ge=1, le=50)
 
 
+class VersionedRoute(APIRoute):
+    def get_route_handler(self):
+        original = super().get_route_handler()
+        async def handle(request):
+            ticker = request.path_params.get("ticker")
+            scope = {"ticker": ticker.upper() if ticker else None,
+                     "expected": request.headers.get("X-FinLens-Data-Version"), "version": 0}
+            token = request_scope.set(scope)
+            try:
+                response = await original(request)
+                if ticker:
+                    response.headers["X-FinLens-Data-Version"] = str(scope["version"])
+                response.headers["Cache-Control"] = "no-store"
+                return response
+            finally:
+                request_scope.reset(token)
+        return handle
+
+
 app = FastAPI(
     title="FinLens API",
     version="0.1.0",
@@ -73,6 +91,7 @@ app = FastAPI(
         "FinLens financial research platform."
     ),
 )
+app.router.route_class = VersionedRoute
 
 app.add_middleware(
     CORSMiddleware,
@@ -125,18 +144,25 @@ def database_health() -> DatabaseHealthResponse:
     response_model=list[CompanyResponse],
 )
 def get_companies() -> list[CompanyResponse]:
-    indexed_filings = (
-        select(
-            FilingChunk.company_cik.label("company_cik"),
-            func.count(distinct(FilingChunk.accession_number)).label(
-                "indexed_filing_count"
-            ),
-        )
-        .where(FilingChunk.embedding.is_not(None))
-        .group_by(FilingChunk.company_cik)
-        .subquery()
-    )
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
+        if schema_ready(session.connection()):
+            indexed_filings = select(FilingPublication.company_cik.label("company_cik"),
+                func.count().label("indexed_filing_count")).group_by(FilingPublication.company_cik).subquery()
+        else:
+            # Transitional, read-only deployment before authorized migration:
+            # two bulk reads validate completeness, never any-vector readiness.
+            companies = list(session.scalars(select(Company).order_by(Company.ticker)))
+            groups, counts = {}, {}
+            for chunk in session.scalars(select(FilingChunk).order_by(FilingChunk.company_cik, FilingChunk.accession_number, FilingChunk.chunk_index)):
+                groups.setdefault((chunk.company_cik, chunk.accession_number), []).append(chunk)
+            for (cik, accession), chunks in groups.items():
+                try:
+                    validate_chunks(chunks)
+                    counts[cik] = counts.get(cik, 0) + 1
+                except ValueError:
+                    pass
+            return [CompanyResponse(id=c.id, ticker=c.ticker, name=c.name, cik=c.cik, exchange=c.exchange,
+                has_indexed_filing=counts.get(c.cik, 0) > 0, indexed_filing_count=counts.get(c.cik, 0)) for c in companies]
         rows = session.execute(
             select(
                 Company,
@@ -161,7 +187,7 @@ def get_companies() -> list[CompanyResponse]:
 
 @app.post("/companies/{ticker}/research-answer", response_model=ResearchAnswer)
 def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         try:
             return answer_research_question(session, ticker, request.question)
         except UnknownCompany:
@@ -170,7 +196,7 @@ def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
 
 @app.get("/companies/{ticker}/financials/summary", response_model=NormalizedFinancialSummary)
 def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         try:
             return load_financial_metrics(session, ticker).summary(period)
         except UnknownCompany:
@@ -180,7 +206,7 @@ def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
 @app.get("/companies/{ticker}/financials/metrics/{metric}", response_model=NormalizedMetricHistory)
 def normalized_metric_history(ticker: str, metric: str, period: PeriodKind = "quarter",
                               limit: int = Query(default=40, ge=1, le=200)):
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         try:
             return load_financial_metrics(session, ticker).history(metric, period, limit)
         except UnknownCompany:
@@ -198,7 +224,7 @@ def get_financial_summary_by_ticker(
 ) -> FinancialSummaryResponse:
     ticker = ticker.upper()
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -268,7 +294,7 @@ def get_financial_snapshot_by_ticker(
 ) -> FinancialSnapshotResponse:
     ticker = ticker.upper()
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -298,7 +324,7 @@ def get_financial_history_by_ticker(
 ) -> FinancialHistoryResponse:
     ticker = ticker.upper()
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -354,7 +380,7 @@ def get_company_sources(
 ) -> list[FinancialSourceResponse]:
     ticker = ticker.upper()
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -380,12 +406,20 @@ def get_company_sources(
 
         grouped: dict[str, dict] = {}
 
-        indexed_metadata = session.execute(
-            select(FilingChunk.accession_number, FilingChunk.form, FilingChunk.filed)
-            .where(FilingChunk.company_cik == company.cik)
-            .distinct()
-        ).all()
-        searchable_accessions = {row.accession_number for row in indexed_metadata}
+        if schema_ready(session.connection()):
+            indexed_metadata = session.execute(select(FilingPublication.accession_number, FilingPublication.form,
+                FilingPublication.filed).where(FilingPublication.company_cik == company.cik)).all()
+        else:
+            groups, indexed_metadata = {}, []
+            for chunk in session.scalars(select(FilingChunk).where(FilingChunk.company_cik == company.cik).order_by(FilingChunk.accession_number, FilingChunk.chunk_index)):
+                groups.setdefault(chunk.accession_number, []).append(chunk)
+            for accession, chunks in groups.items():
+                try:
+                    validate_chunks(chunks)
+                    indexed_metadata.append((accession, chunks[0].form, chunks[0].filed))
+                except ValueError:
+                    pass
+        searchable_accessions = {row[0] for row in indexed_metadata}
 
         for fact in facts:
             accession = fact.accession_number
@@ -457,161 +491,48 @@ def get_company_sources(
             )
 
         return sorted(sources, key=lambda source: (str(source.filed or ""), source.accession_number), reverse=True)
-@app.get(
-    "/companies/{ticker}/filings/{accession_number}/text"
-)
-def get_company_filing_text(
-    ticker: str,
-    accession_number: str,
-):
-    ticker = ticker.upper()
+@app.get("/companies/{ticker}/freshness", response_model=Freshness)
+def company_freshness(ticker: str):
+    with read_session(SessionLocal) as session:
+        return freshness(session, ticker)
 
-    with SessionLocal() as session:
-        company = session.scalar(
-            select(Company).where(
-                Company.ticker == ticker
-            )
-        )
 
-        if company is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Company '{ticker}' not found",
-            )
-
-        filing = session.scalar(
-            select(FinancialFact)
-            .where(
-                FinancialFact.company_cik == company.cik,
-                FinancialFact.accession_number
-                == accession_number,
-            )
-            .order_by(
-                FinancialFact.filed.desc()
-            )
-        )
-
-        if filing is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"Filing '{accession_number}' "
-                    f"not found for company '{ticker}'"
-                ),
-            )
-
-        raw_text = get_filing_raw_text(
-            company.cik,
-            accession_number,
-        )
-
-        parsed = extract_filing_text(
-            raw_text,
-            filing.form,
-        )
-
-        return {
-            "ticker": company.ticker,
-            "company_name": company.name,
-            "company_cik": company.cik,
-            "accession_number": accession_number,
-            "form": parsed["form"],
-            "filed": filing.filed,
-            "filename": parsed["filename"],
-            "sec_url": build_filing_url(
-                company.cik,
-                accession_number,
-            ),
-            "raw_url": build_filing_raw_url(
-                company.cik,
-                accession_number,
-            ),
-            "text_length": len(parsed["text"]),
-            "text": parsed["text"],
-        }
-@app.get(
-    "/companies/{ticker}/filings/{accession_number}/chunks"
-)
-def get_company_filing_chunks(
-    ticker: str,
-    accession_number: str,
-):
-    ticker = ticker.upper()
-
-    with SessionLocal() as session:
-        company = session.scalar(
-            select(Company).where(
-                Company.ticker == ticker
-            )
-        )
-
-        if company is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Company '{ticker}' not found",
-            )
-
-        filing = session.scalar(
-            select(FinancialFact)
-            .where(
-                FinancialFact.company_cik == company.cik,
-                FinancialFact.accession_number
-                == accession_number,
-            )
-            .order_by(
-                FinancialFact.filed.desc()
-            )
-        )
-
-        if filing is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"Filing '{accession_number}' "
-                    f"not found for company '{ticker}'"
-                ),
-            )
-
-        raw_text = get_filing_raw_text(
-            company.cik,
-            accession_number,
-        )
-
-        parsed = extract_filing_text(
-            raw_text,
-            filing.form,
-        )
-
-        chunks = chunk_filing_text(
-            parsed["text"]
-        )
-
-        sec_url = build_filing_url(
-            company.cik,
-            accession_number,
-        )
-
-        for chunk in chunks:
-            chunk["ticker"] = company.ticker
-            chunk["company_name"] = company.name
-            chunk["accession_number"] = accession_number
-            chunk["form"] = parsed["form"]
-            chunk["filename"] = parsed["filename"]
-            chunk["filed"] = filing.filed
-            chunk["sec_url"] = sec_url
-
-        return {
-            "ticker": company.ticker,
-            "company_name": company.name,
-            "company_cik": company.cik,
-            "accession_number": accession_number,
-            "form": parsed["form"],
-            "filename": parsed["filename"],
-            "filed": filing.filed,
-            "sec_url": sec_url,
-            "chunk_count": len(chunks),
-            "chunks": chunks,
+def stored_filing(session, ticker, accession):
+    company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
+    if company is None:
+        raise HTTPException(404, detail="Unknown company")
+    require_published(session, company.cik, accession)
+    chunks = stored_chunks(session, company.cik, accession)
+    first = chunks[0]
+    return company, chunks, {
+        "ticker": company.ticker, "company_name": company.name, "company_cik": company.cik,
+        "accession_number": accession, "form": first.form, "filed": first.filed,
+        "filename": first.filename, "sec_url": first.sec_url,
     }
+
+
+@app.get("/companies/{ticker}/filings/{accession_number}/text")
+def get_company_filing_text(ticker: str, accession_number: str):
+    with read_session(SessionLocal) as session:
+        company, chunks, result = stored_filing(session, ticker, accession_number)
+        publication = session.get(FilingPublication, (company.cik, accession_number)) if schema_ready(session.connection()) else None
+        if publication is None or publication.cleaned_text is None:
+            raise HTTPException(409, detail="Exact full text is not stored. Published evidence chunks remain available.", headers={"X-FinLens-Error-Code": "STORED_TEXT_UNAVAILABLE"})
+        return {**result, "text": publication.cleaned_text, "text_length": len(publication.cleaned_text),
+                "raw_url": build_filing_raw_url(company.cik, accession_number)}
+
+
+@app.get("/companies/{ticker}/filings/{accession_number}/chunks")
+def get_company_filing_chunks(ticker: str, accession_number: str):
+    with read_session(SessionLocal) as session:
+        _, chunks, result = stored_filing(session, ticker, accession_number)
+        return {**result, "chunk_count": len(chunks), "chunks": [
+            {"chunk_id": c.chunk_id, "text": c.text, "start_char": c.start_char, "end_char": c.end_char,
+             "ticker": result["ticker"], "company_name": result["company_name"],
+             "accession_number": c.accession_number, "filename": c.filename, "form": c.form,
+             "filed": c.filed, "sec_url": c.sec_url} for c in chunks]}
+
+
 @app.get(
     "/companies/{ticker}/filings/{accession_number}/search"
 )
@@ -623,7 +544,7 @@ def search_company_filing(
 ):
     ticker = ticker.upper()
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -636,6 +557,7 @@ def search_company_filing(
                 detail=f"Company '{ticker}' not found",
             )
 
+        require_published(session, company.cik, accession_number)
         results = search_filing_chunks(
             session,
             company.cik,
@@ -689,7 +611,7 @@ def semantic_search_company_filing(
             detail="limit must be between 1 and 50",
         )
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(Company.ticker == ticker)
         )
@@ -699,6 +621,7 @@ def semantic_search_company_filing(
                 detail=f"Company '{ticker}' not found",
             )
 
+        require_published(session, company.cik, accession_number)
         results = search_filing_chunks_semantic(
             session,
             company.cik,
@@ -745,7 +668,7 @@ def get_company_filing_context(
             detail="limit must be between 1 and 50",
         )
 
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(Company.ticker == ticker)
         )
@@ -755,6 +678,7 @@ def get_company_filing_context(
                 detail=f"Company '{ticker}' not found",
             )
 
+        require_published(session, company.cik, accession_number)
         filing_context = build_filing_context(
             session,
             company.cik,
@@ -780,7 +704,7 @@ def answer_company_filing_question(
     request: FilingAnswerRequest,
 ):
     ticker = ticker.upper()
-    with SessionLocal() as session:
+    with read_session(SessionLocal) as session:
         company = session.scalar(
             select(Company).where(Company.ticker == ticker)
         )
@@ -790,6 +714,7 @@ def answer_company_filing_question(
                 detail=f"Company '{ticker}' not found",
             )
 
+        require_published(session, company.cik, accession_number)
         filing_context = build_filing_context(
             session,
             company.cik,

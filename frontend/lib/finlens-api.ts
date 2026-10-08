@@ -1,4 +1,11 @@
 const API_PREFIX = "/api/finlens";
+const versionScopes = new WeakMap<AbortSignal, { version: number; changed: () => void }>();
+
+export function versionedController(version: number, changed: () => void): AbortController {
+  const controller = new AbortController();
+  versionScopes.set(controller.signal, { version, changed });
+  return controller;
+}
 
 export type Company = {
   id: number;
@@ -81,11 +88,13 @@ export class FinLensApiError extends Error {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const scope = init?.signal ? versionScopes.get(init.signal) : undefined;
   let response: Response;
   try {
     response = await fetch(`${API_PREFIX}${path}`, {
       cache: "no-store",
       ...init,
+      headers: { ...init?.headers, ...(scope ? { "X-FinLens-Data-Version": String(scope.version) } : {}) },
     });
   } catch {
     if (init?.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
@@ -97,6 +106,12 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const payload: unknown = await response.json().catch(() => null);
+  const returnedVersion = response.headers.get("X-FinLens-Data-Version");
+  if (scope && !init?.signal?.aborted && (response.headers.get("X-FinLens-Error-Code") === "DATA_VERSION_CHANGED"
+      || (returnedVersion !== null && returnedVersion !== String(scope.version)))) {
+    scope.changed();
+    throw new FinLensApiError("Published data changed. Refreshing this research scope.", 409, "DATA_VERSION_CHANGED");
+  }
   if (!response.ok) {
     const detail =
       payload && typeof payload === "object" && "detail" in payload
@@ -177,6 +192,21 @@ export function describeApiError(error: unknown): string {
 }
 
 export type Capabilities = { research_mode: boolean; ai_analysis_configured: boolean };
+export type FreshnessStream = {
+  status: "unknown" | "pending" | "current" | "stale" | "failed";
+  last_checked_at: string | null; last_successful_sync_at: string | null;
+  latest_source_filing_date: string | null; last_error: string | null; failure_stage: string | null;
+  pending_targets: string[]; inventory_complete: boolean;
+};
+export type CompanyFreshness = {
+  ticker: string; data_version: number; facts_version: number; evidence_version: number;
+  status: FreshnessStream["status"]; facts: FreshnessStream; evidence: FreshnessStream;
+  latest_indexed_filing: { accession_number: string; form: string; filed: string } | null;
+  migration_required: boolean; scope: string;
+};
+export function getFreshness(ticker: string, signal?: AbortSignal): Promise<CompanyFreshness> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/freshness`, { signal });
+}
 export type PeriodKind = "quarter" | "half_year" | "nine_months" | "annual" | "instant";
 export type FinancialPeriod = {
   kind: PeriodKind; start: string | null; end: string;

@@ -57,6 +57,13 @@ def embed_filing_chunks(
     accession_number: str | None = None,
     batch_size: int = 32,
 ) -> int:
+    from sqlalchemy.orm import sessionmaker
+    from app.refresh_service import coordinator
+    with coordinator(sessionmaker(bind=session.get_bind())):
+        return _embed_filing_chunks(session, company_cik, accession_number, batch_size)
+
+
+def _embed_filing_chunks(session, company_cik=None, accession_number=None, batch_size=32):
     """Embed chunks missing vectors, optionally scoped to one company or filing."""
     if batch_size <= 0:
         raise ValueError("batch_size must be greater than zero.")
@@ -85,6 +92,8 @@ def embed_filing_chunks(
             session.flush()
             embedded_count += len(batch)
 
+        from app.refresh_service import register_complete_filings
+        register_complete_filings(session, company_cik, accession_number)
         session.commit()
         return embedded_count
     except BaseException:

@@ -52,6 +52,12 @@ def failure_details(exc):
 
 
 def sync_catalog(session_factory, tickers=None, *, dry_run=False, on_result=None, on_progress=None):
+    from app.refresh_service import coordinator
+    with coordinator(session_factory):
+        return _sync_catalog(session_factory, tickers, dry_run=dry_run, on_result=on_result, on_progress=on_progress)
+
+
+def _sync_catalog(session_factory, tickers=None, *, dry_run=False, on_result=None, on_progress=None):
     """Reports are diagnostic; fresh source + stored identities determine work.
 
     Each company uses a new session and atomic transaction. A failed session is

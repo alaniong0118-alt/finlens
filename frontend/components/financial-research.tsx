@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { describeApiError, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
+import { describeApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
   type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
 import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, officialSecUrl,
   periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS } from "@/lib/research";
+
+import { useResearchVersion } from "@/components/research-freshness";
 
 export function MetricProvenance({ point, summary = "Sources and details" }: { point: NormalizedMetric; summary?: string }) {
   return <details className="provenance"><summary>{summary}</summary>
@@ -76,20 +78,22 @@ function HistoryView({ data }: { data: MetricHistory }) {
 }
 
 function MetricHistoryPanel({ company }: { company: Company }) {
+  const { version, changed } = useResearchVersion();
+  const [loadedVersion, setLoadedVersion] = useState(-1);
   const [metric, setMetric] = useState("revenue");
   const [period, setPeriod] = useState<PeriodKind>("quarter");
   const [data, setData] = useState<MetricHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const controller = new AbortController();
+    const controller = versionedController(version, changed);
     setLoading(true); setData(null); setError(null);
     getMetricHistory(company.ticker, metric, period, controller.signal).then((result) => {
-      if (!controller.signal.aborted) setData(result);
+      if (!controller.signal.aborted) { setData(result); setLoadedVersion(version); }
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [company.ticker, metric, period]);
+  }, [company.ticker, metric, period, version, changed]);
   // Changing controls clears the previous series synchronously, before the next effect.
   return <section className="panel" aria-labelledby="history-title">
     <div className="section-heading"><div><p className="eyebrow">Historical research</p><h2 id="history-title">Reported financial trends</h2></div><span className="badge">No AI required</span></div>
@@ -109,25 +113,27 @@ function MetricHistoryPanel({ company }: { company: Company }) {
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">Loading selected history…</p>}
       {error && <p role="alert" className="error-state">{error}</p>}
-      {data && !loading && <HistoryView data={data} />}
+      {data && !loading && loadedVersion === version && <HistoryView data={data} />}
     </div>
   </section>;
 }
 
 export default function FinancialResearch({ company }: { company: Company }) {
+  const { version, changed } = useResearchVersion();
+  const [loadedVersion, setLoadedVersion] = useState(-1);
   const [period, setPeriod] = useState<PeriodKind>("quarter");
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const controller = new AbortController();
+    const controller = versionedController(version, changed);
     setLoading(true); setSummary(null); setError(null);
     getFinancialSummary(company.ticker, period, controller.signal).then((result) => {
-      if (!controller.signal.aborted) setSummary(result);
+      if (!controller.signal.aborted) { setSummary(result); setLoadedVersion(version); }
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [company.ticker, period]);
+  }, [company.ticker, period, version, changed]);
   const available = summary ? Object.values(summary.metrics).filter((point) => point.status === "available").length : 0;
   return <div className="research-column">
     <section className="panel" aria-labelledby="snapshot-title">
@@ -137,7 +143,7 @@ export default function FinancialResearch({ company }: { company: Company }) {
       <div aria-live="polite" aria-busy={loading}>
         {loading && <p className="loading-state">Loading financial snapshot…</p>}
         {error && <p role="alert" className="error-state">{error}</p>}
-        {summary && !loading && <>
+        {summary && !loading && loadedVersion === version && <>
           <p className="period-label">{periodLabel(summary.period)}</p>
           <p className="muted small availability">Financial data: {available ? `${available} of ${Object.keys(summary.metrics).length} metrics available for this snapshot` : "No compatible metrics for this period"}. This snapshot is separate from the selected SEC research filing.</p>
           <div className="metric-grid">{SNAPSHOT_METRICS.map((key) => summary.metrics[key] && <MetricCard key={key} point={summary.metrics[key]} />)}</div>

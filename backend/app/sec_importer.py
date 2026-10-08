@@ -95,7 +95,7 @@ def build_metric_data(facts, canonical_metric, source_fact_names, unit):
     return combined
 
 
-def merge_company_facts(session, company_cik, facts, *, dry_run=False, metrics=None):
+def merge_company_facts(session, company_cik, facts, *, dry_run=False, metrics=None, publish=True):
     """Flush missing observations only. Caller owns the transaction/commit.
 
     Supported PostgreSQL writers take the same per-CIK transaction lock before
@@ -114,9 +114,16 @@ def merge_company_facts(session, company_cik, facts, *, dry_run=False, metrics=N
         if session.connection().get_isolation_level() != "READ COMMITTED":
             raise FinancialSyncError("merge_requires_read_committed")
         session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": (1 << 40) + int(cik)})
+    if not dry_run:
+        from app.freshness_service import schema_ready
+        from app.refresh_service import reject_conflicts
+        if not schema_ready(session.connection()):
+            raise FinancialSyncError("refresh_schema_migration_required")
     if session.scalar(select(Company.id).where(Company.cik == cik)) is None:
         raise FinancialSyncError("unknown_company_cik")
     existing = list(session.scalars(select(FinancialFact).where(FinancialFact.company_cik == cik)))
+    if not dry_run:
+        reject_conflicts(session, cik, [{"company_cik": cik, **item} for item in data])
     identities = {fact_identity(row) for row in existing}
     missing = []
     for item in data:
@@ -129,6 +136,10 @@ def merge_company_facts(session, company_cik, facts, *, dry_run=False, metrics=N
         session.add_all(FinancialFact(**record) for record in missing)
         session.flush()
     inserted = len(missing) if not dry_run else 0
+    if publish and inserted:
+        from app.refresh_service import record_fact_change
+        record_fact_change(session, cik, inserted, {metric: sum(r["metric"] == metric for r in missing)
+                                                   for metric in (metrics if metrics is not None else METRIC_SOURCES)})
     return {"facts_before": len(existing), "source_observations": len(data),
             "already_present": len(data) - len(missing), "facts_inserted": inserted,
             "would_insert": len(missing), "facts_after": len(existing) + inserted,
@@ -145,9 +156,11 @@ def import_metric(company_cik, facts, metric_name):
 def import_company(company_cik):
     """One atomic merge for all supported metrics of a stored company."""
     cik = company_cik.zfill(10)
-    facts = get_company_facts(cik)
-    with SessionLocal() as session, session.begin():
-        return merge_company_facts(session, cik, facts)["inserted_by_metric"]
+    from app.refresh_service import coordinator
+    with coordinator(SessionLocal):
+        facts = get_company_facts(cik)
+        with SessionLocal() as session, session.begin():
+            return merge_company_facts(session, cik, facts)["inserted_by_metric"]
 
 
 def import_all_companies():

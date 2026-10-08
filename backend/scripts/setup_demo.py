@@ -120,6 +120,14 @@ def setup_demo(session=None) -> dict:
         with SessionLocal() as local:
             return setup_demo(local)
 
+    from sqlalchemy.orm import sessionmaker
+    from app.refresh_service import coordinator
+    with coordinator(sessionmaker(bind=session.get_bind())):
+        return _setup_demo(session)
+
+
+def _setup_demo(session) -> dict:
+
     from app.models import Company, FinancialFact
     from app.sec_client import get_sec_headers
     from app.sec_filing_service import ingest_filing_chunks
@@ -159,6 +167,9 @@ def setup_demo(session=None) -> dict:
     session.expire_all()
     chunks = demo_chunks(session)
     validate_chunks(chunks, require_embeddings=True)
+    from app.refresh_service import register_complete_filings
+    register_complete_filings(session, DEMO_CIK, DEMO_ACCESSION)
+    session.commit()
     return {
         "status": "ready", "action": action, "ticker": DEMO_TICKER,
         "accession_number": DEMO_ACCESSION, "form": DEMO_FORM,

@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { describeApiError, firstReadyCompany, getCapabilities, getCompanies, type Company } from "@/lib/finlens-api";
 import CompanyOverview from "@/components/company-overview";
 import FinancialResearch from "@/components/financial-research";
 import FilingResearch from "@/components/filing-research";
 import ThemeControl from "@/components/theme-control";
+import ResearchFreshness from "@/components/research-freshness";
 
 export default function Home() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -13,6 +14,25 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [configured, setConfigured] = useState(false);
+  const catalogController = useRef<AbortController | null>(null);
+  const catalogChanged = useCallback(async (signal: AbortSignal): Promise<boolean> => {
+    catalogController.current?.abort();
+    const controller = new AbortController(); catalogController.current = controller;
+    const cancel = () => controller.abort();
+    signal.addEventListener("abort", cancel, { once: true });
+    try {
+      if (signal.aborted) return false;
+      const next = await getCompanies(controller.signal);
+      if (signal.aborted || controller.signal.aborted) return false;
+      setCompanies(next);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      signal.removeEventListener("abort", cancel);
+    }
+  }, []);
+  useEffect(() => () => catalogController.current?.abort(), []);
   useEffect(() => {
     const controller = new AbortController();
     getCompanies(controller.signal).then((data) => {
@@ -39,9 +59,9 @@ export default function Home() {
       </div>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} />
       <nav className="workspace-nav" aria-label="Research sections"><a href="#snapshot-title">Company research</a><a href="#filing-title">SEC research</a><span>AI Analysis · optional</span></nav>
-      {company && <div className="research-grid" key={company.ticker}>
-        <FinancialResearch company={company} /><FilingResearch company={company} configured={configured} />
-      </div>}
+      {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
+        <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} /></div>
+      </ResearchFreshness>}
       <footer>Financial research and education. No investment recommendations or price forecasts. Reported values and available coverage vary by issuer and period.</footer>
     </main>
   </>;

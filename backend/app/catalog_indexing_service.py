@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.embedding_service import embed_filing_chunks, validate_embedding
-from app.models import Company, FilingChunk
+from app.models import Company, FilingChunk, FilingPublication
 from app.sec_client import FilingMetadata, build_filing_url, discover_filing
 from app.sec_filing_service import ingest_filing_chunks
 
@@ -20,14 +20,14 @@ def filing_chunks(session: Session, cik: str, accession: str | None = None):
     return list(session.scalars(statement.order_by(FilingChunk.accession_number, FilingChunk.chunk_index)).all())
 
 
-def validate_filing(chunks, *, require_embeddings=False):
+def validate_filing(chunks, *, require_embeddings=False, allow_amendments=False):
     if not chunks:
         raise ValueError("No persisted chunks.")
     first = chunks[0]
     for index, chunk in enumerate(chunks):
         if (chunk.chunk_index != index or chunk.chunk_id != f"chunk_{index:04d}"
                 or not chunk.text.strip() or not chunk.filename or not chunk.filed
-                or chunk.form not in {"10-Q", "10-K"}
+                or chunk.form not in ({"10-Q", "10-K", "10-Q/A", "10-K/A"} if allow_amendments else {"10-Q", "10-K"})
                 or chunk.start_char < 0 or chunk.end_char <= chunk.start_char
                 or len(chunk.text) > chunk.end_char - chunk.start_char
                 or any(getattr(chunk, field) != getattr(first, field) for field in
@@ -92,6 +92,10 @@ def index_company(session, company, *, dry_run=False):
             chunks = max(complete, key=lambda group: (group[0].filed, group[0].accession_number))
             first = chunks[0]
             metadata = FilingMetadata(company.cik, first.accession_number, first.form, first.filed, first.filename)
+            if not dry_run:
+                from app.refresh_service import register_complete_filings
+                register_complete_filings(session, company.cik)
+                session.commit()
             return reported(filing_record(metadata, chunks, "skipped"))
         if valid:
             # Committed chunks survive embedding failure; resume without SEC.
@@ -158,6 +162,13 @@ def index_company(session, company, *, dry_run=False):
 
 
 def index_catalog(session: Session, tickers=None, *, dry_run=False, on_result=None):
+    from sqlalchemy.orm import sessionmaker
+    from app.refresh_service import coordinator
+    with coordinator(sessionmaker(bind=session.get_bind())):
+        return _index_catalog(session, tickers, dry_run=dry_run, on_result=on_result)
+
+
+def _index_catalog(session: Session, tickers=None, *, dry_run=False, on_result=None):
     # Immutable scalar identities survive rollback/commit without ORM reloads
     # outside the company-level exception boundary.
     catalog = list(session.execute(select(Company.ticker, Company.cik).order_by(Company.ticker)).all())
@@ -174,8 +185,8 @@ def index_catalog(session: Session, tickers=None, *, dry_run=False, on_result=No
             on_result(result)
     catalog_error = None
     try:
-        ready = session.scalar(select(func.count(func.distinct(FilingChunk.company_cik))).where(
-            FilingChunk.embedding.is_not(None), FilingChunk.company_cik.in_([c.cik for c in catalog]),
+        ready = session.scalar(select(func.count(func.distinct(FilingPublication.company_cik))).where(
+            FilingPublication.company_cik.in_([c.cik for c in catalog]),
         ))
     except SQLAlchemyError:
         ready = None

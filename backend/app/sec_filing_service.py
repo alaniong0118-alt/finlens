@@ -1,4 +1,4 @@
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Company, FinancialFact, FilingChunk
@@ -19,8 +19,17 @@ def ingest_filing_chunks(
     accession_number: str,
     *,
     metadata: FilingMetadata | None = None,
-    preserve_existing: bool = False,
+    preserve_existing: bool = True,
 ) -> int:
+    from sqlalchemy.orm import sessionmaker
+    from app.refresh_service import coordinator
+    with coordinator(sessionmaker(bind=session.get_bind())):
+        return _ingest_filing_chunks(session, company, accession_number, metadata=metadata, preserve_existing=preserve_existing)
+
+
+def _ingest_filing_chunks(session, company, accession_number, *, metadata=None, preserve_existing=True):
+    if not preserve_existing:
+        raise ValueError("Replacing persisted filing evidence is not supported.")
     if preserve_existing:
         existing = session.scalars(select(FilingChunk).where(
             FilingChunk.company_cik == company.cik,
@@ -76,13 +85,9 @@ def ingest_filing_chunks(
     if not chunks:
         raise ValueError("Filing contains no usable text chunks.")
 
-    if not preserve_existing:
-        session.execute(
-            delete(FilingChunk).where(
-                FilingChunk.company_cik == company.cik,
-                FilingChunk.accession_number == accession_number,
-            )
-        )
+    from app.refresh_service import state_row
+    # Legacy staging is durable but unpublished until all vectors validate.
+    state_row(session, company.cik)
 
     sec_url = build_filing_url(
         company.cik,

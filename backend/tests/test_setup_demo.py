@@ -19,7 +19,7 @@ def session():
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
-        connection.execute(text("INSERT INTO alembic_version VALUES ('d7b834408ba8')"))
+        connection.execute(text("INSERT INTO alembic_version VALUES ('f94c6f41e0cb')"))
     with Session(engine) as session:
         yield session
     engine.dispose()

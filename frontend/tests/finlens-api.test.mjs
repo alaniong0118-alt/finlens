@@ -11,7 +11,19 @@ import {
   getResearchAnswer,
   readyCompanyCount,
   searchableFilings,
+  versionedController,
 } from "../lib/finlens-api.ts";
+
+test("version disagreement rejects a response and asks for one scope refresh", async context => {
+  let changes = 0;
+  const controller = versionedController(2, () => changes++);
+  context.mock.method(globalThis, "fetch", async (_, options) => {
+    assert.equal(options.headers['X-FinLens-Data-Version'], '2');
+    return new Response(JSON.stringify({ ticker: 'AAPL', matched: true }), { headers: { 'X-FinLens-Data-Version': '3' } });
+  });
+  await assert.rejects(() => getResearchAnswer('AAPL', '2024 revenue', controller.signal), error => error.code === 'DATA_VERSION_CHANGED');
+  assert.equal(changes, 1);
+});
 
 test("requests one company-scoped deterministic answer with cancellation and no filing or provider input", async context => {
   const calls = [];

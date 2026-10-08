@@ -240,12 +240,12 @@ def test_company_mismatch_unknown_name_and_bounded_queries(db):
     try:
         mismatch = ask("What was Microsoft's revenue?")
         assert mismatch["status"] == "company_mismatch" and mismatch["observation"] is None
-        assert len(queries) == 1  # never load the other company's facts
+        assert len(queries) == 2  # version + catalog; never load other company facts
         queries.clear()
         assert ask("What was UnknownCorp's revenue?")["status"] == "not_matched"
         queries.clear()
         assert ask("latest quarterly revenue")["status"] == "available"
-        assert len(queries) == 2
+        assert len(queries) == 3  # version + catalog + facts
     finally:
         event.remove(db[0].bind, "before_cursor_execute", track)
 

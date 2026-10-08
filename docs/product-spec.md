@@ -65,9 +65,9 @@ Each factual claim must be traceable through citation ID, actual supplied SOURCE
 
 ## Availability and state contracts
 
-- Company Ready means at least one matching chunk with a non-null usable embedding. `indexed_filing_count` counts distinct accessions over those chunks, not chunk rows; availability updates automatically when data arrives.
+- Company Ready means at least one completely validated, published filing with usable embeddings. `indexed_filing_count` counts published accessions, not chunk rows. Before refresh metadata migration, a read-only bulk validator recognizes complete legacy accessions; partial chunks never establish readiness.
 - Preserve the current stable company order and select the first Ready company by default; fall back to the first company only when none is Ready. Do not hide unindexed companies or determine availability with per-company HTTP requests.
-- The sources response merges fact-backed and chunk-backed filing metadata. Chunk-only filings have empty metrics and unknown financial period fields. `has_filing_chunks` describes chunk presence, while company Ready also requires embeddings; these fields have different semantics. Catalog indexing validates every selected filing's vectors before reporting completion.
+- The sources response merges fact-backed and published-evidence metadata. Evidence-only filings have empty metrics and unknown financial period fields. `has_filing_chunks` means complete published research evidence (validated legacy evidence before migration); metadata-only or partial accessions are not searchable.
 - Not indexed is a data state: filing research is unavailable while financial research remains independent. Switching company/filing remounts scoped panels, aborts requests and clears previous results; edits invalidate an in-flight search. Retain labels, keyboard focus, responsive layouts and text status indicators.
 - `GET /capabilities` exposes only `research_mode` and `ai_analysis_configured` booleans. Missing/unknown capability disables optional generation; neither company metrics nor filing evidence depend on it. No key, quota or provider exception appears in optional-AI fallback copy.
 
@@ -76,3 +76,9 @@ Each factual claim must be traceable through citation ID, actual supplied SOURCE
 FinLens provides historical research and education. Personalized investment advice, buy/sell recommendations, price targets, trading, allocation instructions, and unsupported forecasts are outside scope. Source text and questions are untrusted; preserve prompt-injection controls. No fabricated numbers, charts, filings, citations, or model output may appear in the product or portfolio assets.
 
 Acceptance requires evidence appropriate to the changed scope: deterministic metric fixtures, retrieval/data-quality evaluation, no-key research checks, source lineage, accessibility, and reproduction. Real generated answers require real claim audits when credits are deliberately available. Current integration and historical mocks must not be presented as fully verified AI output.
+
+## Data freshness
+
+Research Mode distinguishes stored coverage/readiness from source currency. Selected-company freshness exposes separate financial-fact/evidence states, UTC check/success times, SEC source filed dates and published versions. Unknown, pending, failed and stale are honest states; a recent check is scoped and does not guarantee all SEC data is current. No page request acquires SEC data or schedules work.
+
+A new published version refreshes financial summary/history/source metadata and invalidates direct answer/evidence/AI together, while retaining question, controls and still-available filing selection. Users explicitly research the question again; optional AI is never replayed. Freshness-check failure retains stored research with a disclosure. Refresh implementation has offline acceptance only; development migration and live scheduling are pending. See [contracts, limits and rollout](data-freshness.md).

@@ -74,6 +74,11 @@ def test_source_observation_dimensions_remain_distinct(factory, dimension, chang
     source = payload()
     record = source["facts"]["us-gaap"]["Revenues"]["units"]["USD"][0]
     source["facts"]["us-gaap"]["Revenues"]["units"]["USD"] += [{**record, dimension: changed}, deepcopy(record)]
+    if dimension == "val":
+        with factory() as session, session.begin(), pytest.raises(importer.FinancialSyncError, match="ambiguous_source_revision"):
+            importer.merge_company_facts(session, CIKS["AAPL"], source)
+        assert rows(factory) == []
+        return
     with factory() as session, session.begin():
         result = importer.merge_company_facts(session, CIKS["AAPL"], source)
     assert result["source_observations"] == result["facts_inserted"] == 2
@@ -97,7 +102,8 @@ def test_concepts_and_later_restatements_reach_item6_selector(factory, monkeypat
 def test_preexisting_unrelated_and_missing_from_source_facts_preserved(factory, monkeypatch):
     service.sync_catalog(factory)
     before = rows(factory)
-    source = payload(observations=[{**payload()["facts"]["us-gaap"]["Revenues"]["units"]["USD"][0], "val": 200}])
+    source = payload(observations=[{**payload()["facts"]["us-gaap"]["Revenues"]["units"]["USD"][0], "val": 200,
+                                    "accn": "0000320193-25-000003", "filed": "2025-06-01"}])
     monkeypatch.setattr(service, "get_company_facts", lambda cik: source)
     result = service.sync_catalog(factory, ["AAPL"])
     assert result["facts_inserted"] == 1 and rows(factory)[:len(before)] == before

@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { citationForClaim, describeApiError, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings,
+import { citationForClaim, describeApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings,
   type Company, type FilingAnswer, type FilingContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
+
+import { useResearchVersion } from "@/components/research-freshness";
 
 const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artificial intelligence"];
 
@@ -34,6 +36,7 @@ export function EvidenceResults({ result, answer }: { result: FilingContext; ans
 }
 
 export function AIAnalysis({ result, configured }: { result: FilingContext; configured: boolean }) {
+  const { version, changed } = useResearchVersion();
   const [answer, setAnswer] = useState<FilingAnswer | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
   }, []);
   async function analyze() {
     if (!configured || result.evidence_status !== "sufficient" || loading) return;
-    controller.current?.abort(); controller.current = new AbortController();
+    controller.current?.abort(); controller.current = versionedController(version, changed);
     const id = scope.current.start();
     setLoading(true); setMessage(null); setAnswer(null);
     try {
@@ -78,8 +81,11 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
   </section>;
 }
 
-function FilingSearch({ company, filing, configured }: { company: Company; filing: FilingSource | null; configured: boolean }) {
-  const [query, setQuery] = useState("");
+function FilingSearch({ company, filing, configured, query, setQuery }: {
+  company: Company; filing: FilingSource | null; configured: boolean;
+  query: string; setQuery: (value: string) => void;
+}) {
+  const { version, changed } = useResearchVersion();
   const [result, setResult] = useState<FilingContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +98,12 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
     const currentScope = scope.current;
     return () => { currentScope.invalidate(); controller.current?.abort(); };
   }, []);
+  const [searchedVersion, setSearchedVersion] = useState(version);
+  useEffect(() => {
+    scope.current.invalidate(); controller.current?.abort();
+    setResult(null); setAnswer(null); setLoading(false); setAnswerLoading(false);
+    setError(null); setAnswerError(null);
+  }, [version]);
   function edit(value: string) {
     scope.current.invalidate(); controller.current?.abort();
     setQuery(value); setResult(null); setLoading(false); setError(null);
@@ -99,8 +111,9 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
   }
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!query.trim() || answerLoading || loading) return;
+    setSearchedVersion(version);
     const id = scope.current.start();
-    controller.current?.abort(); controller.current = new AbortController();
+    controller.current?.abort(); controller.current = versionedController(version, changed);
     setLoading(Boolean(filing)); setError(null); setResult(null);
     setAnswerLoading(true); setAnswerError(null); setAnswer(null);
     const signal = controller.current.signal;
@@ -128,10 +141,11 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
       <button className="primary-button" disabled={!query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
       <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). Other questions search SEC evidence. No AI generation.</p>
     </form>
+    {searchedVersion !== version && <p className="notice">Data updated; research this question again.</p>}
     <div aria-live="polite" aria-busy={answerLoading}>
       {answerLoading && <p className="loading-state">Checking stored financial observations…</p>}
       {answerError && <p className="notice">Direct financial answer unavailable: {answerError} SEC evidence research continues independently.</p>}
-      {answer?.matched && <DirectResearchAnswer answer={answer} />}
+      {searchedVersion === version && answer?.matched && <DirectResearchAnswer answer={answer} />}
       {answer?.status === "company_mismatch" && <p className="notice">{answer.explanation}</p>}
       {answer?.status === "not_matched" && <p className="muted small">SEC evidence research · this question is outside supported direct financial answers.</p>}
     </div>
@@ -140,24 +154,29 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
       {error && <p role="alert" className="error-state">{error}</p>}
       {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state"><h3>Explore the filing evidence</h3><p>Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required.</p></div>}
     </div>
-    {result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages may describe a different period and are research, not validation of the structured answer.</p><EvidenceResults key={`evidence-${result.query}-${result.accession_number}`} result={result} answer={answer} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
+    {searchedVersion === version && result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages may describe a different period and are research, not validation of the structured answer.</p><EvidenceResults key={`evidence-${result.query}-${result.accession_number}`} result={result} answer={answer} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
   </>;
 }
 
 export default function FilingResearch({ company, configured }: { company: Company; configured: boolean }) {
+  const { version, changed } = useResearchVersion();
+  const [query, setQuery] = useState("");
+  const [sourceVersion, setSourceVersion] = useState(-1);
   const [filings, setFilings] = useState<FilingSource[]>([]);
   const [accession, setAccession] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const controller = new AbortController();
+    const controller = versionedController(version, changed);
+    setLoading(true); setError(null);
     getFilingSources(company.ticker, controller.signal).then((data) => {
       if (controller.signal.aborted) return;
-      const indexed = searchableFilings(data); setFilings(indexed); setAccession(indexed[0]?.accession_number ?? "");
+      const indexed = searchableFilings(data); setFilings(indexed); setSourceVersion(version);
+      setAccession(previous => indexed.some(item => item.accession_number === previous) ? previous : indexed[0]?.accession_number ?? "");
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [company.ticker]);
+  }, [company.ticker, version, changed]);
   const filing = filings.find((item) => item.accession_number === accession);
   return <section className="panel filing-panel" aria-labelledby="filing-title">
     <div className="section-heading"><div><p className="eyebrow">SEC research</p><h2 id="filing-title">Read the evidence</h2></div><span className="badge">No AI required</span></div>
@@ -169,6 +188,6 @@ export default function FilingResearch({ company, configured }: { company: Compa
     </select></label>
     {error && <p role="alert" className="error-state">{error}</p>}
     {!loading && !error && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
-    {!loading && <FilingSearch key={`${company.ticker}-${accession}`} company={company} filing={company.has_indexed_filing ? filing ?? null : null} configured={configured} />}
+    {sourceVersion >= 0 && <FilingSearch key={`${company.ticker}-${accession}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} configured={configured} query={query} setQuery={setQuery} />}
   </section>;
 }

@@ -194,7 +194,7 @@ def test_unsupported_historical_intents_stay_evidence_research(db, question):
     assert ask(question)["status"] == "not_matched"
 
 
-def test_selected_company_mismatch_and_two_selects(db):
+def test_selected_company_mismatch_and_bounded_versioned_selects(db):
     db[0].add(Company(ticker="MSFT", name="Microsoft Corp", cik="0000789019", exchange="NASDAQ"))
     db[0].commit()
     assert ask("Microsoft revenue in 2025")["status"] == "company_mismatch"
@@ -208,7 +208,7 @@ def test_selected_company_mismatch_and_two_selects(db):
     event.listen(engine, "before_cursor_execute", record)
     try:
         assert ask("2024-2025 revenue growth")["status"] == "available"
-        assert len(queries) == 2
+        assert len(queries) == 3  # version + catalog + facts
     finally:
         event.remove(engine, "before_cursor_execute", record)
 

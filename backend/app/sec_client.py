@@ -1,6 +1,7 @@
 import os
 import re
 import time
+from urllib.parse import urlsplit
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -14,26 +15,41 @@ load_backend_env()
 
 SEC_BASE_URL = "https://data.sec.gov"
 _last_request = 0.0
+MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
 
 def _sec_get(url: str) -> httpx.Response:
     """Sequential fair-access requests; retry transient failures at most twice."""
     global _last_request
-    with httpx.Client(headers=get_sec_headers(), timeout=60.0, follow_redirects=True) as client:
+    parsed = urlsplit(url)
+    if (parsed.scheme != "https" or parsed.hostname not in {"data.sec.gov", "www.sec.gov"}
+            or parsed.username or parsed.password or parsed.port not in {None, 443}
+            or not parsed.path.startswith(("/submissions/", "/api/xbrl/companyfacts/", "/Archives/edgar/data/"))
+            or parsed.query or parsed.fragment):
+        raise ValueError("Untrusted SEC source URL.")
+    with httpx.Client(headers=get_sec_headers(), timeout=60.0, follow_redirects=False) as client:
         for attempt in range(3):
             time.sleep(max(0.0, 0.25 - (time.monotonic() - _last_request)))
             _last_request = time.monotonic()
             try:
-                response = client.get(url)
-                response.raise_for_status()
-                return response
+                with client.stream("GET", url) as response:
+                    response.raise_for_status()
+                    body = bytearray()
+                    for block in response.iter_bytes():
+                        body.extend(block)
+                        if len(body) > MAX_RESPONSE_BYTES:
+                            raise ValueError("SEC response exceeds the configured size bound.")
+                    headers = {k: v for k, v in response.headers.items() if k.lower() not in {"content-encoding", "content-length", "transfer-encoding"}}
+                    return httpx.Response(response.status_code, headers=headers, content=bytes(body), request=response.request)
             except httpx.HTTPStatusError as exc:
                 if attempt == 2 or exc.response.status_code not in {403, 429, 500, 502, 503, 504}:
                     raise
             except httpx.TransportError:
                 if attempt == 2:
                     raise
-            time.sleep(2 ** (attempt + 1))
+            retry_after = response.headers.get("Retry-After", "") if 'response' in locals() else ""
+            delay = min(30, int(retry_after)) if retry_after.isdigit() else 2 ** (attempt + 1)
+            time.sleep(max(2 ** (attempt + 1), delay))
     raise RuntimeError("SEC request did not complete.")
 
 
@@ -156,3 +172,34 @@ def get_filing_raw_text(
     )
 
     return _sec_get(url).text
+
+
+def discover_refresh_filings(company_cik: str):
+    """Bounded recent inventory, latest Q/K independently and recent amendments.
+
+    Complete means both base forms found in the recent window, not all EDGAR
+    history. Sparse registrants remain pending; no predecessor guesses.
+    """
+    cik = company_cik.zfill(10)
+    data = _sec_get(f"{SEC_BASE_URL}/submissions/CIK{cik}.json").json()
+    if str(data.get("cik", "")).zfill(10) != cik:
+        raise ValueError("SEC submissions identity mismatch.")
+    rows = data["filings"]["recent"]
+    forms = rows["form"]
+    if len(forms) > 2000 or any(len(rows.get(f, [])) != len(forms) for f in ("accessionNumber", "filingDate", "primaryDocument")):
+        raise ValueError("Invalid or oversized submissions inventory.")
+    candidates = []
+    for i, form in enumerate(forms):
+        if form not in {"10-Q", "10-K", "10-Q/A", "10-K/A"}:
+            continue
+        accession, document = rows["accessionNumber"][i], rows["primaryDocument"][i]
+        if not re.fullmatch(r"\d{10}-\d{2}-\d{6}", accession) or not re.fullmatch(r"[A-Za-z0-9_.-]+", document):
+            raise ValueError("Invalid filing identity.")
+        candidates.append(FilingMetadata(cik, accession, form, date.fromisoformat(rows["filingDate"][i]), document))
+    selected = [max(group, key=lambda m: (m.filed, m.accession_number)) for form in ("10-Q", "10-K")
+                if (group := [m for m in candidates if m.form == form])]
+    # Recent amendments are retained as separate evidence, never substituted
+    # for another accession. An older amendment still may revise old facts.
+    selected.extend(m for m in candidates if m.form.endswith("/A"))
+    selected.sort(key=lambda m: (m.filed, m.accession_number))
+    return {"filings": selected, "complete": len({m.form for m in selected} & {"10-Q", "10-K"}) == 2}

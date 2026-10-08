@@ -163,7 +163,7 @@ def test_report_counts_and_subset(session):
     add_chunk(session)
     report = service.index_catalog(session, ["msft"])
     assert report["catalog_total"] == 2 and report["selected_total"] == 1
-    assert report["newly_indexed"] == 1 and report["final_ready"] == 2
+    assert report["newly_indexed"] == 1 and report["final_ready"] == 1  # Unregistered legacy AAPL needs offline bootstrap.
     assert report["companies"][0]["ticker"] == "MSFT"
     assert report["openai_calls"] == 0
     with pytest.raises(ValueError):
@@ -191,6 +191,8 @@ def test_dry_run_no_data_writes(session, external):
 
 def test_sources_exposes_indexed_filing_without_facts(session):
     add_chunk(session)
+    from app.refresh_service import bootstrap_publications
+    bootstrap_publications(session); session.commit()
     sources = main.get_company_sources("AAPL")
     assert len(sources) == 1 and sources[0].has_filing_chunks
     assert sources[0].metrics == [] and sources[0].period_start is None and sources[0].period_end is None
@@ -236,14 +238,14 @@ def test_official_discovery_identity_and_archive_fallback(monkeypatch):
 def test_sec_bounded_retry_and_no_retry_404(monkeypatch):
     monkeypatch.setattr(sec_client, "get_sec_headers", lambda: {"User-Agent": "synthetic fixture"})
     monkeypatch.setattr(sec_client.time, "sleep", lambda _: None)
-    request = httpx.Request("GET", "https://data.sec.gov/fixture")
+    request = httpx.Request("GET", "https://data.sec.gov/submissions/CIK0000320193.json")
     get = Mock(side_effect=[httpx.Response(429, request=request), httpx.Response(503, request=request),
                            httpx.Response(200, request=request)])
-    client = Mock(); client.__enter__ = Mock(return_value=client); client.__exit__ = Mock(return_value=False); client.get = get
-    monkeypatch.setattr(sec_client.httpx, "Client", lambda **_: client)
+    original_client = httpx.Client
+    monkeypatch.setattr(sec_client.httpx, "Client", lambda **kw: original_client(transport=httpx.MockTransport(lambda req: get(req)), **kw))
     assert sec_client._sec_get(str(request.url)).status_code == 200
     assert get.call_count == 3
-    get.reset_mock(); get.side_effect = None; get.return_value = httpx.Response(404, request=request)
+    get.reset_mock(); get.side_effect = [httpx.Response(404, request=request)]
     with pytest.raises(httpx.HTTPStatusError):
         sec_client._sec_get(str(request.url))
     assert get.call_count == 1
@@ -274,7 +276,7 @@ def test_zero_vector_fails_not_ready_then_recovers_without_redownload(session, e
     external[2].side_effect = lambda texts: [[0.0] * 384 for _ in texts]
 
     report = service.index_catalog(session, ["MSFT"])
-    assert report["failed"] == 1 and report["final_ready"] == 1
+    assert report["failed"] == 1 and report["final_ready"] == 0  # No completely published accession yet.
     persisted = service.filing_chunks(session, "0000789019")
     assert persisted and all(chunk.embedding is None for chunk in persisted)
     microsoft = next(c for c in main.get_companies() if c.ticker == "MSFT")
@@ -287,7 +289,7 @@ def test_zero_vector_fails_not_ready_then_recovers_without_redownload(session, e
     external[2].side_effect = lambda texts: [[1.0] * 384 for _ in texts]
     recovered = service.index_catalog(session, ["MSFT"])
     assert recovered["resumed"] == 1 and recovered["failed"] == 0
-    assert recovered["final_ready"] == 2
+    assert recovered["final_ready"] == 1  # Only MSFT has a committed publication manifest.
     persisted = service.filing_chunks(session, "0000789019")
     assert [chunk.id for chunk in persisted] == chunk_ids
     assert all(chunk.embedding is not None for chunk in persisted)
@@ -402,8 +404,8 @@ def test_global_readiness_outage_retains_results_and_nonzero_cli_exit(session, m
     path = tmp_path / "outage.json"
     assert index_catalog.main(["--ticker", "AAPL", "--report", str(path)]) == 1
     report = json.loads(path.read_text(encoding="utf-8"))
-    assert report["skipped"] == 1 and report["final_ready"] is None
-    assert report["catalog_error"] and report["companies"][0]["status"] == "skipped"
+    assert report["failed"] == 1 and report["final_ready"] is None  # Publication metadata read also fails safely.
+    assert report["catalog_error"] and report["companies"][0]["status"] == "failed"
     assert "private" not in json.dumps(report) + capsys.readouterr().err
 
 
@@ -420,8 +422,8 @@ def test_valid_accession_skipped_despite_invalid_sibling(session, external):
     assert result["accession_diagnostics"][0]["accession_number"] == invalid.accession_number
     assert result["accession_diagnostics"][0]["status"] == "invalid"
     assert snapshot(session, FilingChunk) == before
-    # Preserve the existing API's non-null, distinct-accession count semantics.
-    assert main.get_companies()[0].indexed_filing_count == 2
+    # Only validated published accessions count as ready.
+    assert main.get_companies()[0].indexed_filing_count == 1
     for call in external:
         call.assert_not_called()
 

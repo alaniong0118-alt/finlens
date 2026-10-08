@@ -10,7 +10,7 @@ import { JSDOM } from 'jsdom';
 // Node's existing test runner + real ReactDOM. Only Next's routing link and
 // browser layout/media APIs are adapted; page, effects, API calls and guards run.
 const require = createRequire(import.meta.url);
-let dom, createRoot, Home;
+let dom, createRoot, Home, ResearchFreshness;
 before(async () => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://finlens.test' });
   for (const key of ['window', 'document', 'HTMLElement', 'SVGElement', 'Node', 'Event', 'MouseEvent']) {
@@ -47,6 +47,7 @@ before(async () => {
     return exports;
   }
   Home = load(fileURLToPath(new URL('../app/page.tsx', import.meta.url))).default;
+  ResearchFreshness = load(fileURLToPath(new URL('../components/research-freshness.tsx', import.meta.url))).default;
 });
 after(() => dom.window.close());
 
@@ -193,10 +194,10 @@ async function mount(ctx, configured = false, catalog = companies) {
     assert.ok(found, `Expected pending request ${path} ${JSON.stringify(params)}`);
     return found;
   }
-  async function release(item, payload, status = 200) {
+  async function release(item, payload, status = 200, version = null) {
     assert.equal(item.released, false); item.released = true;
     await act(async () => item.resolve(new Response(JSON.stringify(payload), {
-      status, headers: { 'Content-Type': 'application/json', ...(status === 502 ? { 'X-FinLens-Error-Code': 'UPSTREAM_FAILURE' } : {}) },
+      status, headers: { 'Content-Type': 'application/json', ...(version !== null ? { 'X-FinLens-Data-Version': String(version) } : {}), ...(status === 502 ? { 'X-FinLens-Error-Code': 'UPSTREAM_FAILURE' } : {}) },
     })));
   }
   async function change(element, value) {
@@ -595,4 +596,214 @@ test('mounted company with no indexed filing can receive a direct answer without
   await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
   assert.match(app.host.querySelector('.direct-answer').textContent, /\$109\.42B/);
   assert.equal(app.requests.filter(request => /\/context$|\/answer$/.test(request.path)).length, 0);
+});
+
+
+function freshnessFixture(ticker, version, evidenceVersion = 0) {
+  const stream = { status: "current", last_checked_at: "2026-10-08T06:00:00Z", last_successful_sync_at: "2026-10-08T06:00:00Z",
+    latest_source_filing_date: "2025-05-01", pending_targets: [], inventory_complete: true, last_error: null, failure_stage: null };
+  return { ticker, data_version: version, facts_version: version, evidence_version: evidenceVersion,
+    status: "current", facts: stream, evidence: stream, latest_indexed_filing: null, migration_required: false,
+    scope: "Synthetic offline latest-Q/K test inventory" };
+}
+async function focusCheck() {
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  await act(async () => window.dispatchEvent(new Event('focus')));
+}
+const latestRequest = (app, path) => app.requests.filter(item => !item.released && item.path === path).at(-1);
+
+test('mounted published-version change rejects delayed old summary history and sources', async ctx => {
+  const app = await mount(ctx);
+  const oldSummary = app.request(companyPath('AAPL', 'financials/summary'));
+  const oldHistory = app.request(companyPath('AAPL', 'financials/metrics/revenue'));
+  const oldSources = app.request(companyPath('AAPL', 'sources'));
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  await app.release(latestRequest(app, companyPath('AAPL', 'financials/summary')), summary('AAPL', '2000000000'), 200, 1);
+  await app.release(latestRequest(app, companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '2000000000'), 200, 1);
+  await app.release(latestRequest(app, companyPath('AAPL', 'sources')), [filing('AAPL')], 200, 1);
+  for (const [pending, value] of [[oldSummary, summary('AAPL', '1000000000')], [oldHistory, history('AAPL', '1000000000')], [oldSources, [filing('AAPL')]]]) {
+    assert.equal(pending.init.signal.aborted, true);
+    await app.release(pending, value, 200, 0);
+    assert.match(app.snapshot().textContent, /\$2B/); assert.doesNotMatch(app.snapshot().textContent, /\$1B/);
+    assert.match(app.trends().textContent, /\$2B/);
+  }
+  assert.match(app.host.querySelector('[aria-label="Data freshness"]').textContent, /version 1/);
+});
+
+test('mounted version invalidation preserves query while clearing answer evidence and pending AI', async ctx => {
+  const app = await mount(ctx, true);
+  await app.completeCompany('AAPL', '1000000000');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  const question = 'latest quarterly revenue';
+  const evidenceRequest = await app.search('AAPL', question, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', question));
+  await app.release(evidenceRequest, context('AAPL', question));
+  await app.click('Generate AI analysis');
+  const oldAI = app.request(companyPath('AAPL', `filings/${filing('AAPL').accession_number}/answer`));
+  const before = app.requests.filter(item => item.path.endsWith('/research-answer')).length;
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.equal(app.host.querySelector('textarea').value, question);
+  assert.deepEqual(app.evidence(), []); assert.ok(!app.host.querySelector('.direct-answer'));
+  assert.match(app.host.textContent, /Data updated; research this question again/);
+  assert.equal(oldAI.init.signal.aborted, true);
+  await app.release(oldAI, { answer: 'OLD AI MUST NOT RENDER', claims: [], citations: [], evidence_status: 'sufficient' }, 200, 0);
+  assert.doesNotMatch(app.host.textContent, /OLD AI MUST NOT RENDER/);
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer')).length, before, 'No auto-answer or AI replay');
+});
+
+test('mounted pending answer and evidence cannot cross a same-company data version', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  const question = 'latest quarterly revenue';
+  const oldContext = await app.search('AAPL', question, true);
+  const oldAnswer = app.request(companyPath('AAPL', 'research-answer'));
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 2));
+  assert.equal(oldContext.init.signal.aborted, true); assert.equal(oldAnswer.init.signal.aborted, true);
+  await app.release(oldAnswer, directAnswer('AAPL', question), 200, 0);
+  await app.release(oldContext, context('AAPL', question), 200, 0);
+  assert.deepEqual(app.evidence(), []);
+  assert.doesNotMatch(app.host.textContent, /AAPL test evidence/);
+  assert.ok(!app.host.querySelector('.direct-answer'));
+});
+
+test('mounted no-change freshness and failed checks preserve usable research without duplicate fan-out', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  const previous = app.requests.filter(item => !item.path.endsWith('/freshness')).length;
+  await focusCheck(); await focusCheck();
+  assert.equal(app.requests.filter(item => !item.released && item.path.endsWith('/freshness')).length, 1, 'Focus checks coalesce');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  assert.equal(app.requests.filter(item => !item.path.endsWith('/freshness')).length, previous);
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), { detail: 'private failure' }, 503);
+  assert.match(app.snapshot().textContent, /\$1B/);
+  assert.match(app.host.textContent, /Freshness check unavailable/);
+  assert.doesNotMatch(app.host.textContent, /private failure/);
+});
+
+test('mounted version refresh preserves period metric and explicit filing controls', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  await app.change(app.select('Snapshot period'), 'annual');
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), summary('AAPL', '4000000000', 'annual'));
+  await app.change(app.select('Metric'), 'net_income');
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/net_income')), history('AAPL', '300000000', 'net_income'));
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.equal(app.select('Snapshot period').value, 'annual'); assert.equal(app.select('Metric').value, 'net_income');
+  const pendingSummary = latestRequest(app, companyPath('AAPL', 'financials/summary'));
+  assert.equal(pendingSummary.params.get('period'), 'annual');
+  assert.equal(pendingSummary.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(pendingSummary, summary('AAPL', '5000000000', 'annual'), 200, 1);
+  await app.release(latestRequest(app, companyPath('AAPL', 'sources')), [filing('AAPL')], 200, 1);
+  assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+  assert.match(app.snapshot().textContent, /\$5B/);
+});
+
+test('mounted delayed freshness from a previous company cannot replace current version', async ctx => {
+  const app = await mount(ctx);
+  const old = app.request(companyPath('AAPL', 'freshness'));
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  await app.completeCompany('JPM', '2000000000');
+  await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 0));
+  assert.equal(old.init.signal.aborted, true);
+  await app.release(old, freshnessFixture('AAPL', 9));
+  assert.match(app.host.querySelector('#company-title').textContent, /JPM/);
+  assert.match(app.snapshot().textContent, /\$2B/);
+  assert.doesNotMatch(app.host.querySelector('[aria-label="Data freshness"]').textContent, /version 9/);
+});
+
+test('mounted StrictMode freshness cleanup restarts checking and stale completions do not unlock a newer request', async ctx => {
+  const previousFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = (url, init) => new Promise(resolve => requests.push({url, init, resolve}));
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host);
+  ctx.after(async () => { await act(async () => root.unmount()); host.remove(); globalThis.fetch = previousFetch; });
+  await act(async () => root.render(React.createElement(React.StrictMode, null,
+    React.createElement(ResearchFreshness, {ticker:'AAPL',catalogChanged:()=>{}}, 'Stored research'))));
+  assert.equal(requests.length, 2, 'StrictMode setup after cleanup must immediately recheck');
+  assert.equal(requests[0].init.signal.aborted, true);
+  const finish = async (request, version) => act(async () => request.resolve(new Response(
+    JSON.stringify(freshnessFixture('AAPL', version)), {status:200,headers:{'Content-Type':'application/json'}})));
+  await finish(requests[1], 1);
+  assert.match(host.textContent, /version 1/);
+  await focusCheck(); assert.equal(requests.length, 3);
+  await finish(requests[0], 9); // Transport deliberately ignores cancellation.
+  await focusCheck(); assert.equal(requests.length, 3, 'Old finally must not release current admission');
+  await finish(requests[2], 2);
+  assert.match(host.textContent, /version 2/); assert.doesNotMatch(host.textContent, /version 9/);
+});
+
+test('mounted first published evidence version reconciles stale catalog readiness exactly once', async ctx => {
+  const app = await mount(ctx, false, [{...companies[0],has_indexed_filing:false,indexed_filing_count:0}]);
+  await app.completeCompany('AAPL','1000000000');
+  assert.match(app.host.textContent, /Not indexed for filing research/);
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',1,1));
+  await app.release(app.request('/companies'), [companies[0]]);
+  await app.release(latestRequest(app,companyPath('AAPL','sources')), [filing('AAPL')],200,1);
+  assert.equal(app.select('Indexed SEC filing').disabled,false);
+  assert.equal(app.select('Indexed SEC filing').value,filing('AAPL').accession_number);
+  assert.match(app.host.textContent, /1 indexed filing/);
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',1,1));
+  assert.equal(app.requests.filter(r=>r.path==='/companies').length,2,'Only initial load plus one reconciliation');
+});
+
+test('mounted failed catalog reconciliation retries the same version and preserves company and question', async ctx => {
+  const app = await mount(ctx, false, [{...companies[0],has_indexed_filing:false,indexed_filing_count:0}]);
+  await app.release(app.request(companyPath('AAPL','financials/summary')), summary('AAPL','1000000000'));
+  await app.release(app.request(companyPath('AAPL','financials/metrics/revenue')), history('AAPL','1000000000'));
+  await app.release(app.request(companyPath('AAPL','sources')), []);
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',0));
+  await app.change(app.host.querySelector('textarea'), 'How much revenue did Apple report?');
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',1,1));
+  await app.release(app.request('/companies'), {detail:'private transient failure'},503);
+  await app.release(latestRequest(app,companyPath('AAPL','sources')), [filing('AAPL')],200,1);
+  assert.equal(app.select('Indexed SEC filing').disabled,true);
+  assert.match(app.host.textContent,/Filing availability check pending/);
+  assert.doesNotMatch(app.host.textContent,/private transient failure/);
+  assert.equal(app.requests.filter(r=>r.path==='/companies').length,2,'No immediate retry loop');
+  await focusCheck(); await focusCheck();
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',1,1));
+  const retry = app.request('/companies');
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',1,1));
+  assert.equal(app.requests.filter(r=>r.path==='/companies').length,3,'One catalog reconciliation in flight');
+  await app.release(retry,[companies[0]]);
+  assert.equal(app.select('Indexed SEC filing').disabled,false);
+  assert.equal(app.select('Indexed SEC filing').value,filing('AAPL').accession_number);
+  assert.equal(app.host.querySelector('#company').value,'AAPL');
+  assert.equal(app.host.querySelector('textarea').value,'How much revenue did Apple report?');
+  assert.doesNotMatch(app.host.textContent,/Filing availability check pending|Not indexed for filing research/);
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL','freshness')), freshnessFixture('AAPL',1,1));
+  assert.equal(app.requests.filter(r=>r.path==='/companies').length,3,'Successful reconciliation is acknowledged');
+});
+
+test('mounted catalog reconciliation from an old company cannot overwrite a newer catalog', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL','1000000000');
+  await app.release(app.request(companyPath('AAPL','freshness')),freshnessFixture('AAPL',1,1));
+  const oldCatalog = app.request('/companies');
+  await app.change(app.host.querySelector('#company'),'JPM');
+  assert.equal(oldCatalog.init.signal.aborted,true);
+  await app.completeCompany('JPM','2000000000');
+  await app.release(app.request(companyPath('JPM','freshness')),freshnessFixture('JPM',1,1));
+  await app.release(latestRequest(app,'/companies'),companies);
+  await app.release(oldCatalog,[{...companies[0],name:'STALE CATALOG MUST NOT RENDER'}]);
+  assert.equal(app.host.querySelector('#company').value,'JPM');
+  assert.match(app.host.querySelector('#company-title').textContent,/JPM/);
+  assert.doesNotMatch(app.host.textContent,/STALE CATALOG MUST NOT RENDER/);
+  await focusCheck();
+  await app.release(app.request(companyPath('JPM','freshness')),freshnessFixture('JPM',1,1));
+  assert.equal(app.requests.filter(r=>r.path==='/companies').length,3);
 });

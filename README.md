@@ -10,7 +10,7 @@ SEC filings contain useful evidence, but reading them involves long documents, i
 
 ## Project documentation
 
-Research Mode is implemented; AI Analysis is an optional enhancement. Comparisons, deeper filing coverage and formal evaluation remain roadmap work, distinct from the recorded acceptance below.
+Research Mode and bounded same-company fiscal comparisons are implemented; AI Analysis is optional. Deeper filing coverage, cross-company analysis and formal evaluation remain roadmap work, distinct from the recorded acceptance below.
 
 Research Answers resolve clear latest-value, fiscal-year/quarter and bounded same-company comparison questions about canonical financial metrics directly from stored SEC observations, with zero LLM calls. Ask “2024 revenue”, “Q2 2025 revenue” or “2024–2025 revenue growth” to see a result before supporting evidence. Comparisons expose both source observations and exact changes; incompatible or missing data retains an explanation. Causal, segment, arbitrary-date, multi-metric and nonfinancial questions continue through selected-filing evidence research. The selected company is authoritative, and evidence/AI failure preserves a valid direct answer. See [scope and limitations](docs/product-spec.md#historical-and-comparative-research-answers).
 
@@ -19,6 +19,7 @@ Research Answers resolve clear latest-value, fiscal-year/quarter and bounded sam
 - [Current architecture](docs/architecture.md) and [technical challenges](docs/technical-challenges.md)
 - [Engineering standards](docs/engineering-standards.md) and [data-source policy](docs/data-sources.md)
 - [Repository instructions](AGENTS.md) and [ExecPlan standard](.agent/PLANS.md)
+- [Data freshness: contracts, migration and operator runbook](docs/data-freshness.md)
 
 ## Quick Start
 
@@ -313,3 +314,9 @@ Real Item 8 captures: [desktop Light](docs/screenshots/research-mode-light.jpg),
 ## Future work
 
 Bounded historical/comparison acceptance (2026-10-08): 233 relevant backend tests, 55 frontend tests, lint/type checking/production build, 26 real HTTP/source audits and actual browser checks passed with unchanged database fingerprints. See the [verification report](backend/reports/historical_answers_final_report.md). These are deterministic results; real LLM acceptance remains pending and will run only when credits are intentionally available. Follow the [roadmap](ROADMAP.md) for broader comparisons, deeper flagship coverage, formal evaluation, optional multi-filing AI, hardening and portfolio release.
+
+## Data freshness and automatic refresh
+
+Offline implementation is accepted; **live rollout is pending**. Incremental jobs reuse the reviewed SEC pipeline, append observations, atomically publish complete evidence and auditable company versions, and expose separate facts/evidence freshness. Research Mode refreshes selected views on version changes without automatic AI or source acquisition. Unknown check dates remain unknown.
+
+The additive migration was tested only on disposable PostgreSQL; the development schema/data were not changed. No SEC/OpenAI call or scheduled task activation occurred. Existing installations must follow the authorized migration/bootstrap cutover in the [runbook](docs/data-freshness.md), rather than migrate while serving an empty publication catalog. Latest offline results: 733 backend tests plus 27 subtests (13 opt-in DB tests skipped), 64 frontend tests, lint/type/build passed. See [verification](backend/reports/data_freshness_verification.json). Independent review and live canaries remain pending.

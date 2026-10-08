@@ -102,6 +102,12 @@ def test_legacy_rows_and_evidence_preserved_and_no_fabricated_readiness(session)
     assert snapshot(session, FinancialFact) == facts
     assert snapshot(session, FilingChunk) == chunks
 
+    from app.models import FilingPublication
+    from app.refresh_contracts import utcnow
+    session.add(FilingPublication(company_cik=LEGACY_CIKS["AAPL"], accession_number="test-accession", form="10-Q",
+        filed=date(2026, 7, 31), filename="fixture.htm", chunk_count=37, content_digest="0"*64,
+        configuration="fixture", published_at=utcnow(), data_version=0))
+    session.commit()
     queries = []
     def record_select(_conn, _cursor, statement, _parameters, _context, _executemany):
         if statement.lstrip().lower().startswith("select"):

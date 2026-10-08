@@ -1,14 +1,21 @@
-"""Company availability is derived from embedded filing chunks in one query."""
+"""Company availability is derived from validated filing publications in one query."""
+from datetime import date
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
 from app import main
-from app.models import Company, FilingChunk
+from app.models import Company, FilingChunk, FilingPublication
+from app.refresh_contracts import utcnow
 
 
 def add_chunks(session, cik, accession, count, *, embedded):
+    if embedded:
+        # Explicit completed-publication fixture; partial rows have no manifest.
+        session.add(FilingPublication(company_cik=cik, accession_number=accession, form="10-Q",
+            filed=date(2025, 5, 1), filename="fixture.htm", chunk_count=count, content_digest="0"*64,
+            configuration="fixture", published_at=utcnow(), data_version=0))
     for index in range(count):
         session.add(FilingChunk(
             company_cik=cik,

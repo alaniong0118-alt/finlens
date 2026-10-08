@@ -1,0 +1,432 @@
+{
+  "verified_at": "2026-10-08T10:27:00.378263+00:00",
+  "scope": "offline implementation acceptance; live rollout not authorized",
+  "before": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "after": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "fingerprints_unchanged": true,
+  "development_alembic_revision": "d7b834408ba8",
+  "development_migration_applied": false,
+  "sec_calls": 0,
+  "openai_calls": 0,
+  "scheduler_enabled": false,
+  "next_env_sha256": "f4e8976c19fc926644d72610bf1058bd6bf52add97e46a02bc0b912a751625c0",
+  "http_read_only_smoke": {
+    "/healthz": {
+      "status": 200
+    },
+    "/dbz": {
+      "status": 200
+    },
+    "/companies": {
+      "status": 200,
+      "count": 35,
+      "ready": 35
+    },
+    "AAPL": {
+      "freshness": "unknown",
+      "migration_required": true,
+      "version": 0,
+      "summary_status": 200,
+      "sources_status": 200
+    },
+    "JPM": {
+      "freshness": "unknown",
+      "migration_required": true,
+      "version": 0,
+      "summary_status": 200,
+      "sources_status": 200
+    },
+    "COST": {
+      "freshness": "unknown",
+      "migration_required": true,
+      "version": 0,
+      "summary_status": 200,
+      "sources_status": 200
+    },
+    "JNJ": {
+      "freshness": "unknown",
+      "migration_required": true,
+      "version": 0,
+      "summary_status": 200,
+      "sources_status": 200
+    },
+    "XOM": {
+      "freshness": "unknown",
+      "migration_required": true,
+      "version": 0,
+      "summary_status": 200,
+      "sources_status": 200
+    },
+    "latest quarterly revenue": {
+      "http_status": 200,
+      "status": "available",
+      "answer": "Apple Inc.'s latest available quarterly revenue was $109.42B for the quarter ended June 27, 2026.",
+      "data_version_header": "0",
+      "formatted_value": "$109.42B",
+      "exact_value": "109417000000.0000"
+    },
+    "2024-2025 revenue growth": {
+      "http_status": 200,
+      "status": "available",
+      "answer": "Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).",
+      "data_version_header": "0",
+      "formatted_value": "+6.43%",
+      "percentage_change": "0.06425511782832738757400232716",
+      "formatted_percentage_change": "+6.43%"
+    }
+  },
+  "backend_tests": {
+    "passed": 733,
+    "subtests_passed": 27,
+    "skipped": 13,
+    "skip_reason": "existing opt-in database RAG tests not pointed at development data"
+  },
+  "refresh_tests": {
+    "passed": 43,
+    "postgres_isolation_migration_concurrency_cases": 4
+  },
+  "frontend_tests": {
+    "passed": 64,
+    "mounted": 34
+  },
+  "lint": "passed",
+  "typescript_no_emit": "passed",
+  "production_build": "passed in disposable frontend snapshot",
+  "browser": {
+    "backend_port": 8023,
+    "frontend_port": 3004,
+    "data": "real unchanged stored data; unmigrated fallback",
+    "widths": [
+      1440,
+      390
+    ],
+    "mobile_client_width": 375,
+    "mobile_scroll_width": 375,
+    "checked": "AAPL unknown freshness, migration disclosure, 35 Ready, $109.42B quarterly snapshot; no AI/evidence submit",
+    "final_build_rechecked": true
+  },
+  "isolated_migration": {
+    "old_to_new": "d7b834408ba8 -> f94c6f41e0cb",
+    "alembic_check": "passed",
+    "note": "Real isolated PostgreSQL old-head upgrade and Alembic check, preserving all preexisting fixture rows. Development unchanged."
+  },
+  "live_canary": "not performed",
+  "independent_review": "pending",
+  "strict_mode_regression": {
+    "before_fix": "failed: initial freshness request did not restart after cleanup",
+    "after_fix": "passed: cleanup rechecks, old completions cannot unlock newer requests"
+  },
+  "final_related_backend_tests": {
+    "passed": 107,
+    "scope": "refresh/PostgreSQL/financial-sync/catalog-indexing after final pending-target fix and stronger migration fixture",
+    "note": "Final full suite rerun after restoring both pre-existing CLI regression cases and preserving per-chunk response metadata."
+  },
+  "syntax_import": "passed",
+  "disabled_cli": "passed; no allow-network exits before database/source",
+  "disabled_scheduler_wrapper": "passed; no child refresh job launched",
+  "documentation_references": {
+    "checked": 180,
+    "errors": 0
+  },
+  "new_file_whitespace": "passed",
+  "git_diff_check": "passed",
+  "catalog_startup_regression": "passed; first evidence publication reconciles stale readiness once",
+  "final_preservation_checked_at": "2026-10-08T10:39:10.559572+00:00",
+  "git_index_changed": false,
+  "financial_selection_and_dependencies_changed": false,
+  "git_status": {
+    "modified": 30,
+    "untracked": 17,
+    "staged": 0,
+    "excluded_generated_file": "frontend/next-env.d.ts pre-existing, bytes unchanged"
+  },
+  "changed_files": [
+    "README.md",
+    "ROADMAP.md",
+    "backend/app/catalog_indexing_service.py",
+    "backend/app/embedding_service.py",
+    "backend/app/financial_sync_service.py",
+    "backend/app/main.py",
+    "backend/app/models.py",
+    "backend/app/sec_client.py",
+    "backend/app/sec_filing_service.py",
+    "backend/app/sec_importer.py",
+    "backend/scripts/setup_demo.py",
+    "backend/tests/test_catalog_indexing.py",
+    "backend/tests/test_company_availability.py",
+    "backend/tests/test_company_catalog.py",
+    "backend/tests/test_financial_metrics.py",
+    "backend/tests/test_financial_sync.py",
+    "backend/tests/test_historical_research_answers.py",
+    "backend/tests/test_research_answers.py",
+    "backend/tests/test_setup_demo.py",
+    "docs/architecture.md",
+    "docs/data-sources.md",
+    "docs/financial-metrics.md",
+    "docs/product-spec.md",
+    "frontend/app/page.tsx",
+    "frontend/components/filing-research.tsx",
+    "frontend/components/financial-research.tsx",
+    "frontend/lib/finlens-api.ts",
+    "frontend/tests/finlens-api.test.mjs",
+    "frontend/tests/research-interactions.test.mjs",
+    "Refresh-FinLens.ps1",
+    "backend/app/freshness_service.py",
+    "backend/app/refresh_contracts.py",
+    "backend/app/refresh_service.py",
+    "backend/migrations/versions/f94c6f41e0cb_add_refresh_state_attempts_and_filing_.py",
+    "backend/reports/data_freshness_baseline.json",
+    "backend/reports/data_freshness_implementation.md",
+    "backend/reports/data_freshness_verification.json",
+    "backend/scripts/refresh_data.py",
+    "backend/tests/test_data_refresh.py",
+    "backend/tests/test_refresh_postgres.py",
+    "docs/data-freshness.md",
+    "docs/exec-plans/completed/2026-10-08-data-freshness-automatic-refresh.md",
+    "docs/screenshots/data-freshness/desktop-unknown.jpg",
+    "docs/screenshots/data-freshness/mobile-unknown.jpg",
+    "frontend/components/research-freshness.tsx"
+  ],
+  "added_content_secret_patterns": "no OpenAI-like key or private-key block detected; private environment values not read/printed",
+  "verification_services_stopped": true,
+  "isolated_postgres_container_stopped": true,
+  "review_repairs": {
+    "verified_at": "2026-10-08T15:19:26.995339+00:00",
+    "scope": "four independently confirmed P2 repairs; focused independent re-review and operational rollout pending",
+    "findings": {
+      "ownership_loss": "publication bound to the physical admission connection; termination rolls back",
+      "uncertain_commit": "fresh-connection durable attempt reconciliation; explicit indeterminate/null unknown counters",
+      "fatal_checkpoint": "stop before any later stream",
+      "catalog_retry": "successful-application acknowledgment distinct from observed evidence version; bounded same-version retry"
+    },
+    "tests": {
+      "refresh_and_postgres": {
+        "passed": 52,
+        "command": "python -B -m pytest -q -p no:cacheprovider tests/test_refresh_postgres.py tests/test_data_refresh.py"
+      },
+      "selected_financial_and_compatibility": {
+        "passed": 465,
+        "command": "python -B -m pytest -q -p no:cacheprovider tests/test_financial_sync.py tests/test_catalog_indexing.py tests/test_setup_demo.py tests/test_research_answers.py tests/test_historical_research_answers.py"
+      },
+      "frontend": {
+        "passed": 66,
+        "mounted": 36,
+        "command": "npm test"
+      },
+      "lint": "passed",
+      "typescript": "passed: npx tsc --noEmit --incremental false",
+      "build": "passed: npm run build in disposable current frontend snapshot",
+      "python_syntax": "5 changed Python files compiled in memory",
+      "fastapi_import": "passed",
+      "final_shared_coordinator_recheck": {
+        "passed": 81,
+        "overlaps_selected_financial_and_compatibility": true,
+        "command": "python -B -m pytest -q -p no:cacheprovider tests/test_financial_sync.py tests/test_catalog_indexing.py tests/test_setup_demo.py"
+      }
+    },
+    "mutations": {
+      "publication_connection_binding": {
+        "detected": true,
+        "failures": 2
+      },
+      "commit_reconciliation": {
+        "detected": true,
+        "failures": 2
+      },
+      "checkpoint_barrier": {
+        "detected": true,
+        "failures": 1
+      },
+      "catalog_success_acknowledgment": {
+        "detected": true,
+        "failures": 1
+      },
+      "method": "in-memory only; permanent files never weakened",
+      "test_fixture_correction": "scope PID lookup to current disposable database; bounded test lock wait; final mutation runs repeated cleanly"
+    },
+    "development_database": {
+      "after": {
+        "counts": {
+          "companies": 35,
+          "financial_facts": 58881,
+          "filing_chunks": 3175,
+          "embeddings": 3175
+        },
+        "sha256": {
+          "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+          "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+          "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+        }
+      },
+      "fingerprints_unchanged": true,
+      "alembic_revision": "d7b834408ba8",
+      "migration_applied": false,
+      "writes": false
+    },
+    "next_env_sha256": "f4e8976c19fc926644d72610bf1058bd6bf52add97e46a02bc0b912a751625c0",
+    "next_env_unchanged": true,
+    "sec_calls": 0,
+    "openai_calls": 0,
+    "scheduler_enabled": false,
+    "browser_rerun": false,
+    "commit_or_push": false,
+    "build_snapshot": "D:/Projects/.finlens-refresh-fixes-check-a589b6870c/frontend",
+    "repair_changed_files": [
+      "backend/app/refresh_service.py",
+      "backend/app/refresh_contracts.py",
+      "backend/scripts/refresh_data.py",
+      "backend/tests/test_data_refresh.py",
+      "backend/tests/test_refresh_postgres.py",
+      "frontend/app/page.tsx",
+      "frontend/components/research-freshness.tsx",
+      "frontend/components/filing-research.tsx",
+      "frontend/tests/research-interactions.test.mjs",
+      "docs/data-freshness.md",
+      "ROADMAP.md",
+      "backend/reports/data_freshness_implementation.md",
+      "backend/reports/data_freshness_verification.json",
+      "docs/exec-plans/completed/2026-10-08-data-freshness-automatic-refresh.md",
+      "docs/exec-plans/completed/2026-10-08-refresh-review-fixes.md"
+    ],
+    "remaining_gates": [
+      "focused Astra re-review",
+      "explicitly authorized development migration and bootstrap",
+      "authorized SEC canary and resource measurements",
+      "separate scheduler authorization"
+    ],
+    "git_status": {
+      "modified": 30,
+      "untracked": 17,
+      "staged": 0,
+      "excluded_generated_file": "frontend/next-env.d.ts pre-existing, bytes unchanged"
+    },
+    "git_diff_check": "passed",
+    "local_documentation_references": {
+      "checked": 192,
+      "missing_targets": 0
+    },
+    "new_file_whitespace": "passed",
+    "isolated_postgres_container_stopped": true
+  },
+  "transaction_cleanup_repair": {
+    "verified_at": "2026-10-08T15:58:17.404705+00:00",
+    "scope": "remaining P2 rollback-cleanup integrity repair; final independent Astra re-review and operational rollout pending",
+    "root_cause": "cleanup unlock-and-commit published residual work after rollback failed before I/O; SQLAlchemy considered its transaction inactive",
+    "design": {
+      "coordinator_cleanup": "no SQL or commit; always invalidate/close dedicated admission connection",
+      "publication_dbapi_error": "invalidate physical owner before fresh-connection ledger reconciliation",
+      "pool": "production pool_pre_ping=True/autoflush=False/autocommit=False tested; other connections remain reusable",
+      "lock_release": "physical PostgreSQL session close releases advisory locks and aborts residual transactions"
+    },
+    "new_regression_cases": 7,
+    "tests": {
+      "focused_new_postgres": {
+        "passed": 7,
+        "deselected": 12,
+        "command": "python -B -m pytest -q -p no:cacheprovider tests/test_refresh_postgres.py -k 'failed_rollback or cleanup_never or driver_commit'"
+      },
+      "combined": {
+        "passed": 524,
+        "refresh_and_postgres": 59,
+        "financial_and_compatibility": 465,
+        "command": "python -B -m pytest -q -p no:cacheprovider tests/test_refresh_postgres.py tests/test_data_refresh.py tests/test_financial_sync.py tests/test_catalog_indexing.py tests/test_setup_demo.py tests/test_research_answers.py tests/test_historical_research_answers.py"
+      },
+      "python_syntax": "passed: compile in memory for app/refresh_service.py and tests/test_refresh_postgres.py",
+      "fastapi_import": "passed",
+      "frontend": "not rerun; no frontend changes"
+    },
+    "outcomes": {
+      "rollback_before_io": "facts/evidence publication rolled back; zero rows/manifests/version advances; physical owner closed and never rechecked out; retry updated then no_change",
+      "rollback_after_io": "same zero-publication and conservative physical retirement; fresh ledger confirms rollback",
+      "ordinary_rollback": "existing facts/evidence before-commit regressions passed",
+      "driver_commit_lost_ack": "fresh independent physical connection recovers exact committed counters/version and successful ledger for both streams",
+      "unknown_commit": "existing indeterminate/null-fields regression passed; no later stream; ledger unchanged; safe retry"
+    },
+    "mutation": {
+      "method": "in-memory coordinator replacement only; repository source never weakened",
+      "restored": "unsafe pg_advisory_unlock followed by commit",
+      "detected": true,
+      "failures": 1,
+      "actual_persisted_facts": 1,
+      "expected_persisted_facts": 0,
+      "test": "test_coordinator_cleanup_never_commits_a_failed_external_session_rollback"
+    },
+    "development_database": {
+      "after": {
+        "counts": {
+          "companies": 35,
+          "financial_facts": 58881,
+          "filing_chunks": 3175,
+          "embeddings": 3175
+        },
+        "sha256": {
+          "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+          "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+          "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+        }
+      },
+      "fingerprints_unchanged": true,
+      "alembic_revision": "d7b834408ba8",
+      "writes": false,
+      "migration_applied": false
+    },
+    "next_env_sha256": "f4e8976c19fc926644d72610bf1058bd6bf52add97e46a02bc0b912a751625c0",
+    "next_env_unchanged": true,
+    "repair_changed_files": [
+      "backend/app/refresh_service.py",
+      "backend/tests/test_refresh_postgres.py",
+      "backend/reports/data_freshness_implementation.md",
+      "backend/reports/data_freshness_verification.json",
+      "docs/data-freshness.md",
+      "docs/exec-plans/completed/2026-10-08-refresh-review-fixes.md",
+      "docs/exec-plans/completed/2026-10-08-refresh-transaction-cleanup.md"
+    ],
+    "sec_calls": 0,
+    "openai_calls": 0,
+    "dependencies_changed": false,
+    "scheduler_enabled": false,
+    "commit_or_push": false,
+    "remaining_gates": [
+      "final independent Astra re-review",
+      "explicit development migration/bootstrap authorization",
+      "separately authorized limited SEC canary and resource checks",
+      "separate scheduler authorization"
+    ],
+    "git_diff_check": "passed",
+    "new_and_changed_file_whitespace": "passed",
+    "local_documentation_references": {
+      "checked": 18,
+      "missing_targets": 0
+    },
+    "git_status": {
+      "modified_tracked": 30,
+      "untracked_files": 18,
+      "staged": 0
+    },
+    "isolated_postgres_container_stopped": true
+  }
+}
