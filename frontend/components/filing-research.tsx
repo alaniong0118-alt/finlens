@@ -4,19 +4,22 @@ import { citationForClaim, describeApiError, getAnswer, getFilingContext, getFil
   type Company, type FilingAnswer, type FilingContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
+import { evidenceExcerpt } from "@/lib/evidence-presentation";
 
 const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artificial intelligence"];
 
-export function EvidenceResults({ result }: { result: FilingContext }) {
+export function EvidenceResults({ result, answer }: { result: FilingContext; answer?: ResearchAnswer | null }) {
+  const [expanded, setExpanded] = useState(false);
   const passages = evidencePassages(result);
+  const previews = passages.map(passage => ({ ...passage, excerpt: evidenceExcerpt(passage.text, result.query, answer, passages.map(item => item.text)) }));
   return <div className="evidence-results" aria-live="polite">
     <div className="section-heading"><h3>{passages.length ? `${passages.length} SEC evidence passages` : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
-    <p className="muted small">Search: “{result.query}” · Evidence is retrieved text, not an AI answer or a guarantee of claim support.</p>
+    <p className="muted small">Search: “{result.query}” · Highlights mark matching text, not verified claim support. Excerpts retain the source wording.</p>
     {passages.length === 0 && <div className="empty-state"><p>Try a more specific financial topic. FinLens does not substitute model knowledge when filing evidence is weak.</p></div>}
-    {passages.map(({ citation, text, rank }) => <article className="evidence-card" key={citation.citation_id}>
+    <div id="ranked-evidence">{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt }) => <article className="evidence-card" key={citation.citation_id}>
       <div className="evidence-heading"><h4>Evidence {rank} <span className="muted">· {citation.form}</span></h4><span className="small muted">Filed {formatDate(citation.filed)}</span></div>
-      <p className="excerpt">{text.length > 650 ? `${text.slice(0, 650)}…` : text}</p>
-      {text.length > 650 && <details className="provenance"><summary>Read full evidence passage</summary><p className="excerpt details-body">{text}</p></details>}
+      <p className="excerpt evidence-preview">{excerpt.start > 0 && "… "}{excerpt.parts.map((part, index) => part.kind ? <mark key={index} className={`evidence-highlight ${part.kind === "value" ? "value-match" : ""}`}>{part.text}</mark> : part.text)}{excerpt.end < text.length && " …"}</p>
+      <details className="provenance"><summary>Read full evidence passage</summary><p className="excerpt details-body">{text}</p></details>
       {officialSecUrl(citation.sec_url) && <a className="source-link" href={officialSecUrl(citation.sec_url)} target="_blank" rel="noopener noreferrer">Open official SEC source ↗</a>}
       <details className="provenance"><summary>Filing and retrieval details</summary><div className="details-body wrap-anywhere">
         <p>{citation.citation_id} · {citation.chunk_id} · {citation.filename}</p>
@@ -25,7 +28,8 @@ export function EvidenceResults({ result }: { result: FilingContext }) {
         <p>Hybrid rank {rank} · Retrieval rule: {citation.evidence_reason.replaceAll("_", " ")}</p>
         <p>Scores describe retrieval ranking, not factual confidence.</p>
       </div></details>
-    </article>)}
+    </article>)}</div>
+    {passages.length > 2 && <button type="button" className="secondary-button evidence-toggle" aria-expanded={expanded} aria-controls="ranked-evidence" onClick={() => setExpanded(!expanded)}>{expanded ? "Show less evidence" : `Show more evidence (${passages.length - 2})`}</button>}
   </div>;
 }
 
@@ -136,7 +140,7 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
       {error && <p role="alert" className="error-state">{error}</p>}
       {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state"><h3>Explore the filing evidence</h3><p>Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required.</p></div>}
     </div>
-    {result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages are supporting research, not validation of the structured answer.</p><EvidenceResults result={result} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
+    {result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages are supporting research, not validation of the structured answer.</p><EvidenceResults key={`evidence-${result.query}-${result.accession_number}`} result={result} answer={answer} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
   </>;
 }
 

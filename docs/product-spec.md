@@ -41,6 +41,12 @@ The selected company is authoritative. Recognized other catalog names/tickers re
 
 Direct answers do not depend on indexed filings or context retrieval. One answer request and one selected-filing context request settle independently; answer/evidence failures and optional AI failure cannot erase the other valid research result. Company/filing changes and question edits invalidate old responses. Narrative supporting passages may concern another period/accession and do not establish validation of the structured answer. No company-wide or multi-filing retrieval is introduced.
 
+### Answer presentation and evidence highlighting
+
+“Answer first, highlight the proof, details on demand.” Direct answers show the server's value/sentence, essential period/filing metadata and basis or warnings; exact provenance stays collapsed. Unavailable reasons and EPS warnings stay visible.
+
+Supporting research initially shows the first two backend-ranked passages. Show more/less retains their order. Each preview is an unchanged, query-focused source window (up to 280 characters, normally 200 around matched values); full stored text and citation details remain expandable. Semantic highlights mark metric/query phrases or exact, safely scaled values, not validated factual support. Unknown units, rounded-only matches and unavailable answers receive no numeric-validation highlight. Evidence-only questions favor relevant reporting language or query terms without generating an answer. Existing company/query invalidation and independent answer/evidence/AI state are retained.
+
 ## Optional AI Analysis
 
 AI can explain or synthesize retrieved evidence, with bounded context and claim-level citations. It does not calculate deterministic financial values or fill gaps using unsupported model knowledge. Multi-filing and cross-company analysis must wait for mature metric, coverage, and retrieval/evaluation layers. See [ADR 003](decisions/003-ai-is-optional.md).

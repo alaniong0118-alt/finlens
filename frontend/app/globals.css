@@ -65,6 +65,12 @@ select:hover,textarea:hover { border-color:var(--accent); } summary { cursor:poi
 .evidence-card { margin-top:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); padding:16px; min-width:0; }
 .direct-answer { margin:20px 0; padding:20px; border:1px solid var(--accent); border-radius:12px; background:var(--surface); min-width:0; }
 .direct-answer .metric-value { font-size:clamp(1.7rem,3vw,2.5rem); margin:12px 0; }
+.direct-answer .section-heading { margin-bottom:8px; }
+.direct-answer .answer-text { font-size:14px; line-height:1.6; margin-bottom:7px; }
+.evidence-preview { line-height:1.7; }
+.evidence-highlight { background:var(--accent-soft); color:var(--text); font-weight:650; text-decoration:underline; text-decoration-color:var(--accent); text-underline-offset:3px; border-radius:2px; }
+.evidence-highlight.value-match { outline:1px solid var(--accent); outline-offset:1px; }
+.evidence-toggle { margin-top:12px; }
 .direct-answer .missing-value { font-size:1.3rem; }
 .answer-text { font-size:15px; line-height:1.7; margin-bottom:10px; overflow-wrap:anywhere; }
 .evidence-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; } .evidence-heading h4 { font-size:12px; }

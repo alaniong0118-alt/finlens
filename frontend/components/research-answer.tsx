@@ -14,6 +14,5 @@ export default function DirectResearchAnswer({ answer }: { answer: ResearchAnswe
     {point.revenue_basis && <p className="small basis-label">Revenue basis: {point.revenue_basis.replaceAll("_", " ")}</p>}
     {answer.comparability && <p className="notice" role="note">Reported as filed · comparability unverified. {answer.comparability.reason}</p>}
     <MetricProvenance point={point} summary="View provenance" />
-    <p className="small muted">Company: {answer.company_name} · Structured SEC financial observations. Supporting passages search the selected filing and may refer to a different period or accession.</p>
   </section>;
 }

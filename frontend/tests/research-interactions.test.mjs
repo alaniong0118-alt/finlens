@@ -50,6 +50,88 @@ before(async () => {
 });
 after(() => dom.window.close());
 
+function presentationContext(ticker, query, texts) {
+  const base = context(ticker, query);
+  return { ...base,
+    context: texts.map((text, index) => `[SOURCE source_${index + 1}]\ntext: |-\n  ${text}\n[END SOURCE source_${index + 1}]`).join('\n\n'),
+    citations: texts.map((text, index) => ({ ...base.citations[0], citation_id: `source_${index + 1}`, chunk_id: `${ticker}-chunk-${index + 1}`, end_char: text.length })) };
+}
+
+const salesRow = 'Services 30,739 27,423 91,728 80,408 Total net sales $ 109,417 $ 94,036.';
+
+test('mounted amount shows compact highlighted proof, two cards and ranked accessible expansions', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const query = 'How much revenue did Apple report?';
+  const pending = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  const texts = ['Unrelated introduction. '.repeat(35) + salesRow, `(in millions): ${salesRow}`, 'Revenue third ranked passage.', 'Revenue fourth ranked passage.', 'Revenue fifth ranked passage.'];
+  await app.release(pending, presentationContext('AAPL', query, texts));
+  const direct = app.host.querySelector('.direct-answer');
+  assert.equal(direct.querySelector('.metric-value').textContent, '$109.42B');
+  assert.equal(direct.querySelectorAll('.answer-text').length, 1);
+  assert.equal(direct.querySelector('details').open, false);
+  assert.doesNotMatch(direct.textContent, /Supporting passages search/);
+  assert.equal(app.evidence().length, 2);
+  const first = app.host.querySelector('.evidence-card');
+  assert.match(first.querySelector('.evidence-preview').textContent, /Total net sales \$ 109,417/);
+  assert.doesNotMatch(first.querySelector('.evidence-preview').textContent, /Unrelated introduction/);
+  assert.equal(first.querySelector('mark.value-match').textContent, '$ 109,417');
+  const full = first.querySelector('details'); assert.equal(full.open, false);
+  full.querySelector('summary').focus(); assert.equal(document.activeElement, full.querySelector('summary'));
+  await act(async () => full.querySelector('summary').click());
+  assert.equal(full.open, true); assert.equal(full.querySelector('p').textContent, texts[0]);
+  const toggle = app.host.querySelector('.evidence-toggle'); assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  const requestCount = app.requests.length;
+  await app.click('Show more evidence (3)'); assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.deepEqual([...app.host.querySelectorAll('.evidence-heading h4')].map(item => item.textContent), Array.from({length:5}, (_, index) => `Evidence ${index + 1} · 10-Q`));
+  await app.click('Show less evidence'); assert.equal(app.evidence().length, 2);
+  assert.equal(app.requests.length, requestCount, 'Disclosure/expansion must not fetch data');
+  assert.equal(app.requests.filter(request => /\/answer$/.test(request.path)).length, 0);
+});
+
+test('mounted method research prefers accounting text without numeric direct answer', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const query = 'How does Apple report revenue?'; const pending = await app.search('AAPL', query);
+  const text = 'Total net sales $109,417 million. '.repeat(20) + 'Revenue is recognized when control transfers to the customer. Accounting policies describe performance obligations.';
+  await app.release(pending, presentationContext('AAPL', query, [text]));
+  assert.ok(!app.host.querySelector('.direct-answer'));
+  const preview = app.host.querySelector('.evidence-preview'); assert.match(preview.textContent, /Revenue is recognized/);
+  assert.ok([...preview.querySelectorAll('mark')].some(mark => /recognized/.test(mark.textContent)));
+  assert.ok(!preview.querySelector('mark.value-match'));
+});
+
+test('mounted keyword fallback highlights terms and safely renders literal markup', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const query = 'supply constraints'; const pending = await app.search('AAPL', query);
+  await app.release(pending, presentationContext('AAPL', query, ['Unrelated text. '.repeat(30) + 'Supply constraints affect components <script>unsafe()</script>.']));
+  const preview = app.host.querySelector('.evidence-preview'); assert.match(preview.textContent, /Supply constraints/);
+  assert.equal(preview.querySelectorAll('mark').length, 1);
+  assert.ok(!preview.querySelector('script')); assert.match(preview.textContent, /<script>/);
+});
+
+test('mounted unavailable answer retains reason without numeric-validation marks', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const query = 'latest quarterly revenue growth'; const pending = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query, 'unavailable'));
+  await app.release(pending, presentationContext('AAPL', query, [`(in millions): ${salesRow}`]));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /Unavailable.*economic bases/);
+  assert.equal(app.host.querySelectorAll('mark.value-match').length, 0); assert.ok(app.host.querySelector('mark'));
+});
+
+test('mounted query/company changes remove highlights and reset evidence expansion', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  let pending = await app.search('AAPL', 'revenue');
+  await app.release(pending, presentationContext('AAPL', 'revenue', Array.from({length:5}, (_, index) => `Revenue old scope ${index}.`)));
+  await app.click('Show more evidence (3)'); assert.equal(app.evidence().length, 5);
+  await app.change(app.host.querySelector('textarea'), 'supply constraints');
+  assert.equal(app.host.querySelectorAll('mark').length, 0); assert.deepEqual(app.evidence(), []);
+  pending = await app.search('AAPL', 'supply constraints');
+  await app.release(pending, presentationContext('AAPL', 'supply constraints', Array(5).fill('Supply constraints current scope.')));
+  assert.equal(app.evidence().length, 2); assert.doesNotMatch(app.host.querySelector('.evidence-results').textContent, /old scope/);
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  assert.equal(app.host.querySelectorAll('mark').length, 0); assert.deepEqual(app.evidence(), []);
+});
+
 // Explicit synthetic API fixtures live only in tests. One filing per company;
 // no database, network, production data or generated model output is involved.
 const companies = [
