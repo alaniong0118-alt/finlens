@@ -9,6 +9,7 @@ from app.financial_metric_registry import METRICS, SELECTION_POLICY, REVENUE_CON
 from app.financial_metric_schemas import (
     FactProvenance, FinancialPeriod, MetricInput, NormalizedMetric,
     NormalizedFinancialSummary, NormalizedMetricHistory, HistoryComparability,
+    FiscalPeriodRequest, MetricComparison,
 )
 from app.models import Company, FinancialFact
 from app.sec_client import build_filing_url
@@ -243,11 +244,92 @@ class FinancialMetrics:
                     for role, p in zip(roles, operands, strict=True)],
         )
 
+    def metric_periods(self, name, kind):
+        """Shared normalized anchors; never infer a quarter from annual/YTD."""
+        anchor_name = name if name in self.base else ("operating_cash_flow" if name == "free_cash_flow" else "revenue")
+        return [p.period for p in self.base[anchor_name] if p.period.kind == kind]
+
+    def reporting_periods(self, kind):
+        anchors = self.metric_periods("revenue", kind)
+        return anchors or [p.period for points in self.base.values() for p in points if p.period.kind == kind]
+
+    def fiscal_observation(self, name, requested: FiscalPeriodRequest):
+        """Exact requested normalized fiscal label, with existing vintage selection."""
+        definition = METRICS[name]
+        kind = "quarter" if requested.quarter else "annual"
+        anchors = (self.reporting_periods(kind) if definition.kind == "instant"
+                   else self.metric_periods(name, kind) or self.reporting_periods(kind))
+        matches = {(p.kind, p.start, p.end): p for p in anchors
+                   if p.fiscal_year == requested.fiscal_year
+                   and p.fiscal_period == (f"Q{requested.quarter}" if requested.quarter else "FY")}
+        if len(matches) != 1:
+            reason = ("Multiple stored reporting periods have this fiscal label; selection is ambiguous."
+                      if matches else "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.")
+            return self.missing(name, reason)
+        period = next(iter(matches.values()))
+        if definition.kind == "instant":
+            period = self.period("instant", None, period.end)
+        return self.observation(name, period)
+
+    def compare_fiscal(self, name, earlier: FiscalPeriodRequest, later: FiscalPeriodRequest):
+        """Read-only comparisons over canonical observations, including input scope."""
+        left, right = self.fiscal_observation(name, earlier), self.fiscal_observation(name, later)
+        result = MetricComparison(status="unavailable", earlier_period=earlier, later_period=later,
+                                  earlier=left, later=right)
+        if left.status != "available" or right.status != "available":
+            result.status = "not_applicable" if "not_applicable" in {left.status, right.status} else "unavailable"
+            result.reason = "; ".join(f"{request.label}: {point.reason}" for request, point in [(earlier, left), (later, right)] if point.status != "available")
+            return result
+        if (left.unit != right.unit or left.period.kind != right.period.kind
+                or earlier.quarter != later.quarter
+                or (earlier.fiscal_year, earlier.quarter or 0) >= (later.fiscal_year, later.quarter or 0)):
+            result.reason = "Comparison requires chronological, matching annual or same fiscal-quarter bases and units."
+            return result
+        year_gap = later.fiscal_year - earlier.fiscal_year
+        tolerance = 14 + year_gap // 4 + 1  # week calendars and accumulated leap days
+        gaps = [(right.period.end-left.period.end).days]
+        if left.period.start is not None and right.period.start is not None:
+            gaps.append((right.period.start-left.period.start).days)
+        if any(abs(gap - 365 * year_gap) > tolerance for gap in gaps):
+            result.reason = "Fiscal reporting boundaries do not align across the requested years."
+            return result
+        if left.period.start is not None and right.period.start is not None:
+            if abs((left.period.end-left.period.start).days - (right.period.end-right.period.start).days) > 9:
+                result.reason = "Reporting durations are not comparable."
+                return result
+        if name == "revenue" and not revenue_bases_compatible(left.revenue_basis, right.revenue_basis):
+            result.reason = "Earlier/later revenue economic bases are not explicitly comparable."
+            return result
+        left_inputs = {(i.role, i.metric, i.unit): i for i in left.inputs}
+        right_inputs = {(i.role, i.metric, i.unit): i for i in right.inputs}
+        if left_inputs.keys() != right_inputs.keys() or any(
+            i.metric == "revenue" and not revenue_bases_compatible(i.revenue_basis, right_inputs[key].revenue_basis)
+            for key, i in left_inputs.items()
+        ):
+            result.reason = "Derived input economic bases or roles are not explicitly comparable."
+            return result
+        with localcontext() as context:
+            context.prec = 28
+            result.absolute_change = right.value - left.value
+            result.direction = "increase" if result.absolute_change > 0 else "decrease" if result.absolute_change < 0 else "no_change"
+            result.status = "available"
+            if left.unit == "ratio":
+                result.percentage_status = "not_applicable"
+                result.percentage_reason = "Ratio comparisons use percentage-point change, not percentage growth."
+            elif name == "diluted_eps":
+                result.percentage_status = "not_applicable"
+                result.percentage_reason = "EPS is reported as filed; stock-split/restatement share-basis comparability is unverified."
+            elif left.value <= 0:
+                result.percentage_reason = "Percentage change requires a positive earlier value; zero/negative baselines use absolute change only."
+            else:
+                result.percentage_change = result.absolute_change / left.value
+                result.percentage_status = "available"
+        return result
+
     def history(self, name, kind="quarter", limit=40):
         if name not in METRICS:
             raise UnknownMetric(name)
-        anchor_name = name if name in self.base else ("operating_cash_flow" if name == "free_cash_flow" else "revenue")
-        anchors = [p.period for p in self.base[anchor_name] if p.period.kind == kind]
+        anchors = self.metric_periods(name, kind)
         observations = [self.observation(name, period) for period in anchors]
         history = observations[-limit:]
         status = "available" if any(p.status == "available" for p in history) else "unavailable"
@@ -260,9 +342,7 @@ class FinancialMetrics:
                                        comparability=HistoryComparability() if name == "diluted_eps" else None)
 
     def summary(self, kind="quarter"):
-        anchors = [p.period for p in self.base["revenue"] if p.period.kind == kind]
-        if not anchors:
-            anchors = [p.period for points in self.base.values() for p in points if p.period.kind == kind]
+        anchors = self.reporting_periods(kind)
         anchor = max(anchors, key=lambda p: (p.end, p.start or date.min)) if anchors else None
         metrics = {}
         for name, definition in METRICS.items():

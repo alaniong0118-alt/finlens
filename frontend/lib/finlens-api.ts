@@ -218,6 +218,21 @@ export type ResearchAnswer = {
   formatted_value: string | null; answer_text: string | null; explanation: string | null;
   observation: NormalizedMetric | null; comparability: MetricHistory["comparability"] | null;
   selection_policy: string;
+  answer_kind: "latest_metric" | "historical_metric" | "period_comparison";
+  requested_period: FiscalPeriodRequest | null;
+  comparison: MetricComparison | null;
+  formatted_absolute_change: string | null; formatted_percentage_change: string | null;
+};
+
+export type FiscalPeriodRequest = { fiscal_year: number; quarter: number | null };
+export type MetricComparison = {
+  status: NormalizedMetric["status"]; reason: string | null;
+  earlier_period: FiscalPeriodRequest; later_period: FiscalPeriodRequest;
+  earlier: NormalizedMetric; later: NormalizedMetric;
+  absolute_change: string | null; percentage_change: string | null;
+  percentage_status: "available" | "unavailable" | "not_applicable";
+  percentage_reason: string | null; direction: "increase" | "decrease" | "no_change" | null;
+  formula: string;
 };
 
 export function getResearchAnswer(ticker: string, question: string, signal?: AbortSignal): Promise<ResearchAnswer> {

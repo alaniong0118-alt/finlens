@@ -54,7 +54,7 @@ def test_unsupported_and_ambiguous_do_not_overmatch(question):
     "What is Apple's revenue reporting?", "What is reporting revenue?",
     "How much revenue did Apple report and how was it reported?",
     "What is Apple's main product?", "What drove revenue growth?",
-    "services revenue", "revenue in 2024", "revenue and net income",
+    "services revenue", "revenue in March 2024", "revenue and net income",
 ])
 def test_method_and_unsupported_questions_return_evidence_fallback(db, question):
     db[1].ticker, db[1].name = "AAPL", "Apple Inc."

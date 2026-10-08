@@ -1,0 +1,121 @@
+{
+  "frontend": "http://127.0.0.1:3000",
+  "backend": "http://127.0.0.1:8000",
+  "cases": [
+    {
+      "query": "2024-2025 revenue growth",
+      "value": "+6.43%",
+      "provenance": "Exact values for both FYs and official SEC links verified; keyboard disclosure passed"
+    },
+    {
+      "query": "2024 revenue",
+      "value": "$391.04B"
+    },
+    {
+      "query": "Q2 2025 revenue",
+      "answer": "Research Answer\nDeterministic · no AI\n\n$95.36B\n\nApple Inc.'s Q2 FY2025 revenue was $95.36B.\n\nQ2 FY2025 · Fiscal period\n\nDirect quarter · Ended Mar 29, 2025 · 10-Q · filed May 1, 2026\n\nRevenue basis: customer contract\n\nView provenance"
+    },
+    {
+      "query": "2024 vs 2025 revenue",
+      "answer": "Research Answer\nDeterministic · no AI\n\n+6.43%\n\nRevenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).\n\nFY2024\n$391.04B\n\ncustomer contract basis\n\nFY2025\n$416.16B\n\ncustomer contract basis\n\nChange\n+$25.13B\nView comparison provenance"
+    },
+    {
+      "query": "Why did revenue grow from 2024 to 2025?",
+      "fallback": true,
+      "directAnswerCount": 0
+    },
+    {
+      "query": "What is Apple's main product?",
+      "fallback": true,
+      "directAnswerCount": 0
+    },
+    {
+      "ticker": "JPM",
+      "query": "2024 vs 2025 revenue",
+      "expected": "Unavailable",
+      "answer": "Research Answer\nDeterministic · no AI\n\nUnavailable\n\nRevenue comparison is unavailable. FY2024: Incompatible revenue scopes; no unambiguous canonical observation.; FY2025: Incompatible revenue scopes; no unambiguous canonical observation.\n\nFY2024\nUnavailable\nFY2025\nUnavailable\nView comparison provenance"
+    },
+    {
+      "ticker": "JPM",
+      "query": "compare Q2 2024 and Q2 2025 revenue",
+      "expected": "-10.53%",
+      "answer": "Research Answer\nDeterministic · no AI\n\n-10.53%\n\nRevenue decreased from $50.20B in Q2 FY2024 to $44.91B in Q2 FY2025 (-10.53%).\n\nQ2 FY2024\n$50.2B\n\nnet interest basis\n\nQ2 FY2025\n$44.91B\n\nnet interest basis\n\nChange\n-$5.29B\nView comparison provenance"
+    },
+    {
+      "ticker": "COST",
+      "query": "compare Q3 2025 and Q3 2026 revenue",
+      "expected": "Unavailable",
+      "answer": "Research Answer\nDeterministic · no AI\n\nUnavailable\n\nRevenue comparison is unavailable. Earlier/later revenue economic bases are not explicitly comparable.\n\nQ3 FY2025\n$63.21B\n\ntotal revenue basis\n\nQ3 FY2026\n$70.53B\n\ncustomer contract basis\n\nView comparison provenance"
+    },
+    {
+      "ticker": "JNJ",
+      "query": "2025 net income",
+      "expected": "$26.80B",
+      "answer": "Research Answer\nDeterministic · no AI\n\n$26.80B\n\nJOHNSON & JOHNSON's FY2025 net income was $26.80B.\n\nFY2025 · Fiscal period\n\nAnnual · Ended Dec 28, 2025 · 10-K · filed Feb 11, 2026\n\nView provenance"
+    },
+    {
+      "ticker": "XOM",
+      "query": "2025 revenue",
+      "expected": "Unavailable",
+      "answer": "Research Answer\nDeterministic · no AI\n\nUnavailable\n\nFY2025 revenue is unavailable. No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.\n\nFY2025 · Fiscal period\n\nView provenance"
+    }
+  ],
+  "requestedWidths": [
+    1440,
+    1280,
+    768,
+    390
+  ],
+  "layouts": [
+    {
+      "width": 1425,
+      "height": 900,
+      "cardWidth": 495.71875,
+      "scrollWidth": 1425
+    },
+    {
+      "width": 1265,
+      "height": 900,
+      "cardWidth": 430.421875,
+      "scrollWidth": 1265
+    },
+    {
+      "width": 753,
+      "height": 1000,
+      "cardWidth": 639,
+      "scrollWidth": 753
+    },
+    {
+      "width": 375,
+      "height": 844,
+      "cardWidth": 303,
+      "scrollWidth": 375
+    }
+  ],
+  "themes": [
+    {
+      "background": "rgb(247, 250, 249)",
+      "color": "rgb(16, 42, 53)",
+      "selected": "light",
+      "theme": "light"
+    },
+    {
+      "background": "rgb(25, 46, 56)",
+      "color": "rgb(230, 240, 241)",
+      "selected": "dark",
+      "theme": "dark"
+    },
+    {
+      "background": "rgb(25, 46, 56)",
+      "color": "rgb(230, 240, 241)",
+      "selected": "system",
+      "theme": "dark"
+    }
+  ],
+  "keyboard": "Enter opened comparison and both-side provenance summaries; visible source values and SEC links checked",
+  "failures": "Evidence/provider failures tested through mounted fixtures, no live OpenAI call",
+  "screenshots": [
+    "docs/screenshots/historical-comparison-desktop.jpg",
+    "docs/screenshots/historical-comparison-mobile.jpg"
+  ]
+}

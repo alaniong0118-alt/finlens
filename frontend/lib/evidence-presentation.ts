@@ -68,6 +68,9 @@ function localScale(text: string, index: number): number | null {
 function valueSpans(text: string, answer: ResearchAnswer | null | undefined, peers: string[]): Span[] {
   const point = answer?.observation;
   if (!answer?.matched || answer.status !== "available" || point?.value == null) return [];
+  // Selected-filing excerpts do not establish a historical comparison's period
+  // alignment. Exact financial proof lives in its structured provenance.
+  if (answer.answer_kind && answer.answer_kind !== "latest_metric") return [];
   const target = decimal(point.value);
   if (target === null) return [];
   const spans: Span[] = [];

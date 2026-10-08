@@ -102,3 +102,11 @@ test('unavailable answers never mark unrelated numbers; literal unsafe text stay
  assert.deepEqual(values(result), []);
  assert.equal(result.parts.map(part => part.text).join(''), text);
 });
+
+test('historical/comparison answers do not validate numbers in a different selected-filing scope', () => {
+ for (const answer_kind of ['historical_metric', 'period_comparison']) {
+  const result = evidenceExcerpt('Revenue $109,417 million.', '2024 revenue', { ...answer(), answer_kind });
+  assert.deepEqual(values(result), []);
+  assert.ok(result.parts.some(part => part.kind === 'term'));
+ }
+});

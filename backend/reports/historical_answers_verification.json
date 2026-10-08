@@ -1,0 +1,3623 @@
+{
+  "verified_at": "2026-10-07T23:35:42.623487+00:00",
+  "api_url": "http://127.0.0.1:8000",
+  "http_cases": [
+    {
+      "ticker": "AAPL",
+      "question": "2024 revenue",
+      "http_status": 200,
+      "latency_ms": 72.74,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024 revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "$391.04B",
+        "answer_text": "Apple Inc.'s FY2024 revenue was $391.04B.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "391035000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "annual",
+            "start": "2023-10-01",
+            "end": "2024-09-28",
+            "fiscal_year": 2024,
+            "fiscal_period": "FY",
+            "fiscal_label_basis": "annual_period_end_year"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1842,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "391035000000.0000",
+              "unit": "USD",
+              "period_start": "2023-10-01",
+              "period_end": "2024-09-28",
+              "stored_period_type": "annual",
+              "source_fiscal_year": 2025,
+              "source_fiscal_period": "FY",
+              "frame": "CY2024",
+              "filed": "2025-10-31",
+              "form": "10-K",
+              "accession_number": "0000320193-25-000079",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+              "stored_at": "2026-10-03T07:27:26.732609"
+            }
+          ],
+          "alternatives": [
+            {
+              "fact_id": 13044,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "391035000000.0000",
+              "unit": "USD",
+              "period_start": "2023-10-01",
+              "period_end": "2024-09-28",
+              "stored_period_type": "annual",
+              "source_fiscal_year": 2024,
+              "source_fiscal_period": "FY",
+              "frame": null,
+              "filed": "2024-11-01",
+              "form": "10-K",
+              "accession_number": "0000320193-24-000123",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+              "stored_at": "2026-10-04T13:52:56.085756"
+            }
+          ],
+          "inputs": [],
+          "revenue_basis": "customer_contract"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "2025 revenue",
+      "http_status": 200,
+      "latency_ms": 189.19,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2025 revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "$416.16B",
+        "answer_text": "Apple Inc.'s FY2025 revenue was $416.16B.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "416161000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "annual",
+            "start": "2024-09-29",
+            "end": "2025-09-27",
+            "fiscal_year": 2025,
+            "fiscal_period": "FY",
+            "fiscal_label_basis": "annual_period_end_year"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1848,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "416161000000.0000",
+              "unit": "USD",
+              "period_start": "2024-09-29",
+              "period_end": "2025-09-27",
+              "stored_period_type": "annual",
+              "source_fiscal_year": 2025,
+              "source_fiscal_period": "FY",
+              "frame": "CY2025",
+              "filed": "2025-10-31",
+              "form": "10-K",
+              "accession_number": "0000320193-25-000079",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+              "stored_at": "2026-10-03T07:27:26.732612"
+            }
+          ],
+          "alternatives": [],
+          "inputs": [],
+          "revenue_basis": "customer_contract"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": null
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "Q2 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 65.78,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "Q2 2025 revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": "$95.36B",
+        "answer_text": "Apple Inc.'s Q2 FY2025 revenue was $95.36B.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "95359000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2024-12-29",
+            "end": "2025-03-29",
+            "fiscal_year": 2025,
+            "fiscal_period": "Q2",
+            "fiscal_label_basis": "observed_annual_boundary"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1845,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "95359000000.0000",
+              "unit": "USD",
+              "period_start": "2024-12-29",
+              "period_end": "2025-03-29",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q2",
+              "frame": "CY2025Q1",
+              "filed": "2026-05-01",
+              "form": "10-Q",
+              "accession_number": "0000320193-26-000013",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000013/0000320193-26-000013-index.html",
+              "stored_at": "2026-10-03T07:27:26.732610"
+            }
+          ],
+          "alternatives": [
+            {
+              "fact_id": 13047,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "95359000000.0000",
+              "unit": "USD",
+              "period_start": "2024-12-29",
+              "period_end": "2025-03-29",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2025,
+              "source_fiscal_period": "Q2",
+              "frame": null,
+              "filed": "2025-05-02",
+              "form": "10-Q",
+              "accession_number": "0000320193-25-000057",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/0000320193-25-000057-index.html",
+              "stored_at": "2026-10-04T13:52:56.085758"
+            }
+          ],
+          "inputs": [],
+          "revenue_basis": "customer_contract"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": 2
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "2024 vs 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 63.74,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024 vs 2025 revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+6.43%",
+        "answer_text": "Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "391035000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1842,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732609"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13044,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.085756"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "25126000000.0000",
+          "percentage_change": "0.06425511782832738757400232716",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$25.13B",
+        "formatted_percentage_change": "+6.43%"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "2024-2025 revenue growth",
+      "http_status": 200,
+      "latency_ms": 65.08,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024-2025 revenue growth",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+6.43%",
+        "answer_text": "Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "391035000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1842,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732609"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13044,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.085756"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "25126000000.0000",
+          "percentage_change": "0.06425511782832738757400232716",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$25.13B",
+        "formatted_percentage_change": "+6.43%"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "how much did revenue grow from 2024 to 2025?",
+      "http_status": 200,
+      "latency_ms": 65.14,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "how much did revenue grow from 2024 to 2025?",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+6.43%",
+        "answer_text": "Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "391035000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1842,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732609"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13044,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.085756"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "25126000000.0000",
+          "percentage_change": "0.06425511782832738757400232716",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$25.13B",
+        "formatted_percentage_change": "+6.43%"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "did revenue increase from 2024 to 2025?",
+      "http_status": 200,
+      "latency_ms": 62.67,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "did revenue increase from 2024 to 2025?",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+6.43%",
+        "answer_text": "Yes. Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "391035000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1842,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732609"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13044,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.085756"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "25126000000.0000",
+          "percentage_change": "0.06425511782832738757400232716",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$25.13B",
+        "formatted_percentage_change": "+6.43%"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "how much did net income change between 2024 and 2025?",
+      "http_status": 200,
+      "latency_ms": 65.17,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "how much did net income change between 2024 and 2025?",
+        "matched": true,
+        "status": "available",
+        "metric": "net_income",
+        "metric_label": "Net income",
+        "period_intent": "annual",
+        "formatted_value": "+19.50%",
+        "answer_text": "Net income increased from $93.74B in FY2024 to $112.01B in FY2025 (+19.50%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "net_income",
+            "unit": "USD",
+            "status": "available",
+            "value": "93736000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1965,
+                "canonical_metric": "net_income",
+                "company_cik": "0000320193",
+                "stored_metric": "NetIncomeLoss",
+                "original_concept": "NetIncomeLoss",
+                "value": "93736000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: NetIncomeLoss",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.750873"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13986,
+                "canonical_metric": "net_income",
+                "company_cik": "0000320193",
+                "stored_metric": "NetIncomeLoss",
+                "original_concept": "NetIncomeLoss",
+                "value": "93736000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: NetIncomeLoss",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.086304"
+              }
+            ],
+            "inputs": []
+          },
+          "later": {
+            "metric": "net_income",
+            "unit": "USD",
+            "status": "available",
+            "value": "112010000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1971,
+                "canonical_metric": "net_income",
+                "company_cik": "0000320193",
+                "stored_metric": "NetIncomeLoss",
+                "original_concept": "NetIncomeLoss",
+                "value": "112010000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: NetIncomeLoss",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.750876"
+              }
+            ],
+            "alternatives": [],
+            "inputs": []
+          },
+          "absolute_change": "18274000000.0000",
+          "percentage_change": "0.1949517794657335495433984808",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$18.27B",
+        "formatted_percentage_change": "+19.50%"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "Q4 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 63.08,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "Q4 2025 revenue",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": null,
+        "answer_text": "Q4 FY2025 revenue is unavailable. No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "explanation": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "unavailable",
+          "value": null,
+          "reason": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+          "period": null,
+          "formula": null,
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": 4
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "1999 revenue",
+      "http_status": 200,
+      "latency_ms": 191.43,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "1999 revenue",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": null,
+        "answer_text": "FY1999 revenue is unavailable. No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "explanation": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "unavailable",
+          "value": null,
+          "reason": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+          "period": null,
+          "formula": null,
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 1999,
+          "quarter": null
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "2024 gross margin",
+      "http_status": 200,
+      "latency_ms": 63.37,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024 gross margin",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "gross_margin",
+        "metric_label": "Gross margin",
+        "period_intent": "annual",
+        "formatted_value": null,
+        "answer_text": "FY2024 gross margin is unavailable. Selected revenue scope does not establish an approved total/net-interest margin denominator.",
+        "explanation": "Selected revenue scope does not establish an approved total/net-interest margin denominator.",
+        "observation": {
+          "metric": "gross_margin",
+          "unit": "ratio",
+          "status": "unavailable",
+          "value": null,
+          "reason": "Selected revenue scope does not establish an approved total/net-interest margin denominator.",
+          "period": {
+            "kind": "annual",
+            "start": "2023-10-01",
+            "end": "2024-09-28",
+            "fiscal_year": 2024,
+            "fiscal_period": "FY",
+            "fiscal_label_basis": "annual_period_end_year"
+          },
+          "formula": "gross_profit / revenue",
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "JPM",
+      "question": "2024 vs 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 38.28,
+      "result": {
+        "ticker": "JPM",
+        "company_name": "JPMorgan Chase & Co.",
+        "question": "2024 vs 2025 revenue",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": null,
+        "answer_text": "Revenue comparison is unavailable. FY2024: Incompatible revenue scopes; no unambiguous canonical observation.; FY2025: Incompatible revenue scopes; no unambiguous canonical observation.",
+        "explanation": "FY2024: Incompatible revenue scopes; no unambiguous canonical observation.; FY2025: Incompatible revenue scopes; no unambiguous canonical observation.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "unavailable",
+          "reason": "FY2024: Incompatible revenue scopes; no unambiguous canonical observation.; FY2025: Incompatible revenue scopes; no unambiguous canonical observation.",
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "unavailable",
+            "value": null,
+            "reason": "Incompatible revenue scopes; no unambiguous canonical observation.",
+            "period": {
+              "kind": "annual",
+              "start": "2024-01-01",
+              "end": "2024-12-31",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [],
+            "alternatives": [
+              {
+                "fact_id": 5025,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "177556000000.0000",
+                "unit": "USD",
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2026-02-13",
+                "form": "10-K",
+                "accession_number": "0001628280-26-008131",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026008131/0001628280-26-008131-index.html",
+                "stored_at": "2026-10-03T07:33:17.263485"
+              },
+              {
+                "fact_id": 34887,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "177556000000.0000",
+                "unit": "USD",
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2025-02-14",
+                "form": "10-K",
+                "accession_number": "0000019617-25-000270",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000001961725000270/0000019617-25-000270-index.html",
+                "stored_at": "2026-10-04T13:53:11.676073"
+              },
+              {
+                "fact_id": 34888,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "177556000000.0000",
+                "unit": "USD",
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2026-02-13",
+                "form": "10-K",
+                "accession_number": "0001628280-26-008131",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026008131/0001628280-26-008131-index.html",
+                "stored_at": "2026-10-04T13:53:11.676074"
+              },
+              {
+                "fact_id": 34964,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "177556000000.0000",
+                "unit": "USD",
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2025-02-14",
+                "form": "10-K",
+                "accession_number": "0000019617-25-000270",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000001961725000270/0000019617-25-000270-index.html",
+                "stored_at": "2026-10-04T13:53:11.676119"
+              }
+            ],
+            "inputs": []
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "unavailable",
+            "value": null,
+            "reason": "Incompatible revenue scopes; no unambiguous canonical observation.",
+            "period": {
+              "kind": "annual",
+              "start": "2025-01-01",
+              "end": "2025-12-31",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [],
+            "alternatives": [
+              {
+                "fact_id": 5031,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "182447000000.0000",
+                "unit": "USD",
+                "period_start": "2025-01-01",
+                "period_end": "2025-12-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2026-02-13",
+                "form": "10-K",
+                "accession_number": "0001628280-26-008131",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026008131/0001628280-26-008131-index.html",
+                "stored_at": "2026-10-03T07:33:17.263489"
+              },
+              {
+                "fact_id": 34892,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "182447000000.0000",
+                "unit": "USD",
+                "period_start": "2025-01-01",
+                "period_end": "2025-12-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2026-02-13",
+                "form": "10-K",
+                "accession_number": "0001628280-26-008131",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026008131/0001628280-26-008131-index.html",
+                "stored_at": "2026-10-04T13:53:11.676076"
+              }
+            ],
+            "inputs": []
+          },
+          "absolute_change": null,
+          "percentage_change": null,
+          "percentage_status": "unavailable",
+          "percentage_reason": null,
+          "direction": null,
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "JPM",
+      "question": "compare Q2 2024 and Q2 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 37.41,
+      "result": {
+        "ticker": "JPM",
+        "company_name": "JPMorgan Chase & Co.",
+        "question": "compare Q2 2024 and Q2 2025 revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": "-10.53%",
+        "answer_text": "Revenue decreased from $50.20B in Q2 FY2024 to $44.91B in Q2 FY2025 (-10.53%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": 2
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": 2
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": 2
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "50200000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "quarter",
+              "start": "2024-04-01",
+              "end": "2024-06-30",
+              "fiscal_year": 2024,
+              "fiscal_period": "Q2",
+              "fiscal_label_basis": "observed_annual_boundary"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 5022,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "50200000000.0000",
+                "unit": "USD",
+                "period_start": "2024-04-01",
+                "period_end": "2024-06-30",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q2",
+                "frame": "CY2024Q2",
+                "filed": "2025-08-05",
+                "form": "10-Q",
+                "accession_number": "0000019617-25-000615",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000001961725000615/0000019617-25-000615-index.html",
+                "stored_at": "2026-10-03T07:33:17.263483"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 34884,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "50200000000.0000",
+                "unit": "USD",
+                "period_start": "2024-04-01",
+                "period_end": "2024-06-30",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "Q2",
+                "frame": null,
+                "filed": "2024-08-02",
+                "form": "10-Q",
+                "accession_number": "0000019617-24-000453",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000001961724000453/0000019617-24-000453-index.html",
+                "stored_at": "2026-10-04T13:53:11.676071"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "net_interest"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "44912000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "quarter",
+              "start": "2025-04-01",
+              "end": "2025-06-30",
+              "fiscal_year": 2025,
+              "fiscal_period": "Q2",
+              "fiscal_label_basis": "observed_annual_boundary"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 5028,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "44912000000.0000",
+                "unit": "USD",
+                "period_start": "2025-04-01",
+                "period_end": "2025-06-30",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2026,
+                "source_fiscal_period": "Q2",
+                "frame": "CY2025Q2",
+                "filed": "2026-08-06",
+                "form": "10-Q",
+                "accession_number": "0001628280-26-054343",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026054343/0001628280-26-054343-index.html",
+                "stored_at": "2026-10-03T07:33:17.263487"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 34891,
+                "canonical_metric": "revenue",
+                "company_cik": "0000019617",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenuesNetOfInterestExpense",
+                "value": "44912000000.0000",
+                "unit": "USD",
+                "period_start": "2025-04-01",
+                "period_end": "2025-06-30",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q2",
+                "frame": null,
+                "filed": "2025-08-05",
+                "form": "10-Q",
+                "accession_number": "0000019617-25-000615",
+                "source": "SEC Company Facts API: RevenuesNetOfInterestExpense",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/19617/000001961725000615/0000019617-25-000615-index.html",
+                "stored_at": "2026-10-04T13:53:11.676075"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "net_interest"
+          },
+          "absolute_change": "-5288000000.0000",
+          "percentage_change": "-0.1053386454183266932270916335",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "decrease",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "-$5.29B",
+        "formatted_percentage_change": "-10.53%"
+      }
+    },
+    {
+      "ticker": "COST",
+      "question": "2024 vs 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 67.07,
+      "result": {
+        "ticker": "COST",
+        "company_name": "COSTCO WHOLESALE CORP /NEW",
+        "question": "2024 vs 2025 revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+8.17%",
+        "answer_text": "Revenue increased from $254.45B in FY2024 to $275.24B in FY2025 (+8.17%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "254453000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-09-04",
+              "end": "2024-09-01",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 9407,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639333"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 9406,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q3",
+                "frame": null,
+                "filed": "2025-06-05",
+                "form": "10-Q",
+                "accession_number": "0000909832-25-000033",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000033/0000909832-25-000033-index.html",
+                "stored_at": "2026-10-04T13:52:14.639332"
+              },
+              {
+                "fact_id": 9405,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q2",
+                "frame": null,
+                "filed": "2025-03-13",
+                "form": "10-Q",
+                "accession_number": "0000909832-25-000015",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000015/0000909832-25-000015-index.html",
+                "stored_at": "2026-10-04T13:52:14.639332"
+              },
+              {
+                "fact_id": 9404,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q1",
+                "frame": null,
+                "filed": "2024-12-19",
+                "form": "10-Q",
+                "accession_number": "0000909832-24-000079",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983224000079/0000909832-24-000079-index.html",
+                "stored_at": "2026-10-04T13:52:14.639331"
+              },
+              {
+                "fact_id": 9403,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-10-09",
+                "form": "10-K",
+                "accession_number": "0000909832-24-000049",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983224000049/0000909832-24-000049-index.html",
+                "stored_at": "2026-10-04T13:52:14.639331"
+              },
+              {
+                "fact_id": 9079,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-10-09",
+                "form": "10-K",
+                "accession_number": "0000909832-24-000049",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983224000049/0000909832-24-000049-index.html",
+                "stored_at": "2026-10-04T13:52:14.639147"
+              },
+              {
+                "fact_id": 9080,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639148"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "total_revenue"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "275235000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-02",
+              "end": "2025-08-31",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 9416,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "275235000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-02",
+                "period_end": "2025-08-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639338"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 9091,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "275235000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-02",
+                "period_end": "2025-08-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639154"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "total_revenue"
+          },
+          "absolute_change": "20782000000.0000",
+          "percentage_change": "0.08167323631476146871917407144",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$20.78B",
+        "formatted_percentage_change": "+8.17%"
+      }
+    },
+    {
+      "ticker": "COST",
+      "question": "compare Q3 2025 and Q3 2026 revenue",
+      "http_status": 200,
+      "latency_ms": 67.53,
+      "result": {
+        "ticker": "COST",
+        "company_name": "COSTCO WHOLESALE CORP /NEW",
+        "question": "compare Q3 2025 and Q3 2026 revenue",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": null,
+        "answer_text": "Revenue comparison is unavailable. Earlier/later revenue economic bases are not explicitly comparable.",
+        "explanation": "Earlier/later revenue economic bases are not explicitly comparable.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": 3
+        },
+        "comparison": {
+          "status": "unavailable",
+          "reason": "Earlier/later revenue economic bases are not explicitly comparable.",
+          "earlier_period": {
+            "fiscal_year": 2025,
+            "quarter": 3
+          },
+          "later_period": {
+            "fiscal_year": 2026,
+            "quarter": 3
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "63205000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "quarter",
+              "start": "2025-02-17",
+              "end": "2025-05-11",
+              "fiscal_year": 2025,
+              "fiscal_period": "Q3",
+              "fiscal_label_basis": "observed_annual_boundary"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 9415,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "63205000000.0000",
+                "unit": "USD",
+                "period_start": "2025-02-17",
+                "period_end": "2025-05-11",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q3",
+                "frame": "CY2025Q1",
+                "filed": "2025-06-05",
+                "form": "10-Q",
+                "accession_number": "0000909832-25-000033",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000033/0000909832-25-000033-index.html",
+                "stored_at": "2026-10-04T13:52:14.639337"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 9089,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "63205000000.0000",
+                "unit": "USD",
+                "period_start": "2025-02-17",
+                "period_end": "2025-05-11",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "Q3",
+                "frame": null,
+                "filed": "2025-06-05",
+                "form": "10-Q",
+                "accession_number": "0000909832-25-000033",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000033/0000909832-25-000033-index.html",
+                "stored_at": "2026-10-04T13:52:14.639153"
+              },
+              {
+                "fact_id": 9090,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "63205000000.0000",
+                "unit": "USD",
+                "period_start": "2025-02-17",
+                "period_end": "2025-05-11",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2026,
+                "source_fiscal_period": "Q3",
+                "frame": "CY2025Q1",
+                "filed": "2026-06-03",
+                "form": "10-Q",
+                "accession_number": "0000909832-26-000051",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983226000051/0000909832-26-000051-index.html",
+                "stored_at": "2026-10-04T13:52:14.639154"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "total_revenue"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "70527000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "quarter",
+              "start": "2026-02-16",
+              "end": "2026-05-10",
+              "fiscal_year": 2026,
+              "fiscal_period": "Q3",
+              "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 9096,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "70527000000.0000",
+                "unit": "USD",
+                "period_start": "2026-02-16",
+                "period_end": "2026-05-10",
+                "stored_period_type": "quarter",
+                "source_fiscal_year": 2026,
+                "source_fiscal_period": "Q3",
+                "frame": "CY2026Q1",
+                "filed": "2026-06-03",
+                "form": "10-Q",
+                "accession_number": "0000909832-26-000051",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983226000051/0000909832-26-000051-index.html",
+                "stored_at": "2026-10-04T13:52:14.639157"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": null,
+          "percentage_change": null,
+          "percentage_status": "unavailable",
+          "percentage_reason": null,
+          "direction": null,
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "COST",
+      "question": "compare 2024 and 2025 operating margin",
+      "http_status": 200,
+      "latency_ms": 68.63,
+      "result": {
+        "ticker": "COST",
+        "company_name": "COSTCO WHOLESALE CORP /NEW",
+        "question": "compare 2024 and 2025 operating margin",
+        "matched": true,
+        "status": "available",
+        "metric": "operating_margin",
+        "metric_label": "Operating margin",
+        "period_intent": "annual",
+        "formatted_value": "+0.12 percentage points",
+        "answer_text": "Operating margin increased from 3.65% in FY2024 to 3.77% in FY2025.",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "operating_margin",
+            "unit": "ratio",
+            "status": "available",
+            "value": "0.03649003941788856881231504443",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-09-04",
+              "end": "2024-09-01",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": "operating_income / revenue",
+            "provenance": [
+              {
+                "fact_id": 9938,
+                "canonical_metric": "operating_income",
+                "company_cik": "0000909832",
+                "stored_metric": "OperatingIncomeLoss",
+                "original_concept": "OperatingIncomeLoss",
+                "value": "9285000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: OperatingIncomeLoss",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639640"
+              },
+              {
+                "fact_id": 9407,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period_start": "2023-09-04",
+                "period_end": "2024-09-01",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639333"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [
+              {
+                "role": "operating_income",
+                "metric": "operating_income",
+                "value": "9285000000.0000",
+                "unit": "USD",
+                "period": {
+                  "kind": "annual",
+                  "start": "2023-09-04",
+                  "end": "2024-09-01",
+                  "fiscal_year": 2024,
+                  "fiscal_period": "FY",
+                  "fiscal_label_basis": "annual_period_end_year"
+                },
+                "fact_ids": [
+                  9938
+                ]
+              },
+              {
+                "role": "revenue",
+                "metric": "revenue",
+                "value": "254453000000.0000",
+                "unit": "USD",
+                "period": {
+                  "kind": "annual",
+                  "start": "2023-09-04",
+                  "end": "2024-09-01",
+                  "fiscal_year": 2024,
+                  "fiscal_period": "FY",
+                  "fiscal_label_basis": "annual_period_end_year"
+                },
+                "fact_ids": [
+                  9407
+                ],
+                "revenue_basis": "total_revenue"
+              }
+            ]
+          },
+          "later": {
+            "metric": "operating_margin",
+            "unit": "ratio",
+            "status": "available",
+            "value": "0.03772412665540356422693334787",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-02",
+              "end": "2025-08-31",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": "operating_income / revenue",
+            "provenance": [
+              {
+                "fact_id": 9949,
+                "canonical_metric": "operating_income",
+                "company_cik": "0000909832",
+                "stored_metric": "OperatingIncomeLoss",
+                "original_concept": "OperatingIncomeLoss",
+                "value": "10383000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-02",
+                "period_end": "2025-08-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: OperatingIncomeLoss",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639646"
+              },
+              {
+                "fact_id": 9416,
+                "canonical_metric": "revenue",
+                "company_cik": "0000909832",
+                "stored_metric": "Revenues",
+                "original_concept": "Revenues",
+                "value": "275235000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-02",
+                "period_end": "2025-08-31",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-08",
+                "form": "10-K",
+                "accession_number": "0000909832-25-000101",
+                "source": "SEC Company Facts API: Revenues",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/0000909832-25-000101-index.html",
+                "stored_at": "2026-10-04T13:52:14.639338"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [
+              {
+                "role": "operating_income",
+                "metric": "operating_income",
+                "value": "10383000000.0000",
+                "unit": "USD",
+                "period": {
+                  "kind": "annual",
+                  "start": "2024-09-02",
+                  "end": "2025-08-31",
+                  "fiscal_year": 2025,
+                  "fiscal_period": "FY",
+                  "fiscal_label_basis": "annual_period_end_year"
+                },
+                "fact_ids": [
+                  9949
+                ]
+              },
+              {
+                "role": "revenue",
+                "metric": "revenue",
+                "value": "275235000000.0000",
+                "unit": "USD",
+                "period": {
+                  "kind": "annual",
+                  "start": "2024-09-02",
+                  "end": "2025-08-31",
+                  "fiscal_year": 2025,
+                  "fiscal_period": "FY",
+                  "fiscal_label_basis": "annual_period_end_year"
+                },
+                "fact_ids": [
+                  9416
+                ],
+                "revenue_basis": "total_revenue"
+              }
+            ]
+          },
+          "absolute_change": "0.00123408723751499541461830344",
+          "percentage_change": null,
+          "percentage_status": "not_applicable",
+          "percentage_reason": "Ratio comparisons use percentage-point change, not percentage growth.",
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+0.12 percentage points",
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "JNJ",
+      "question": "2025 net income",
+      "http_status": 200,
+      "latency_ms": 53.04,
+      "result": {
+        "ticker": "JNJ",
+        "company_name": "JOHNSON & JOHNSON",
+        "question": "2025 net income",
+        "matched": true,
+        "status": "available",
+        "metric": "net_income",
+        "metric_label": "Net income",
+        "period_intent": "annual",
+        "formatted_value": "$26.80B",
+        "answer_text": "JOHNSON & JOHNSON's FY2025 net income was $26.80B.",
+        "explanation": null,
+        "observation": {
+          "metric": "net_income",
+          "unit": "USD",
+          "status": "available",
+          "value": "26804000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "annual",
+            "start": "2024-12-30",
+            "end": "2025-12-28",
+            "fiscal_year": 2025,
+            "fiscal_period": "FY",
+            "fiscal_label_basis": "annual_period_end_year"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 6034,
+              "canonical_metric": "net_income",
+              "company_cik": "0000200406",
+              "stored_metric": "NetIncomeLoss",
+              "original_concept": "NetIncomeLoss",
+              "value": "26804000000.0000",
+              "unit": "USD",
+              "period_start": "2024-12-30",
+              "period_end": "2025-12-28",
+              "stored_period_type": "annual",
+              "source_fiscal_year": 2025,
+              "source_fiscal_period": "FY",
+              "frame": "CY2025",
+              "filed": "2026-02-11",
+              "form": "10-K",
+              "accession_number": "0000200406-26-000016",
+              "source": "SEC Company Facts API: NetIncomeLoss",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000016/0000200406-26-000016-index.html",
+              "stored_at": "2026-10-04T13:51:11.140946"
+            }
+          ],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": null
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "JNJ",
+      "question": "2024 vs 2025 diluted EPS",
+      "http_status": 200,
+      "latency_ms": 51.85,
+      "result": {
+        "ticker": "JNJ",
+        "company_name": "JOHNSON & JOHNSON",
+        "question": "2024 vs 2025 diluted EPS",
+        "matched": true,
+        "status": "available",
+        "metric": "diluted_eps",
+        "metric_label": "Diluted EPS",
+        "period_intent": "annual",
+        "formatted_value": "+$5.24 per share",
+        "answer_text": "Diluted EPS increased from $5.79 per share in FY2024 to $11.03 per share in FY2025.",
+        "explanation": null,
+        "observation": null,
+        "comparability": {
+          "value_basis": "reported_as_filed",
+          "status": "unverified",
+          "reason": "SEC source values are preserved; cross-period stock-split/restatement share-basis comparability is not established."
+        },
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "diluted_eps",
+            "unit": "USD/share",
+            "status": "available",
+            "value": "5.7900",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-01-01",
+              "end": "2024-12-29",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 6338,
+                "canonical_metric": "diluted_eps",
+                "company_cik": "0000200406",
+                "stored_metric": "EarningsPerShareDiluted",
+                "original_concept": "EarningsPerShareDiluted",
+                "value": "5.7900",
+                "unit": "USD/shares",
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-29",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2026-02-11",
+                "form": "10-K",
+                "accession_number": "0000200406-26-000016",
+                "source": "SEC Company Facts API: EarningsPerShareDiluted",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000016/0000200406-26-000016-index.html",
+                "stored_at": "2026-10-04T13:51:11.141123"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 6337,
+                "canonical_metric": "diluted_eps",
+                "company_cik": "0000200406",
+                "stored_metric": "EarningsPerShareDiluted",
+                "original_concept": "EarningsPerShareDiluted",
+                "value": "5.7900",
+                "unit": "USD/shares",
+                "period_start": "2024-01-01",
+                "period_end": "2024-12-29",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2025-02-13",
+                "form": "10-K",
+                "accession_number": "0000200406-25-000038",
+                "source": "SEC Company Facts API: EarningsPerShareDiluted",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040625000038/0000200406-25-000038-index.html",
+                "stored_at": "2026-10-04T13:51:11.141122"
+              }
+            ],
+            "inputs": []
+          },
+          "later": {
+            "metric": "diluted_eps",
+            "unit": "USD/share",
+            "status": "available",
+            "value": "11.0300",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-12-30",
+              "end": "2025-12-28",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 6347,
+                "canonical_metric": "diluted_eps",
+                "company_cik": "0000200406",
+                "stored_metric": "EarningsPerShareDiluted",
+                "original_concept": "EarningsPerShareDiluted",
+                "value": "11.0300",
+                "unit": "USD/shares",
+                "period_start": "2024-12-30",
+                "period_end": "2025-12-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2026-02-11",
+                "form": "10-K",
+                "accession_number": "0000200406-26-000016",
+                "source": "SEC Company Facts API: EarningsPerShareDiluted",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000016/0000200406-26-000016-index.html",
+                "stored_at": "2026-10-04T13:51:11.141128"
+              }
+            ],
+            "alternatives": [],
+            "inputs": []
+          },
+          "absolute_change": "5.2400",
+          "percentage_change": null,
+          "percentage_status": "not_applicable",
+          "percentage_reason": "EPS is reported as filed; stock-split/restatement share-basis comparability is unverified.",
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$5.24 per share",
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "XOM",
+      "question": "2025 revenue",
+      "http_status": 200,
+      "latency_ms": 6.34,
+      "result": {
+        "ticker": "XOM",
+        "company_name": "ExxonMobil Holdings Corp",
+        "question": "2025 revenue",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": null,
+        "answer_text": "FY2025 revenue is unavailable. No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "explanation": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "unavailable",
+          "value": null,
+          "reason": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+          "period": null,
+          "formula": null,
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": null
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "XOM",
+      "question": "Q2 2025 revenue",
+      "http_status": 200,
+      "latency_ms": 6.15,
+      "result": {
+        "ticker": "XOM",
+        "company_name": "ExxonMobil Holdings Corp",
+        "question": "Q2 2025 revenue",
+        "matched": true,
+        "status": "unavailable",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": null,
+        "answer_text": "Q2 FY2025 revenue is unavailable. No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "explanation": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "unavailable",
+          "value": null,
+          "reason": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+          "period": null,
+          "formula": null,
+          "provenance": [],
+          "alternatives": [],
+          "inputs": []
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "historical_metric",
+        "requested_period": {
+          "fiscal_year": 2025,
+          "quarter": 2
+        },
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "Why did revenue grow from 2024 to 2025?",
+      "http_status": 200,
+      "latency_ms": 4.43,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "Why did revenue grow from 2024 to 2025?",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What is Apple's main product?",
+      "http_status": 200,
+      "latency_ms": 4.6,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "What is Apple's main product?",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "How is Apple's 2024 revenue reported?",
+      "http_status": 200,
+      "latency_ms": 3.83,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "How is Apple's 2024 revenue reported?",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "2024 revenue and net income",
+      "http_status": 200,
+      "latency_ms": 3.75,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024 revenue and net income",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "Microsoft revenue in 2025",
+      "http_status": 200,
+      "latency_ms": 3.46,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "Microsoft revenue in 2025",
+        "matched": false,
+        "status": "company_mismatch",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This workspace is selected for Apple Inc. (AAPL). Select the company named in your question or ask about this company.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "question": "latest quarterly revenue",
+      "http_status": 200,
+      "latency_ms": 190.52,
+      "result": {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "latest quarterly revenue",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "quarter",
+        "formatted_value": "$109.42B",
+        "answer_text": "Apple Inc.'s latest available quarterly revenue was $109.42B for the quarter ended June 27, 2026.",
+        "explanation": null,
+        "observation": {
+          "metric": "revenue",
+          "unit": "USD",
+          "status": "available",
+          "value": "109417000000.0000",
+          "reason": null,
+          "period": {
+            "kind": "quarter",
+            "start": "2026-03-29",
+            "end": "2026-06-27",
+            "fiscal_year": 2026,
+            "fiscal_period": "Q3",
+            "fiscal_label_basis": "ytd_start_after_observed_annual_end"
+          },
+          "formula": null,
+          "provenance": [
+            {
+              "fact_id": 1853,
+              "canonical_metric": "revenue",
+              "company_cik": "0000320193",
+              "stored_metric": "Revenues",
+              "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+              "value": "109417000000.0000",
+              "unit": "USD",
+              "period_start": "2026-03-29",
+              "period_end": "2026-06-27",
+              "stored_period_type": "quarter",
+              "source_fiscal_year": 2026,
+              "source_fiscal_period": "Q3",
+              "frame": "CY2026Q2",
+              "filed": "2026-07-31",
+              "form": "10-Q",
+              "accession_number": "0000320193-26-000020",
+              "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+              "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/0000320193-26-000020-index.html",
+              "stored_at": "2026-10-03T07:27:26.732615"
+            }
+          ],
+          "alternatives": [],
+          "inputs": [],
+          "revenue_basis": "customer_contract"
+        },
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      }
+    }
+  ],
+  "source_audit": "Every selected/alternative source and derived input checked against exact stored rows and official SEC URL construction; comparisons checked independently with Decimal.",
+  "database_before": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "database_after": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "database_unchanged": true,
+  "external_sec_calls": 0,
+  "external_openai_calls": 0,
+  "server_guard": "Local acceptance backend forces read-only transactions and forbids SEC transport/OpenAI client construction; HF model loading offline.",
+  "database_final": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "final_preservation_unchanged": true,
+  "validation": {
+    "backend_tests_passed": 233,
+    "frontend_tests_passed": 55,
+    "mounted_tests_passed": 26,
+    "lint": "passed",
+    "typescript": "passed",
+    "production_build": "passed",
+    "browser_record": "historical_answers_browser.json"
+  },
+  "environment_restored": {
+    "backend": "normal uvicorn on 127.0.0.1:8000",
+    "health_http_status": 200,
+    "research_answer_http_status": 200,
+    "growth": "+6.43%",
+    "provider_called": false
+  },
+  "yoy_recognition_review_fix": {
+    "status": "fixed",
+    "validation_scope": "27 new isolated API regressions; 28 focused tests; 99 historical/comparative + 91 existing deterministic tests; no frontend/build rerun",
+    "focused_tests_passed": 28,
+    "answer_tests_passed": 190,
+    "stored_data_checks": [
+      {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2022 vs 2025 year over year revenue growth",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      },
+      {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2022-2025 YoY revenue growth",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      },
+      {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "Compare FY2022 and FY2025 YoY revenue growth",
+        "matched": false,
+        "status": "not_matched",
+        "metric": null,
+        "metric_label": null,
+        "period_intent": null,
+        "formatted_value": null,
+        "answer_text": null,
+        "explanation": "This question is outside supported deterministic financial value/comparison questions. Continue with SEC evidence research.",
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "latest_metric",
+        "requested_period": null,
+        "comparison": null,
+        "formatted_absolute_change": null,
+        "formatted_percentage_change": null
+      },
+      {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024-2025 revenue growth",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+6.43%",
+        "answer_text": "Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%).",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "391035000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1842,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732609"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13044,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.085756"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "25126000000.0000",
+          "percentage_change": "0.06425511782832738757400232716",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$25.13B",
+        "formatted_percentage_change": "+6.43%"
+      },
+      {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2024-2025 YoY revenue growth",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+6.43%",
+        "answer_text": "Revenue increased from $391.04B in FY2024 to $416.16B in FY2025 (+6.43%). Year-over-year change.",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2024,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2024,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "391035000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2023-10-01",
+              "end": "2024-09-28",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1842,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2024",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732609"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13044,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "391035000000.0000",
+                "unit": "USD",
+                "period_start": "2023-10-01",
+                "period_end": "2024-09-28",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-04T13:52:56.085756"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "25126000000.0000",
+          "percentage_change": "0.06425511782832738757400232716",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$25.13B",
+        "formatted_percentage_change": "+6.43%"
+      },
+      {
+        "ticker": "AAPL",
+        "company_name": "Apple Inc.",
+        "question": "2022-2025 revenue growth",
+        "matched": true,
+        "status": "available",
+        "metric": "revenue",
+        "metric_label": "Revenue",
+        "period_intent": "annual",
+        "formatted_value": "+5.54%",
+        "answer_text": "Revenue increased from $394.33B in FY2022 to $416.16B in FY2025 (+5.54%). Cumulative period-to-period change.",
+        "explanation": null,
+        "observation": null,
+        "comparability": null,
+        "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+        "answer_kind": "period_comparison",
+        "requested_period": {
+          "fiscal_year": 2022,
+          "quarter": null
+        },
+        "comparison": {
+          "status": "available",
+          "reason": null,
+          "earlier_period": {
+            "fiscal_year": 2022,
+            "quarter": null
+          },
+          "later_period": {
+            "fiscal_year": 2025,
+            "quarter": null
+          },
+          "earlier": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "394328000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2021-09-26",
+              "end": "2022-09-24",
+              "fiscal_year": 2022,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1830,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "394328000000.0000",
+                "unit": "USD",
+                "period_start": "2021-09-26",
+                "period_end": "2022-09-24",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2024,
+                "source_fiscal_period": "FY",
+                "frame": "CY2022",
+                "filed": "2024-11-01",
+                "form": "10-K",
+                "accession_number": "0000320193-24-000123",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+                "stored_at": "2026-10-03T07:27:26.732602"
+              }
+            ],
+            "alternatives": [
+              {
+                "fact_id": 13031,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "394328000000.0000",
+                "unit": "USD",
+                "period_start": "2021-09-26",
+                "period_end": "2022-09-24",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2023,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2023-11-03",
+                "form": "10-K",
+                "accession_number": "0000320193-23-000106",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/0000320193-23-000106-index.html",
+                "stored_at": "2026-10-04T13:52:56.085749"
+              },
+              {
+                "fact_id": 13030,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "394328000000.0000",
+                "unit": "USD",
+                "period_start": "2021-09-26",
+                "period_end": "2022-09-24",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2022,
+                "source_fiscal_period": "FY",
+                "frame": null,
+                "filed": "2022-10-28",
+                "form": "10-K",
+                "accession_number": "0000320193-22-000108",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019322000108/0000320193-22-000108-index.html",
+                "stored_at": "2026-10-04T13:52:56.085748"
+              }
+            ],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "later": {
+            "metric": "revenue",
+            "unit": "USD",
+            "status": "available",
+            "value": "416161000000.0000",
+            "reason": null,
+            "period": {
+              "kind": "annual",
+              "start": "2024-09-29",
+              "end": "2025-09-27",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "formula": null,
+            "provenance": [
+              {
+                "fact_id": 1848,
+                "canonical_metric": "revenue",
+                "company_cik": "0000320193",
+                "stored_metric": "Revenues",
+                "original_concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "value": "416161000000.0000",
+                "unit": "USD",
+                "period_start": "2024-09-29",
+                "period_end": "2025-09-27",
+                "stored_period_type": "annual",
+                "source_fiscal_year": 2025,
+                "source_fiscal_period": "FY",
+                "frame": "CY2025",
+                "filed": "2025-10-31",
+                "form": "10-K",
+                "accession_number": "0000320193-25-000079",
+                "source": "SEC Company Facts API: RevenueFromContractWithCustomerExcludingAssessedTax",
+                "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+                "stored_at": "2026-10-03T07:27:26.732612"
+              }
+            ],
+            "alternatives": [],
+            "inputs": [],
+            "revenue_basis": "customer_contract"
+          },
+          "absolute_change": "21833000000.0000",
+          "percentage_change": "0.05536761274877766732263496379",
+          "percentage_status": "available",
+          "percentage_reason": null,
+          "direction": "increase",
+          "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+        },
+        "formatted_absolute_change": "+$21.83B",
+        "formatted_percentage_change": "+5.54%"
+      }
+    ],
+    "database_before": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "database_after": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "database_unchanged": true,
+    "sec_calls": 0,
+    "openai_calls": 0,
+    "live_http_retested": false
+  },
+  "recognition_safety_review_fixes": {
+    "date": "2026-10-08",
+    "status": "fixed",
+    "findings": [
+      "growth-rate changes mistaken for revenue-level changes",
+      "year-to-year qualifier lost",
+      "mathematical punctuation erased before classification"
+    ],
+    "focused_api_cases": 45,
+    "historical_comparative_tests": 144,
+    "existing_deterministic_tests": 91,
+    "combined_passed": 235,
+    "mutation_checks": {
+      "growth_target_guard": {
+        "detected": true,
+        "failures": 6
+      },
+      "slash_year_guard": {
+        "detected": true,
+        "failures": 6
+      },
+      "relative_margin_guard": {
+        "detected": true,
+        "failures": 4
+      },
+      "year_to_year_qualifier": {
+        "detected": true,
+        "failures": 7
+      }
+    },
+    "synthetic_fixture": {
+      "revenue": {
+        "2023": "50",
+        "2024": "100",
+        "2025": "110"
+      },
+      "yoy_rates": {
+        "2024": "1",
+        "2025": "0.1"
+      },
+      "revenue_change": "0.1",
+      "rate_changes": "not_matched",
+      "operating_margins": [
+        "0.2",
+        "0.25"
+      ],
+      "ordinary_margin_change": "+5.00 percentage points",
+      "relative_margin_change": "not_matched",
+      "ordinary_multiyear_growth": "+175.00% cumulative"
+    },
+    "syntax_fastapi_import": "passed",
+    "diff_check": "passed",
+    "database_mutated": false,
+    "database_fingerprints_reverified": false,
+    "database_verification_limitation": "Configured PostgreSQL connection unavailable (OperationalError); no development data writes. Prior baseline retained, not asserted current.",
+    "sec_calls": 0,
+    "openai_calls": 0,
+    "frontend_changed": false,
+    "dependencies_changed": false,
+    "financial_selection_changed": false,
+    "browser_build_rerun": false,
+    "limitations": [
+      "growth-rate differences unsupported",
+      "relative margin growth unsupported",
+      "annualization/CAGR unsupported",
+      "arbitrary time-series analysis unsupported"
+    ],
+    "scope_note": "Earlier listed cases passed; independent follow-up exposed equivalent-wording gaps. Superseded by structured_math_intent_fix."
+  },
+  "structured_math_intent_fix": {
+    "date": "2026-10-08",
+    "status": "fixed_within_bounded_scope",
+    "design": "Original-question operator-preserving tokens -> operation/target classification -> company mismatch precedence -> closed metric/period grammar -> unchanged FinancialMetrics",
+    "new_api_cases": 149,
+    "focused_passed": 149,
+    "historical_comparative_passed": 293,
+    "existing_deterministic_passed": 91,
+    "combined_passed": 384,
+    "metamorphic_variants": [
+      "plain",
+      "uppercase",
+      "doubled whitespace",
+      "curly apostrophe/en-dash/parenthesized growth"
+    ],
+    "mutation_checks": {
+      "growth_operand": {
+        "detected": true,
+        "failures": 28
+      },
+      "relative_margin": {
+        "detected": true,
+        "failures": 28
+      },
+      "annualized": {
+        "detected": true,
+        "failures": 20
+      }
+    },
+    "database_check": "READ ONLY; current fingerprints equal historical baseline",
+    "database_current": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "database_mutated": false,
+    "sec_calls": 0,
+    "openai_calls": 0,
+    "financial_selection_changed": false,
+    "dependencies_changed": false,
+    "frontend_changed": false,
+    "syntax_fastapi_import": "passed",
+    "diff_check": "passed",
+    "limitations": [
+      "bounded closed vocabulary; no universal recognition claim",
+      "growth-rate differences unsupported",
+      "relative margin change unsupported",
+      "CAGR/annualization/division unsupported",
+      "explicit point vocabulary may fall back outside closed grammar"
+    ],
+    "scope_note": "Historical listed-case validation retained. Independent review found operand/Unicode handoff defects; superseded by recognition_handoff_redesign."
+  },
+  "recognition_handoff_redesign": {
+    "date": "2026-10-08",
+    "status": "completed_within_bounded_scope",
+    "defects_fixed": [
+      "separately period-labelled growth observations cannot become revenue-level growth",
+      "Unicode mathematical qualifiers cannot disappear into cumulative/point calculations"
+    ],
+    "design": "Targeted operator canonicalization -> alias-independent MathematicalIntent -> closed metric/fiscal grammar -> typed FinancialOperation -> mandatory operation/metric/operand/period agreement -> unchanged FinancialMetrics",
+    "internal_contract": [
+      "operation",
+      "canonical requested metric",
+      "fiscal requests",
+      "operand shape",
+      "support/ambiguity status",
+      "retained mathematical intent",
+      "unsupported reason"
+    ],
+    "public_api_changed": false,
+    "new_api_cases": 119,
+    "focused_passed": 119,
+    "historical_comparative_passed": 293,
+    "existing_deterministic_passed": 91,
+    "combined_passed": 503,
+    "test_command": ".venv/Scripts/python.exe -B -m pytest tests/test_research_operation_handoff.py tests/test_historical_research_answers.py tests/test_research_answers.py -q -p no:cacheprovider",
+    "test_working_directory": "backend",
+    "mutation_checks": {
+      "operand_structure": {
+        "detected": true,
+        "failures": 12,
+        "change": "Remove repeated/independent growth-operand classification",
+        "selector": "independent_growth_operands"
+      },
+      "unicode_operator_preservation": {
+        "detected": true,
+        "failures": 8,
+        "change": "Replace mathematical_text with identity",
+        "selector": "unicode"
+      },
+      "operation_dispatch_agreement": {
+        "detected": true,
+        "failures": 6,
+        "change": "Replace operation_agrees with unconditional True",
+        "selector": "dispatch_rejects_contract_disagreement"
+      },
+      "method": "Compile replacement functions in the actual service module namespace in memory; restore original functions in finally; no production files modified by mutation checks"
+    },
+    "synthetic_data": {
+      "revenue": {
+        "2023": "50",
+        "2024": "100",
+        "2025": "110"
+      },
+      "yoy_observations": {
+        "2024": "1",
+        "2025": "0.1"
+      },
+      "ordinary_interval_growth": "+10.00%",
+      "ordinary_margin_difference": "+5.00 percentage points",
+      "ordinary_2022_2025_growth": "+175.00% cumulative"
+    },
+    "unicode_mapping": {
+      "％": "%",
+      "／": "/",
+      "∕": "/",
+      "⁄": "/"
+    },
+    "unknown_notation": "Unknown symbols, arbitrary slash operations and uninterpreted non-ASCII numeric notation reject rather than lose operators/period labels",
+    "database_before": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "database_after": {
+      "counts": {
+        "companies": 35,
+        "financial_facts": 58881,
+        "filing_chunks": 3175,
+        "embeddings": 3175
+      },
+      "sha256": {
+        "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+        "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+        "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+      }
+    },
+    "database_check": "Actual before/after READ ONLY PostgreSQL whole-row fingerprints matched the historical baseline, including vector data",
+    "database_mutated": false,
+    "sec_calls": 0,
+    "openai_calls": 0,
+    "financial_selection_changed": false,
+    "registry_changed": false,
+    "schema_changed": false,
+    "frontend_changed": false,
+    "dependencies_changed": false,
+    "syntax_fastapi_import": "passed",
+    "diff_check": "passed",
+    "limitations": [
+      "Closed vocabulary, not arbitrary natural-language reasoning",
+      "Rate differences, relative margins, explicit EPS percentages, annualization/CAGR and arbitrary division unsupported",
+      "Conservative abstention on ambiguous compare/vs growth wording",
+      "Browser/frontend/build not rerun for this backend recognition-only correction"
+    ],
+    "blockers": [],
+    "git_status": {
+      "modified": 15,
+      "untracked": 16,
+      "staged_by_this_task": 0,
+      "commit_or_push": false
+    },
+    "next_env_preserved_sha256": "F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0"
+  }
+}

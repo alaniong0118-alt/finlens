@@ -354,6 +354,133 @@ function directAnswer(ticker, question, status = 'available') {
     explanation: observation.reason, observation, comparability: null, selection_policy: 'fixture' };
 }
 
+function historicalAnswer(ticker, question, year = 2024, quarter = null) {
+ const base = directAnswer(ticker, question);
+ const observation = point(ticker, '100000000000', 'revenue', quarter ? 'quarter' : 'annual');
+ observation.period.fiscal_year = year;
+ observation.period.fiscal_period = quarter ? `Q${quarter}` : 'FY';
+ observation.period.start = `${year}-${quarter === 2 ? '04' : '01'}-01`;
+ observation.period.end = `${year}-${quarter === 2 ? '06-30' : '12-31'}`;
+ observation.provenance[0] = { ...observation.provenance[0], fact_id: year,
+   period_start: observation.period.start, period_end: observation.period.end,
+   accession_number: `${ticker}-${year}-accession`, sec_url: `https://www.sec.gov/Archives/test/${ticker}/${year}` };
+ return { ...base, answer_kind: 'historical_metric', requested_period: { fiscal_year: year, quarter },
+   observation, formatted_value: '$100.00B', answer_text: `${ticker} fixture's ${quarter ? `Q${quarter} ` : ''}FY${year} revenue was $100.00B.` };
+}
+
+function comparisonAnswer(ticker, question, status = 'available') {
+ const base = historicalAnswer(ticker, question);
+ const earlier = base.observation;
+ const later = historicalAnswer(ticker, question, 2025).observation;
+ later.value = '110000000000'; later.provenance[0].value = later.value;
+ if (status !== 'available') { later.status = status; later.value = null; later.provenance = []; later.reason = 'Incompatible revenue economic bases.'; }
+ return { ...base, answer_kind: 'period_comparison', observation: null, status,
+   formatted_value: status === 'available' ? '+10.00%' : null,
+   formatted_absolute_change: status === 'available' ? '+$10.00B' : null,
+   formatted_percentage_change: status === 'available' ? '+10.00%' : null,
+   answer_text: status === 'available' ? `${ticker} revenue increased from $100.00B in FY2024 to $110.00B in FY2025 (+10.00%).` : 'Revenue comparison is unavailable. Incompatible revenue economic bases.',
+   comparison: { status, reason: later.reason, earlier_period: { fiscal_year: 2024, quarter: null }, later_period: { fiscal_year: 2025, quarter: null }, earlier, later,
+     absolute_change: status === 'available' ? '10000000000' : null, percentage_change: status === 'available' ? '0.1' : null,
+     percentage_status: status === 'available' ? 'available' : 'unavailable', percentage_reason: null,
+     direction: status === 'available' ? 'increase' : null, formula: 'absolute_change = later - earlier; percentage_change = (later - earlier) / earlier' } };
+}
+
+test('mounted historical annual and explicit-quarter answers show fiscal scope and provenance', async ctx => {
+ const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+ for (const [query, year, quarter] of [['2024 revenue', 2024, null], ['Q2 2025 revenue', 2025, 2]]) {
+  const evidence = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), historicalAnswer('AAPL', query, year, quarter));
+  const answer = app.host.querySelector('.direct-answer');
+  assert.match(answer.textContent, new RegExp(`${quarter ? 'Q2 ' : ''}FY${year}`));
+  assert.equal(answer.querySelector('.metric-value').textContent, '$100.00B');
+  assert.match(answer.querySelector('details').textContent, /Exact API value:.*100000000000 USD/);
+  await app.release(evidence, context('AAPL', query));
+ }
+});
+
+test('mounted comparison shows both periods, change and independent exact provenance', async ctx => {
+ const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+ const query = '2024-2025 revenue growth'; const evidence = await app.search('AAPL', query, true);
+ await app.release(app.request(companyPath('AAPL', 'research-answer')), comparisonAnswer('AAPL', query));
+ const answer = app.host.querySelector('.direct-answer');
+ assert.equal(answer.querySelector('.metric-value').textContent, '+10.00%');
+ assert.match(answer.querySelector('dl').textContent, /FY2024\$100B.*FY2025\$110B.*Change\+\$10.00B/);
+ const disclosure = answer.querySelector('.comparison-provenance'); assert.equal(disclosure.open, false);
+ await act(async () => disclosure.querySelector('summary').click()); assert.equal(disclosure.open, true);
+ const sides = [...disclosure.querySelectorAll('details')]; assert.equal(sides.length, 2);
+ for (const [index, value] of ['100000000000', '110000000000'].entries()) {
+  await act(async () => sides[index].querySelector('summary').click());
+  assert.match(sides[index].textContent, new RegExp(`Exact API value:.*${value} USD`));
+  assert.equal(sides[index].querySelector('a').href, `https://www.sec.gov/Archives/test/AAPL/${2024 + index}`);
+ }
+ await app.release(evidence, presentationContext('AAPL', query, ['Revenue $100,000 million in another filing period.']));
+ assert.equal(app.host.querySelectorAll('mark.value-match').length, 0);
+ assert.equal(app.requests.filter(r => r.path.endsWith('/research-answer')).length, 1);
+});
+
+test('mounted unavailable comparison keeps the reason and never fabricates a zero', async ctx => {
+ const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+ const query = '2024 vs 2025 revenue'; const evidence = await app.search('AAPL', query, true);
+ await app.release(app.request(companyPath('AAPL', 'research-answer')), comparisonAnswer('AAPL', query, 'unavailable'));
+ const answer = app.host.querySelector('.direct-answer');
+ assert.equal(answer.querySelector('.metric-value').textContent, 'Unavailable');
+ assert.match(answer.textContent, /Incompatible revenue economic bases/);
+ assert.doesNotMatch(answer.textContent, /\$0|\+10\.00%|Change/);
+ assert.equal(answer.querySelectorAll('.comparison-provenance details').length, 2);
+ await app.release(evidence, context('AAPL', query));
+ assert.ok(app.host.querySelector('.direct-answer'));
+});
+
+test('mounted evidence failure preserves a completed comparison and both sources', async ctx => {
+ const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+ const query = '2024-2025 revenue growth'; const evidence = await app.search('AAPL', query, true);
+ await app.release(app.request(companyPath('AAPL', 'research-answer')), comparisonAnswer('AAPL', query));
+ const before = app.host.querySelector('.direct-answer').textContent;
+ await app.release(evidence, { detail: 'Evidence fixture failed' }, 503);
+ assert.equal(app.host.querySelector('.direct-answer').textContent, before);
+ assert.match(app.host.querySelector('[role="alert"]').textContent, /Evidence fixture failed/);
+});
+
+test('mounted AI failure preserves comparison, provenance and supporting evidence', async ctx => {
+ const app = await mount(ctx, true); await app.completeCompany('AAPL', '1000000000');
+ const query = '2024-2025 revenue growth'; const evidence = await app.search('AAPL', query, true);
+ await app.release(app.request(companyPath('AAPL', 'research-answer')), comparisonAnswer('AAPL', query));
+ await app.release(evidence, context('AAPL', query));
+ const before = app.host.querySelector('.direct-answer').textContent, passages = app.evidence();
+ await app.click('Generate AI analysis');
+ await app.release(app.request(companyPath('AAPL', `filings/${filing('AAPL').accession_number}/answer`)), { detail: 'Private test-provider detail' }, 502);
+ assert.equal(app.host.querySelector('.direct-answer').textContent, before);
+ assert.deepEqual(app.evidence(), passages); assert.match(app.host.querySelector('.ai-panel').textContent, /AI analysis is currently unavailable/);
+ assert.doesNotMatch(app.host.textContent, /Private test-provider/);
+});
+
+test('mounted company switch discards pending and completed comparison state', async ctx => {
+ const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+ const query = '2024-2025 revenue growth'; const evidence = await app.search('AAPL', query, true);
+ const old = app.request(companyPath('AAPL', 'research-answer'));
+ await app.change(app.host.querySelector('#company'), 'JPM');
+ await app.release(old, comparisonAnswer('AAPL', query)); await app.release(evidence, context('AAPL', query));
+ assert.ok(!app.host.querySelector('.direct-answer')); await app.completeCompany('JPM', '2000000000');
+ const currentEvidence = await app.search('JPM', query, true);
+ await app.release(app.request(companyPath('JPM', 'research-answer')), comparisonAnswer('JPM', query));
+ await app.release(currentEvidence, context('JPM', query));
+ assert.match(app.host.querySelector('.direct-answer').textContent, /JPM revenue/);
+ assert.doesNotMatch(app.host.querySelector('.direct-answer').textContent, /AAPL/);
+ await app.change(app.host.querySelector('#company'), 'AAPL'); assert.ok(!app.host.querySelector('.direct-answer'));
+});
+
+test('mounted query edits clear completed comparison and reject delayed old responses', async ctx => {
+ const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+ const query = '2024-2025 revenue growth'; let evidence = await app.search('AAPL', query, true);
+ await app.release(app.request(companyPath('AAPL', 'research-answer')), comparisonAnswer('AAPL', query));
+ await app.release(evidence, context('AAPL', query));
+ await app.change(app.host.querySelector('textarea'), '2024 net income'); assert.ok(!app.host.querySelector('.direct-answer'));
+ evidence = await app.search('AAPL', query, true); const old = app.request(companyPath('AAPL', 'research-answer'));
+ await app.change(app.host.querySelector('textarea'), '2025 revenue');
+ await app.release(old, comparisonAnswer('AAPL', query)); await app.release(evidence, context('AAPL', query));
+ assert.ok(!app.host.querySelector('.direct-answer')); assert.deepEqual(app.evidence(), []);
+});
+
 test('mounted direct answer arrives before slow evidence, discloses exact provenance, and survives evidence failure', async ctx => {
   const app = await mount(ctx);
   await app.completeCompany('AAPL', '1000000000');

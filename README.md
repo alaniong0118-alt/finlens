@@ -12,7 +12,7 @@ SEC filings contain useful evidence, but reading them involves long documents, i
 
 Research Mode is implemented; AI Analysis is an optional enhancement. Comparisons, deeper filing coverage and formal evaluation remain roadmap work, distinct from the recorded acceptance below.
 
-Research Answers now resolve clear latest quarterly, annual or latest available questions about the 15 canonical financial metrics directly from stored SEC observations, with zero LLM calls. Ask “What was Apple's latest quarterly revenue?” to see the answer before supporting evidence; View provenance exposes exact values, concepts, formulas and source filings. Unavailable values retain the metric service's reason. Causal, segment, explicit historical-date, multi-metric and nonfinancial questions continue through selected-filing evidence research. The selected company is authoritative, and evidence/AI failure preserves a valid direct answer. See [scope and limitations](docs/product-spec.md#deterministic-research-answers).
+Research Answers resolve clear latest-value, fiscal-year/quarter and bounded same-company comparison questions about canonical financial metrics directly from stored SEC observations, with zero LLM calls. Ask “2024 revenue”, “Q2 2025 revenue” or “2024–2025 revenue growth” to see a result before supporting evidence. Comparisons expose both source observations and exact changes; incompatible or missing data retains an explanation. Causal, segment, arbitrary-date, multi-metric and nonfinancial questions continue through selected-filing evidence research. The selected company is authoritative, and evidence/AI failure preserves a valid direct answer. See [scope and limitations](docs/product-spec.md#historical-and-comparative-research-answers).
 
 - [Roadmap and milestone status](ROADMAP.md)
 - [Product specification](docs/product-spec.md) and [AI-is-optional decision](docs/decisions/003-ai-is-optional.md)
@@ -312,4 +312,4 @@ Real Item 8 captures: [desktop Light](docs/screenshots/research-mode-light.jpg),
 
 ## Future work
 
-Follow the [roadmap](ROADMAP.md) for compatible comparisons, deeper flagship coverage, formal evaluation, optional multi-filing AI, hardening and portfolio release. Real LLM acceptance remains pending and will run only when credits are intentionally available.
+Bounded historical/comparison acceptance (2026-10-08): 233 relevant backend tests, 55 frontend tests, lint/type checking/production build, 26 real HTTP/source audits and actual browser checks passed with unchanged database fingerprints. See the [verification report](backend/reports/historical_answers_final_report.md). These are deterministic results; real LLM acceptance remains pending and will run only when credits are intentionally available. Follow the [roadmap](ROADMAP.md) for broader comparisons, deeper flagship coverage, formal evaluation, optional multi-filing AI, hardening and portfolio release.

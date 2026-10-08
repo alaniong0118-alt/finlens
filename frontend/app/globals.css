@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+.comparison-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.comparison-values > div { padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.65rem; }
+.comparison-values dt { font-size: 0.8rem; color: var(--muted); }
+.comparison-values dd { margin: 0.3rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+
 :root { color-scheme: light; --page:#f3f6f5; --card:#fff; --surface:#f7faf9; --text:#102a35; --muted:#526773; --border:#d9e4e1; --accent:#087e78; --accent-soft:#e9f6f2; --header:#102a35; --error:#9b283c; --shadow:0 8px 28px rgba(16,42,53,.045); }
 :root[data-theme="dark"] { color-scheme: dark; --page:#0c1820; --card:#142630; --surface:#192e38; --text:#e6f0f1; --muted:#a6bec6; --border:#344c57; --accent:#57d3c0; --accent-soft:#1a3a3c; --header:#10212b; --error:#ffb4b9; --shadow:0 8px 28px rgba(0,0,0,.12); }
 * { box-sizing:border-box; }

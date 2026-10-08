@@ -126,7 +126,7 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
       <label htmlFor="research-query">Research question or search<textarea id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
       <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>
       <button className="primary-button" disabled={!query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
-      <p className="muted small">Clear latest quarterly, annual or latest available financial values can receive a direct answer. Other questions search SEC evidence. No AI generation.</p>
+      <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). Other questions search SEC evidence. No AI generation.</p>
     </form>
     <div aria-live="polite" aria-busy={answerLoading}>
       {answerLoading && <p className="loading-state">Checking stored financial observations…</p>}
@@ -140,7 +140,7 @@ function FilingSearch({ company, filing, configured }: { company: Company; filin
       {error && <p role="alert" className="error-state">{error}</p>}
       {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state"><h3>Explore the filing evidence</h3><p>Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required.</p></div>}
     </div>
-    {result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages are supporting research, not validation of the structured answer.</p><EvidenceResults key={`evidence-${result.query}-${result.accession_number}`} result={result} answer={answer} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
+    {result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages may describe a different period and are research, not validation of the structured answer.</p><EvidenceResults key={`evidence-${result.query}-${result.accession_number}`} result={result} answer={answer} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
   </>;
 }
 

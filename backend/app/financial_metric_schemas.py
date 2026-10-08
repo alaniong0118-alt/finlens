@@ -87,6 +87,30 @@ class NormalizedFinancialSummary(BaseModel):
     metrics: dict[str, NormalizedMetric]
 
 
+class FiscalPeriodRequest(BaseModel):
+    fiscal_year: int = Field(ge=1900, le=2099)
+    quarter: int | None = Field(default=None, ge=1, le=4)
+
+    @property
+    def label(self):
+        return f"Q{self.quarter} FY{self.fiscal_year}" if self.quarter else f"FY{self.fiscal_year}"
+
+
+class MetricComparison(BaseModel):
+    status: Availability
+    reason: str | None = None
+    earlier_period: FiscalPeriodRequest
+    later_period: FiscalPeriodRequest
+    earlier: NormalizedMetric
+    later: NormalizedMetric
+    absolute_change: Decimal | None = None
+    percentage_change: Decimal | None = None
+    percentage_status: Literal["available", "unavailable", "not_applicable"] = "unavailable"
+    percentage_reason: str | None = None
+    direction: Literal["increase", "decrease", "no_change"] | None = None
+    formula: str = "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+
+
 class HistoryComparability(BaseModel):
     value_basis: Literal["reported_as_filed"] = "reported_as_filed"
     status: Literal["unverified"] = "unverified"
