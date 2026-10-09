@@ -1,0 +1,960 @@
+{
+  "identity": {
+    "cluster": "7692131504986030119",
+    "database": "finlens",
+    "role": "finlens",
+    "database_oid": 16384
+  },
+  "runtime": {
+    "context": "desktop-linux",
+    "endpoint": "npipe:////./pipe/dockerDesktopLinuxEngine",
+    "container": "b6b6024497e57ecdf82927b557f51ef20d7321be74b3a526afe134db851817d8",
+    "image": "sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a",
+    "volume": {
+      "Destination": "/var/lib/postgresql/data",
+      "Driver": "local",
+      "Mode": "rw",
+      "Name": "finlens-foundation_finlens-postgres-data",
+      "Propagation": "",
+      "RW": true,
+      "Source": "/var/lib/docker/volumes/finlens-foundation_finlens-postgres-data/_data",
+      "Type": "volume"
+    },
+    "ports": {
+      "5432/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "5432"
+        }
+      ]
+    }
+  },
+  "versions": {
+    "postgres": "160015",
+    "pgvector": "0.8.7"
+  },
+  "free_bytes": {
+    "host_C": 47883153408,
+    "host_D": 193116372992,
+    "docker_data": 1023034224640,
+    "docker_tmp": 1023034224640
+  },
+  "indexes": {
+    "alembic_version_pkc": {
+      "schema": "public",
+      "name": "alembic_version_pkc",
+      "table_schema": "public",
+      "table_name": "alembic_version",
+      "method": "btree",
+      "relkind": "i",
+      "unique": true,
+      "primary": true,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE UNIQUE INDEX alembic_version_pkc ON public.alembic_version USING btree (version_num)",
+      "expression": null,
+      "predicate": null,
+      "oid": 24585,
+      "filenode": 24585,
+      "bytes": 16384,
+      "attributes": [
+        {
+          "name": "version_num",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "alembic_version_pkc",
+          "type": "p",
+          "definition": "PRIMARY KEY (version_num)",
+          "validated": true
+        }
+      ]
+    },
+    "companies_cik_key": {
+      "schema": "public",
+      "name": "companies_cik_key",
+      "table_schema": "public",
+      "table_name": "companies",
+      "method": "btree",
+      "relkind": "i",
+      "unique": true,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE UNIQUE INDEX companies_cik_key ON public.companies USING btree (cik)",
+      "expression": null,
+      "predicate": null,
+      "oid": 24594,
+      "filenode": 24594,
+      "bytes": 16384,
+      "attributes": [
+        {
+          "name": "cik",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "companies_cik_key",
+          "type": "u",
+          "definition": "UNIQUE (cik)",
+          "validated": true
+        }
+      ]
+    },
+    "ix_companies_ticker": {
+      "schema": "public",
+      "name": "ix_companies_ticker",
+      "table_schema": "public",
+      "table_name": "companies",
+      "method": "btree",
+      "relkind": "i",
+      "unique": true,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE UNIQUE INDEX ix_companies_ticker ON public.companies USING btree (ticker)",
+      "expression": null,
+      "predicate": null,
+      "oid": 24596,
+      "filenode": 24596,
+      "bytes": 16384,
+      "attributes": [
+        {
+          "name": "ticker",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_financial_facts_company_cik": {
+      "schema": "public",
+      "name": "ix_financial_facts_company_cik",
+      "table_schema": "public",
+      "table_name": "financial_facts",
+      "method": "btree",
+      "relkind": "i",
+      "unique": false,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE INDEX ix_financial_facts_company_cik ON public.financial_facts USING btree (company_cik)",
+      "expression": null,
+      "predicate": null,
+      "oid": 24604,
+      "filenode": 24604,
+      "bytes": 557056,
+      "attributes": [
+        {
+          "name": "company_cik",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_financial_facts_company_metric_period": {
+      "schema": "public",
+      "name": "ix_financial_facts_company_metric_period",
+      "table_schema": "public",
+      "table_name": "financial_facts",
+      "method": "btree",
+      "relkind": "i",
+      "unique": false,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE INDEX ix_financial_facts_company_metric_period ON public.financial_facts USING btree (company_cik, metric, period_end)",
+      "expression": null,
+      "predicate": null,
+      "oid": 24605,
+      "filenode": 24605,
+      "bytes": 2318336,
+      "attributes": [
+        {
+          "name": "company_cik",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        },
+        {
+          "name": "metric",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        },
+        {
+          "name": "period_end",
+          "collation": null,
+          "opclass": "pg_catalog.date_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_financial_facts_metric": {
+      "schema": "public",
+      "name": "ix_financial_facts_metric",
+      "table_schema": "public",
+      "table_name": "financial_facts",
+      "method": "btree",
+      "relkind": "i",
+      "unique": false,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE INDEX ix_financial_facts_metric ON public.financial_facts USING btree (metric)",
+      "expression": null,
+      "predicate": null,
+      "oid": 24606,
+      "filenode": 24606,
+      "bytes": 466944,
+      "attributes": [
+        {
+          "name": "metric",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_filing_chunks_accession_index": {
+      "schema": "public",
+      "name": "ix_filing_chunks_accession_index",
+      "table_schema": "public",
+      "table_name": "filing_chunks",
+      "method": "btree",
+      "relkind": "i",
+      "unique": true,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE UNIQUE INDEX ix_filing_chunks_accession_index ON public.filing_chunks USING btree (accession_number, chunk_index)",
+      "expression": null,
+      "predicate": null,
+      "oid": 32778,
+      "filenode": 32778,
+      "bytes": 327680,
+      "attributes": [
+        {
+          "name": "accession_number",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        },
+        {
+          "name": "chunk_index",
+          "collation": null,
+          "opclass": "pg_catalog.int4_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_filing_chunks_accession_number": {
+      "schema": "public",
+      "name": "ix_filing_chunks_accession_number",
+      "table_schema": "public",
+      "table_name": "filing_chunks",
+      "method": "btree",
+      "relkind": "i",
+      "unique": false,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE INDEX ix_filing_chunks_accession_number ON public.filing_chunks USING btree (accession_number)",
+      "expression": null,
+      "predicate": null,
+      "oid": 32779,
+      "filenode": 32779,
+      "bytes": 57344,
+      "attributes": [
+        {
+          "name": "accession_number",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_filing_chunks_company_accession": {
+      "schema": "public",
+      "name": "ix_filing_chunks_company_accession",
+      "table_schema": "public",
+      "table_name": "filing_chunks",
+      "method": "btree",
+      "relkind": "i",
+      "unique": false,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE INDEX ix_filing_chunks_company_accession ON public.filing_chunks USING btree (company_cik, accession_number)",
+      "expression": null,
+      "predicate": null,
+      "oid": 32780,
+      "filenode": 32780,
+      "bytes": 57344,
+      "attributes": [
+        {
+          "name": "company_cik",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        },
+        {
+          "name": "accession_number",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": []
+    },
+    "ix_filing_chunks_company_cik": {
+      "schema": "public",
+      "name": "ix_filing_chunks_company_cik",
+      "table_schema": "public",
+      "table_name": "filing_chunks",
+      "method": "btree",
+      "relkind": "i",
+      "unique": false,
+      "primary": false,
+      "valid": true,
+      "ready": true,
+      "live": true,
+      "definition": "CREATE INDEX ix_filing_chunks_company_cik ON public.filing_chunks USING btree (company_cik)",
+      "expression": null,
+      "predicate": null,
+      "oid": 32781,
+      "filenode": 32781,
+      "bytes": 57344,
+      "attributes": [
+        {
+          "name": "company_cik",
+          "collation": "pg_catalog.default",
+          "opclass": "pg_catalog.text_ops"
+        }
+      ],
+      "constraints": []
+    }
+  },
+  "fingerprints": {
+    "counts": {
+      "companies": 35,
+      "financial_facts": 58881,
+      "filing_chunks": 3175,
+      "embeddings": 3175
+    },
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12"
+    }
+  },
+  "embedding_sha256": "d5146e1e5f4b843bdfeb4cca65db1211cfe272527d6aee0888d36b1e4e250cb6",
+  "phase": "before",
+  "revision": "d7b834408ba8",
+  "locale": [
+    "c",
+    "en_US.utf8",
+    "en_US.utf8",
+    "2.41",
+    "2.36"
+  ],
+  "query_checks": [
+    {
+      "index": "public.alembic_version_pkc",
+      "rows": 1,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 52.67,
+        "Total Cost": 54.52,
+        "Plan Rows": 740,
+        "Plan Width": 82,
+        "Output": [
+          "version_num"
+        ],
+        "Sort Key": [
+          "alembic_version.version_num"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "alembic_version",
+            "Schema": "public",
+            "Alias": "alembic_version",
+            "Startup Cost": 0.0,
+            "Total Cost": 17.4,
+            "Plan Rows": 740,
+            "Plan Width": 82,
+            "Output": [
+              "version_num"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "alembic_version_pkc",
+        "Relation Name": "alembic_version",
+        "Schema": "public",
+        "Alias": "alembic_version",
+        "Startup Cost": 0.15,
+        "Total Cost": 59.25,
+        "Plan Rows": 740,
+        "Plan Width": 82,
+        "Output": [
+          "version_num"
+        ]
+      }
+    },
+    {
+      "index": "public.companies_cik_key",
+      "rows": 35,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 15.86,
+        "Total Cost": 16.19,
+        "Plan Rows": 130,
+        "Plan Width": 42,
+        "Output": [
+          "cik",
+          "id"
+        ],
+        "Sort Key": [
+          "companies.cik"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "companies",
+            "Schema": "public",
+            "Alias": "companies",
+            "Startup Cost": 0.0,
+            "Total Cost": 11.3,
+            "Plan Rows": 130,
+            "Plan Width": 42,
+            "Output": [
+              "cik",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "companies_cik_key",
+        "Relation Name": "companies",
+        "Schema": "public",
+        "Alias": "companies",
+        "Startup Cost": 0.14,
+        "Total Cost": 50.09,
+        "Plan Rows": 130,
+        "Plan Width": 42,
+        "Output": [
+          "cik",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_companies_ticker",
+      "rows": 35,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 15.86,
+        "Total Cost": 16.19,
+        "Plan Rows": 130,
+        "Plan Width": 42,
+        "Output": [
+          "ticker",
+          "id"
+        ],
+        "Sort Key": [
+          "companies.ticker"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "companies",
+            "Schema": "public",
+            "Alias": "companies",
+            "Startup Cost": 0.0,
+            "Total Cost": 11.3,
+            "Plan Rows": 130,
+            "Plan Width": 42,
+            "Output": [
+              "ticker",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_companies_ticker",
+        "Relation Name": "companies",
+        "Schema": "public",
+        "Alias": "companies",
+        "Startup Cost": 0.14,
+        "Total Cost": 50.09,
+        "Plan Rows": 130,
+        "Plan Width": 42,
+        "Output": [
+          "ticker",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_financial_facts_company_cik",
+      "rows": 58881,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 6669.81,
+        "Total Cost": 6817.01,
+        "Plan Rows": 58881,
+        "Plan Width": 15,
+        "Output": [
+          "company_cik",
+          "id"
+        ],
+        "Sort Key": [
+          "financial_facts.company_cik"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "financial_facts",
+            "Schema": "public",
+            "Alias": "financial_facts",
+            "Startup Cost": 0.0,
+            "Total Cost": 2004.81,
+            "Plan Rows": 58881,
+            "Plan Width": 15,
+            "Output": [
+              "company_cik",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_financial_facts_company_cik",
+        "Relation Name": "financial_facts",
+        "Schema": "public",
+        "Alias": "financial_facts",
+        "Startup Cost": 0.29,
+        "Total Cost": 6726.79,
+        "Plan Rows": 58881,
+        "Plan Width": 15,
+        "Output": [
+          "company_cik",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_financial_facts_company_metric_period",
+      "rows": 58881,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 6669.81,
+        "Total Cost": 6817.01,
+        "Plan Rows": 58881,
+        "Plan Width": 39,
+        "Output": [
+          "company_cik",
+          "metric",
+          "period_end",
+          "id"
+        ],
+        "Sort Key": [
+          "financial_facts.company_cik",
+          "financial_facts.metric",
+          "financial_facts.period_end"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "financial_facts",
+            "Schema": "public",
+            "Alias": "financial_facts",
+            "Startup Cost": 0.0,
+            "Total Cost": 2004.81,
+            "Plan Rows": 58881,
+            "Plan Width": 39,
+            "Output": [
+              "company_cik",
+              "metric",
+              "period_end",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_financial_facts_company_metric_period",
+        "Relation Name": "financial_facts",
+        "Schema": "public",
+        "Alias": "financial_facts",
+        "Startup Cost": 0.41,
+        "Total Cost": 7627.48,
+        "Plan Rows": 58881,
+        "Plan Width": 39,
+        "Output": [
+          "company_cik",
+          "metric",
+          "period_end",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_financial_facts_metric",
+      "rows": 58881,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 6669.81,
+        "Total Cost": 6817.01,
+        "Plan Rows": 58881,
+        "Plan Width": 24,
+        "Output": [
+          "metric",
+          "id"
+        ],
+        "Sort Key": [
+          "financial_facts.metric"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "financial_facts",
+            "Schema": "public",
+            "Alias": "financial_facts",
+            "Startup Cost": 0.0,
+            "Total Cost": 2004.81,
+            "Plan Rows": 58881,
+            "Plan Width": 24,
+            "Output": [
+              "metric",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_financial_facts_metric",
+        "Relation Name": "financial_facts",
+        "Schema": "public",
+        "Alias": "financial_facts",
+        "Startup Cost": 0.29,
+        "Total Cost": 6763.67,
+        "Plan Rows": 58881,
+        "Plan Width": 24,
+        "Output": [
+          "metric",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_filing_chunks_accession_index",
+      "rows": 3175,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 1265.42,
+        "Total Cost": 1273.35,
+        "Plan Rows": 3175,
+        "Plan Width": 29,
+        "Output": [
+          "accession_number",
+          "chunk_index",
+          "id"
+        ],
+        "Sort Key": [
+          "filing_chunks.accession_number",
+          "filing_chunks.chunk_index"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "filing_chunks",
+            "Schema": "public",
+            "Alias": "filing_chunks",
+            "Startup Cost": 0.0,
+            "Total Cost": 1080.75,
+            "Plan Rows": 3175,
+            "Plan Width": 29,
+            "Output": [
+              "accession_number",
+              "chunk_index",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_filing_chunks_accession_index",
+        "Relation Name": "filing_chunks",
+        "Schema": "public",
+        "Alias": "filing_chunks",
+        "Startup Cost": 0.28,
+        "Total Cost": 4395.15,
+        "Plan Rows": 3175,
+        "Plan Width": 29,
+        "Output": [
+          "accession_number",
+          "chunk_index",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_filing_chunks_accession_number",
+      "rows": 3175,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 1265.42,
+        "Total Cost": 1273.35,
+        "Plan Rows": 3175,
+        "Plan Width": 25,
+        "Output": [
+          "accession_number",
+          "id"
+        ],
+        "Sort Key": [
+          "filing_chunks.accession_number"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "filing_chunks",
+            "Schema": "public",
+            "Alias": "filing_chunks",
+            "Startup Cost": 0.0,
+            "Total Cost": 1080.75,
+            "Plan Rows": 3175,
+            "Plan Width": 25,
+            "Output": [
+              "accession_number",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_filing_chunks_accession_number",
+        "Relation Name": "filing_chunks",
+        "Schema": "public",
+        "Alias": "filing_chunks",
+        "Startup Cost": 0.28,
+        "Total Cost": 4256.33,
+        "Plan Rows": 3175,
+        "Plan Width": 25,
+        "Output": [
+          "accession_number",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_filing_chunks_company_accession",
+      "rows": 3175,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 1265.42,
+        "Total Cost": 1273.35,
+        "Plan Rows": 3175,
+        "Plan Width": 36,
+        "Output": [
+          "company_cik",
+          "accession_number",
+          "id"
+        ],
+        "Sort Key": [
+          "filing_chunks.company_cik",
+          "filing_chunks.accession_number"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "filing_chunks",
+            "Schema": "public",
+            "Alias": "filing_chunks",
+            "Startup Cost": 0.0,
+            "Total Cost": 1080.75,
+            "Plan Rows": 3175,
+            "Plan Width": 36,
+            "Output": [
+              "company_cik",
+              "accession_number",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_filing_chunks_company_accession",
+        "Relation Name": "filing_chunks",
+        "Schema": "public",
+        "Alias": "filing_chunks",
+        "Startup Cost": 0.28,
+        "Total Cost": 4151.14,
+        "Plan Rows": 3175,
+        "Plan Width": 36,
+        "Output": [
+          "company_cik",
+          "accession_number",
+          "id"
+        ]
+      }
+    },
+    {
+      "index": "public.ix_filing_chunks_company_cik",
+      "rows": 3175,
+      "sequential_plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 1265.42,
+        "Total Cost": 1273.35,
+        "Plan Rows": 3175,
+        "Plan Width": 15,
+        "Output": [
+          "company_cik",
+          "id"
+        ],
+        "Sort Key": [
+          "filing_chunks.company_cik"
+        ],
+        "Plans": [
+          {
+            "Node Type": "Seq Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "filing_chunks",
+            "Schema": "public",
+            "Alias": "filing_chunks",
+            "Startup Cost": 0.0,
+            "Total Cost": 1080.75,
+            "Plan Rows": 3175,
+            "Plan Width": 15,
+            "Output": [
+              "company_cik",
+              "id"
+            ]
+          }
+        ]
+      },
+      "indexed_plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "ix_filing_chunks_company_cik",
+        "Relation Name": "filing_chunks",
+        "Schema": "public",
+        "Alias": "filing_chunks",
+        "Startup Cost": 0.28,
+        "Total Cost": 4057.21,
+        "Plan Rows": 3175,
+        "Plan Width": 15,
+        "Output": [
+          "company_cik",
+          "id"
+        ]
+      }
+    }
+  ],
+  "status": "verified",
+  "captured_at": "2026-10-08T23:45:34.698055+00:00",
+  "quiescent": false,
+  "database_writes": false
+}

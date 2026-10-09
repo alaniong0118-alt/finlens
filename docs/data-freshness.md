@@ -54,6 +54,12 @@ All normal read routes use stored data. `/chunks` returns stored published chunk
 
 ## Operator commands and safe rollout
 
+The existing development database has a libc collation-version mismatch. Follow
+the [guarded collation remediation runbook](collation-remediation.md) before any
+development migration/bootstrap. Its verifier is read-only; backup, restore,
+REINDEX and metadata-refresh commands require separate authorization and have
+not been executed by the operator-safety task.
+
 Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **The migration/bootstrap/live commands below require later explicit authorization for the target database; they were not run on development.** Keep private database/contact settings in ignored env files. No OpenAI key is required.
 
 1. Stop source-writing jobs; record read-only counts/full-row fingerprints and take an operator-managed backup. Confirm isolated tests and independent review first.

@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-09",
+  "timezone": "Asia/Macau",
+  "scope": "Operator verification safety only; no maintenance execution",
+  "status": "ready_for_focused_independent_review",
+  "head_at_start": "2bbadf3",
+  "changes": {
+    "optimization": "Explicit SafetyError checks; optimization rejected before database configuration import",
+    "coverage": "Verbose JSON plans require the intended qualified index and a verified non-indexed reference",
+    "identity": "TCP and Docker cluster/database/OID/role equality; pinned context/endpoint/container/image/volume/ports",
+    "inventory": "Exact definitions, attributes, collations, opclasses, uniqueness, constraints, valid/ready/live flags",
+    "recovery": "Before/after logical OIDs and filenodes; phase gates; guarded SQL text generation only",
+    "disk": "Enforced minimum 1 GiB each on C:, D:, Docker data and /tmp"
+  },
+  "validation": {
+    "focused_command": ".venv/Scripts/python.exe -B -m pytest tests/test_verify_collation.py -q",
+    "focused_tests_passed": 61,
+    "test_database_writes": false,
+    "negative_cases": [
+      "PYTHONOPTIMIZE=1 and 2 reject before probes",
+      "wrong index/schema/table and sorted indexed fallback",
+      "indexed or wrong-table sequential reference",
+      "wrong cluster/database/OID/role through either or both paths",
+      "changed definition, attributes, collation, uniqueness and constraint links",
+      "invalid/unready/dead index",
+      "row and embedding fingerprint mismatch",
+      "insufficient or missing disk-space gate",
+      "unexpected migration revision or collation provider/locale/version",
+      "unchanged filenodes or changed logical OIDs after claimed rebuild",
+      "runtime context/endpoint/container/image/volume/port drift",
+      "out-of-order or non-quiescent SQL plan generation"
+    ],
+    "live_before_audit": "verified",
+    "live_baseline_recheck": "verified; logical OIDs and filenodes unchanged",
+    "exact_index_plan_checks": 10,
+    "live_final_phase_negative": "rejected: Wrong recorded collation for phase",
+    "live_quiescent_negative": "rejected while API database sessions remain; no SQL plan file created",
+    "powershell": "Runbook block parsed successfully by Windows PowerShell 5.1.19041.7725; commands not executed",
+    "createdb_maintenance_option": "Confirmed through read-only --help",
+    "git_diff_check": "passed"
+  },
+  "preservation": {
+    "baseline": "collation_operator_before.json",
+    "counts": {"companies": 35, "financial_facts": 58881, "filing_chunks": 3175, "embeddings": 3175},
+    "sha256": {
+      "companies": "ace9bd807d59983386906c3e3612bc2b05c262344731ba4421bbf2c6586084f0",
+      "financial_facts": "ff6dbccc908b0748148f8a01712e40fd469a6ef362b9b3990d6e0ce881f70655",
+      "filing_chunks": "ca6ce451d4060723b3c3dcc73c58a623a5dfac37a8246b435f69d8bb4bdf3c12",
+      "embedding_only": "d5146e1e5f4b843bdfeb4cca65db1211cfe272527d6aee0888d36b1e4e250cb6",
+      "frontend_next_env": "f4e8976c19fc926644d72610bf1058bd6bf52add97e46a02bc0b912a751625c0"
+    },
+    "revision": "d7b834408ba8",
+    "recorded_runtime_collation": ["2.41", "2.36"],
+    "database_data_or_metadata_writes": false,
+    "docker_changes": false,
+    "dependencies_changed": false,
+    "SEC_or_OpenAI_calls": false
+  },
+  "not_executed": [
+    "pg_dump backup or archive verification",
+    "database creation or restoration",
+    "rehearsal REINDEX/ALTER DATABASE",
+    "development REINDEX/ALTER DATABASE",
+    "migration/bootstrap",
+    "API shutdown/restart or scheduler activation"
+  ],
+  "remaining_gates": [
+    "Independent focused review of verifier, tests and runbook",
+    "Explicit authorization for backup and disposable restore/rehearsal",
+    "Explicit development maintenance authorization",
+    "Successful fresh backup, rehearsal and quiescent gates before development writes",
+    "Separate deployment preflight and authorization for migration/bootstrap"
+  ]
+}
