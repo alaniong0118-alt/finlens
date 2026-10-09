@@ -195,7 +195,8 @@ Implementation continuation 2026-10-08: read-only baseline matched the recorded 
 - [x] Run offline production-path, PostgreSQL migration/concurrency/isolation, mounted UI, full relevant regression and read-only preservation checks.
 - [x] Finish runbook/reports/canonical docs and implementation self-review.
 - [ ] Independent Astra review (separate review, not claimed here).
-- [ ] Authorized target migration/bootstrap, live canaries/resource measurement and scheduler activation (explicitly deferred operational acceptance).
+- [x] Authorized development migration/bootstrap and API recovery independently accepted on 2026-10-09 (see deployment addendum).
+- [ ] Live canaries/resource measurement and scheduler activation (separately authorized operational acceptance).
 
 Phase 1 commands run from repository root: scoped `Get-Content`/`rg` source/doc/test reads; `git status --short`, `git diff --stat`, `git diff -- frontend/next-env.d.ts`, `git rev-parse HEAD`; SHA256 of the pre-existing generated file. Final checks: local relative Markdown targets/anchors in this plan, source function references, documentation scope, `git diff --check`, and new-file whitespace check. No application tests/build, browser/live HTTP, DB connection, SEC/OpenAI request, migration, scheduler or data write was performed. Existing test counts and baseline fingerprints above are explicitly historical evidence.
 
@@ -236,7 +237,7 @@ See [implementation report](../../../backend/reports/data_freshness_implementati
 - Whole-row fingerprint equality: 35 companies, 58,881 facts, 3,175 chunks/vectors; development revision unchanged at d7b834408ba8. Generated next-env SHA256 unchanged.
 - Syntax/import, CLI/wrapper disabled behavior, documentation references and git diff --check validated at closure; results recorded in machine verification.
 
-## Deferred operational acceptance
+## Deferred operational acceptance — original 2026-10-08 snapshot
 
 Independent Astra review, explicitly authorized target migration/validated bootstrap/API restart, current SEC policy/contact check, live subset canaries/no-op/recovery/preservation, encoder/memory/time measurements and explicit scheduler activation remain pending. These are not implementation blockers under the requested offline scope. The milestone is not operationally complete. No later roadmap work is authorized.
 
@@ -265,3 +266,18 @@ provider calls, live jobs, staging or commits. See the updated [implementation
 report](../../../backend/reports/data_freshness_implementation.md) and [verification
 JSON](../../../backend/reports/data_freshness_verification.json). Focused independent
 re-review and all operational rollout gates remain pending.
+
+## Development deployment closure — 2026-10-09
+
+Independent Astra acceptance is **PASS** for fresh backup, development migration
+to `f94c6f41e0cb`, offline bootstrap and API recovery. Thirty independent HTTP
+checks passed. Bootstrap committed 35 publications/35 refresh states/zero attempts,
+with initial versions zero and unknown freshness; original financial/vector
+fingerprints matched. This supersedes migration/review-pending statements in the
+historical sections above, without changing their recorded offline test results.
+
+Canonical backup path/SHA256, external acceptance evidence and the historical
+intermittent Research HTTP 500 are recorded in [deployment status](../../data-freshness.md#accepted-development-deployment).
+No new acceptance tests or database operations were performed during this closure.
+Live SEC refresh remains unvalidated and scheduling disabled. Continue only after
+separate authorization through the [planned one-company canary](../active/2026-10-09-sec-live-canary.md).

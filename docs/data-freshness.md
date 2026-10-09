@@ -1,6 +1,22 @@
 # Data freshness and controlled refresh
 
-Status (2026-10-08): **offline implementation and four review repairs validated; focused independent re-review and operational rollout pending**. No development migration, live SEC canary or scheduler activation was performed. See [verification](../backend/reports/data_freshness_verification.json), [implementation report](../backend/reports/data_freshness_implementation.md) and [completed implementation plan](exec-plans/completed/2026-10-08-data-freshness-automatic-refresh.md).
+Status (2026-10-09): **development deployment completed and independently accepted (Astra PASS)**. Live SEC refresh is not yet validated; automatic scheduling is disabled. Offline implementation history remains in [verification](../backend/reports/data_freshness_verification.json), [implementation report](../backend/reports/data_freshness_implementation.md) and the [completed implementation plan](exec-plans/completed/2026-10-08-data-freshness-automatic-refresh.md).
+
+## Accepted development deployment
+
+These are accepted execution results, not checks repeated during documentation closure:
+
+- Database `finlens`, OID `16384`, cluster `7692131504986030119`; Alembic `f94c6f41e0cb`; libc collation recorded/runtime `2.36 / 2.36`.
+- Offline bootstrap committed 35 `filing_publications`, 35 `company_refresh_state`, zero `refresh_attempts`. Initial data/stream versions are zero and freshness is **unknown**: publication of legacy stored evidence does not prove a live SEC check.
+- Fresh backup: `D:\Backups\FinLens\freshness_20261009_185544_4121139\finlens.dump` (9,649,856 bytes), SHA256 `de34c8aaccddee686fb9a81f130d8bde734e7921eb3ce80b1025eba2a18cd077`. Archive inventory and complete decode passed; this deployment did not include a fresh isolated restore or a cluster-global/PITR backup.
+- Independent acceptance: `D:\FinLens-OperatorReports\freshness_independent_acceptance_20261009_233932_0408181`. Original execution and final recovery evidence are retained outside Git. Thirty independent HTTP checks accepted backend, frontend proxy, freshness, financial Research and stored evidence.
+- All four original row/vector fingerprints matched: 35 companies, 58,881 facts, 3,175 chunks and 3,175 embeddings. Scheduler remains disabled; no live SEC refresh or OpenAI acquisition was accepted.
+
+Remaining rollout: the [one-company offline canary plan](exec-plans/active/2026-10-09-sec-live-canary.md), independent live acceptance/resource measurement, separately authorized wider coverage, then separately authorized scheduling. Do not rerun backup/migration/bootstrap merely to close documentation.
+
+### Historical Research incident
+
+**Historical intermittent HTTP 500; currently not reproducible.** The user observed AAPL `revenue growth` displaying a plausible 16.36% deterministic answer alongside HTTP 500, then independently retried without the error. This is not a verified financial-value audit or a completed bug fix. Scoped existing deployment/recovery log inspection supplied no concrete Research-error cause. The supplemental reporting `KeyError: 'table'` was a separate read-only reporting incident after successful deployment; it is not evidence of the Research error's cause. If the HTTP error recurs, capture the request/route, timestamp and sanitized backend traceback before diagnosing it.
 
 ## Publication architecture
 
@@ -54,13 +70,12 @@ All normal read routes use stored data. `/chunks` returns stored published chunk
 
 ## Operator commands and safe rollout
 
-The existing development database has a libc collation-version mismatch. Follow
-the [guarded collation remediation runbook](collation-remediation.md) before any
-development migration/bootstrap. Its verifier is read-only; backup, restore,
-REINDEX and metadata-refresh commands require separate authorization and have
-not been executed by the operator-safety task.
+The development collation repair and migration/bootstrap cutover are accepted;
+their historical procedures remain in the [collation runbook](collation-remediation.md)
+and external revision-4 deployment evidence. For other installations, diagnose
+collation and obtain target-specific authorization before maintenance.
 
-Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **The migration/bootstrap/live commands below require later explicit authorization for the target database; they were not run on development.** Keep private database/contact settings in ignored env files. No OpenAI key is required.
+Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **Steps 1–4 are completed on development; retain them as cutover guidance for other authorized targets. Do not repeat them on the accepted database. Steps 5–6 still require separate live-canary authorization and the linked plan's gates.** Keep private database/contact settings in ignored env files. No OpenAI key is required.
 
 1. Stop source-writing jobs; record read-only counts/full-row fingerprints and take an operator-managed backup. Confirm isolated tests and independent review first.
 2. Stop API for the migration/bootstrap cutover. On an existing dataset, migration alone creates empty manifests; do not serve the migrated catalog before validated bootstrap.
@@ -128,7 +143,7 @@ Pre-commit recovery is rollback and retry. Post-publication recovery is forward-
 
 ## Validation boundary
 
-Offline API/service, real disposable PostgreSQL migration/locking/isolation and mounted UI regressions passed; original full financial regression and read-only HTTP/browser acceptance remain recorded in [verification](../backend/reports/data_freshness_verification.json). The repair record separately records 52 refresh/PostgreSQL tests, 465 deterministic/compatibility tests, 66 frontend tests, lint/type/build and four detected mutations. Screenshots show the original real **unmigrated/unknown** deployment at [desktop](screenshots/data-freshness/desktop-unknown.jpg) and [mobile](screenshots/data-freshness/mobile-unknown.jpg). Version-change/retry UI acceptance is fixture-based. Browser acceptance was not repeated for these repairs. Development data, schema, dependencies and generated-file bytes were preserved. Focused independent Astra re-review, authorized migration/bootstrap, SEC canaries, resource measurement and scheduler activation remain pending.
+Offline API/service, real disposable PostgreSQL migration/locking/isolation and mounted UI regressions passed; original full financial regression and read-only HTTP/browser acceptance remain recorded in [verification](../backend/reports/data_freshness_verification.json). The repair record separately records 52 refresh/PostgreSQL tests, 465 deterministic/compatibility tests, 66 frontend tests, lint/type/build and four detected mutations. Screenshots show the historical **unmigrated/unknown** deployment at [desktop](screenshots/data-freshness/desktop-unknown.jpg) and [mobile](screenshots/data-freshness/mobile-unknown.jpg). Version-change/retry UI acceptance is fixture-based. Browser acceptance was not repeated for those repairs. The accepted deployment above supersedes their old migration-pending status: original financial/vector data were preserved through the additive migration. Live SEC canaries, resource measurements and scheduler activation remain pending.
 
 The subsequent [transaction-cleanup repair](exec-plans/completed/2026-10-08-refresh-transaction-cleanup.md)
 adds seven PostgreSQL cases and production fixture settings: 59 refresh/PostgreSQL
