@@ -90,7 +90,7 @@ Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **Steps 1
 Bootstrap validates the complete stored inventory, retains rows/vectors and records version-zero manifests without fabricated check dates. It is idempotent, only intended before versioned publication, and must be resolved before restart if invalid accessions are reported. Fresh clones instead migrate then run the existing `scripts.setup_demo`; no legacy bootstrap is needed.
 
 4. Restart API (schema capability is cached); verify readiness, sources, unknown freshness and unchanged original fingerprints. Keep scheduler disabled.
-5. After separate live acquisition authorization, validate private SEC contact and cached encoder; perform one-company discovery-only dry-run followed by a small canary:
+5. After separate live acquisition authorization, validate private SEC contact and cached encoder; perform one-company discovery-only dry-run followed by a small canary. The narrowly authorized AAPL publication must use the opt-in gate below rather than the unrestricted example:
 
 ```powershell
 .venv/Scripts/python.exe -m scripts.refresh_data --ticker AAPL --dry-run --allow-network --report reports/canary-discovery.json
@@ -120,6 +120,50 @@ metadata or start another stream; `refresh_busy_or_lock_lost` can accompany a
 confirmed rollback. Its original running attempt is retained for the next
 controlled coordinator to mark interrupted, rather than being rewritten without
 ownership. Use the run UUID and ledger before deciding which streams to retry.
+
+## Exact AAPL publication scope
+
+Offline implementation: [scope gate plan](exec-plans/completed/2026-10-10-canary-source-authorization.md).
+Independent code review and live acceptance remain required. Proposed command
+for separately authorized execution, **not executed by this fix**:
+
+```powershell
+Set-Location D:\Projects\finlens-foundation\backend
+$env:HF_HUB_OFFLINE = '1'
+$env:TRANSFORMERS_OFFLINE = '1'
+$env:HF_DATASETS_OFFLINE = '1'
+$env:HF_HUB_DISABLE_TELEMETRY = '1'
+$canaryStamp = Get-Date -Format 'yyyyMMdd_HHmmss_fffffff'
+$canaryReport = "reports/canary-$canaryStamp-publication.json"
+& .\.venv\Scripts\python.exe -B -m scripts.refresh_data --ticker AAPL --stream both --publication-scope aapl-10k-2025 --allow-network --max-filings 1 --max-seconds 300 --max-run-seconds 600 --report $canaryReport
+if ($LASTEXITCODE -ne 0) { throw 'Stop; reconcile report and ledger. Do not retry.' }
+```
+
+Use the accepted pinned Core/Docker/Python procedure and fresh monitoring session.
+The named profile requires AAPL/CIK `0000320193`, both streams, one filing and
+300/600-second maximum budgets. Under admission it acquires/copies both metadata
+sources once, validates conflicts and **zero** new supported facts, and requires
+the complete selected inventory to be exactly the authorized 10-K
+`0000320193-25-000079` (2025-10-31, `aapl-20250927.htm`) plus the already published,
+complete 10-Q `0000320193-26-000020` (2026-07-31, `aapl-20260627.htm`). Amendments,
+competing/incomplete/changed scope, already published/partially stored targets,
+and unsettled running attempts fail before any persistent write.
+
+Reports retain validated source digests; execution reuses the captured sources
+without metadata refetch. Raw envelope/header and primary document identities
+must match the pin before embedding. Guarded facts publication uses only a dry
+merge and cannot insert facts; evidence scope is rechecked at stream entry and
+publication. A guarded stream failure stops subsequent streams. Once the initial
+gate passes, ordinary separate stream commits still apply: a facts no-change check
+may commit before raw/evidence failure. Such later failures may record metadata;
+an initial scope rejection does not. Reconcile uncertain outcomes; do not retry.
+
+The two SEC responses are sequential, not an atomic upstream snapshot. Supported
+writers share admission; unmanaged SQL must remain excluded operationally.
+Soft resource limits and cooperative deadlines are unchanged (preflight consumes
+the facts-stream budget). Without this opt-in, ordinary refresh defaults, scope
+and recovery are unchanged. A separate dry-run neither pins nor authorizes the
+sources acquired by a later invocation.
 
 ## Scheduling: disabled
 

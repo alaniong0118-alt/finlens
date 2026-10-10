@@ -22,7 +22,11 @@ def main(argv=None):
     parser.add_argument("--max-seconds", type=int, default=300)
     parser.add_argument("--max-run-seconds", type=int, default=1800)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--publication-scope", choices=("aapl-10k-2025",),
+                        help="Opt-in zero-new-facts/exact-accession pre-write canary authorization gate.")
     args = parser.parse_args(argv)
+    if args.publication_scope and (args.all or args.bootstrap or args.show_run):
+        parser.error("Publication scope requires explicit --ticker AAPL; bootstrap/show-run/all are excluded.")
     if not args.bootstrap and not args.show_run and not args.allow_network:
         print("SEC acquisition is disabled. Use --allow-network only after live rollout authorization.", file=sys.stderr)
         return 2
@@ -46,7 +50,7 @@ def main(argv=None):
             tickers = list(session.scalars(select(Company.ticker))) if args.all else args.ticker
         request = RefreshRequest(tickers=tickers, stream=args.stream, dry_run=args.dry_run,
                                  max_filings=args.max_filings, max_seconds=args.max_seconds,
-                                 max_run_seconds=args.max_run_seconds)
+                                 max_run_seconds=args.max_run_seconds, publication_scope=args.publication_scope)
         if args.bootstrap:
             if not args.all:
                 raise ValueError("Bootstrap requires --all; it validates the complete stored inventory.")

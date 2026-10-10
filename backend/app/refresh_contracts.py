@@ -2,7 +2,7 @@
 from datetime import date, datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Stream = Literal["facts", "evidence"]
 Status = Literal["unknown", "pending", "current", "stale", "failed"]
@@ -52,6 +52,16 @@ class RefreshRequest(BaseModel):
     max_filings: int = Field(default=2, ge=1, le=10)
     max_seconds: int = Field(default=300, ge=1, le=1800)
     max_run_seconds: int = Field(default=1800, ge=1, le=14400)
+    publication_scope: Literal["aapl-10k-2025"] | None = None
+
+    @model_validator(mode="after")
+    def validate_publication_scope(self):
+        if self.publication_scope and (
+            self.tickers != ["AAPL"] or self.stream != "both" or self.max_filings != 1
+            or self.max_seconds > 300 or self.max_run_seconds > 600
+        ):
+            raise ValueError("AAPL scope requires only AAPL, both streams, one filing and 300/600-second maximum budgets.")
+        return self
 
 
 class RefreshResult(BaseModel):

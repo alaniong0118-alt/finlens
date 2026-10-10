@@ -1,6 +1,6 @@
 # One-company SEC Live Canary
 
-Status: active — offline plan prepared; execution awaits separate authorization.
+Status: active — scoped publication blocked; source-gate fix awaits independent review.
 Roadmap phase: Data Freshness rollout, not a new feature milestone.
 
 ## Objective
@@ -101,13 +101,19 @@ is no unlimited historical archive crawl in this refresh path.
 
 Recheck identities, backup, disk/resource gates, admission and baseline before
 write. Inspect discovery scope: a one-filing cap does not bound full Company
-Facts merge size. Approve its observed fact delta and target filing scope before
-publication; stop for unexpectedly large/unreviewable changes.
+Facts merge size. The narrow AAPL authorization requires the
+[opt-in source gate](../../data-freshness.md#exact-aapl-publication-scope): both
+fresh metadata sources must be validated before the first persistent write,
+with zero new facts and only the exact authorized 10-K missing. The command
+must retain that same validated source snapshot; an earlier dry-run is insufficient.
+The offline fix requires independent Astra review before live execution.
 
 ```powershell
 $env:HF_HUB_OFFLINE = '1'
 $env:TRANSFORMERS_OFFLINE = '1'
-& $canaryPython -m scripts.refresh_data --ticker AAPL --stream both --allow-network --max-filings 1 --max-seconds 300 --max-run-seconds 600 --report $canaryPublication
+$env:HF_DATASETS_OFFLINE = '1'
+$env:HF_HUB_DISABLE_TELEMETRY = '1'
+& $canaryPython -B -m scripts.refresh_data --ticker AAPL --stream both --publication-scope aapl-10k-2025 --allow-network --max-filings 1 --max-seconds 300 --max-run-seconds 600 --report $canaryPublication
 if ($LASTEXITCODE -ne 0) { throw 'Refresh non-success/pending: inspect report and durable ledger; do not retry.' }
 Copy-Item -LiteralPath $canaryPublication -Destination $canaryEvidence -ErrorAction Stop
 ```
@@ -183,6 +189,11 @@ authorization, target-identity and downtime requirements.
 - Unknown legacy freshness is correct; deployment acceptance is not live freshness.
 - Historical AAPL Research HTTP 500 is currently not reproducible. No causal
   attribution or code fix is warranted; see the recorded incident in Data Freshness.
+- 2026-10-10: Publication stopped before launch (zero refresh/SEC/write operations):
+  the unrestricted CLI could merge facts before evidence discovery, and count caps
+  could not pin the target. The [bounded offline gate fix](../completed/2026-10-10-canary-source-authorization.md)
+  adds a named source authorization profile. No live publication or no-op follow-up
+  is claimed; accepted backup/monitoring evidence remains outside Git.
 
 ## Progress, validation and completion criteria
 

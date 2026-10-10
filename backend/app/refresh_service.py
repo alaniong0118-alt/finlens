@@ -23,6 +23,8 @@ from app.sec_importer import METRIC_SOURCES, FinancialSyncError, build_metric_da
 from app.sec_client import FilingMetadata, build_filing_url, get_company_facts, get_filing_raw_text
 from app.sec_parser import extract_filing_text, chunk_filing_text
 from app.embedding_service import MODEL_NAME, embed_texts, validate_embedding
+from app.refresh_scope import (CIK as CANARY_CIK, PinnedCanarySources, SourceScopeError,
+    pin_sources, require as scope_require, validate_inventory, validate_raw_submission)
 
 CONFIGURATION = f"parser-v1/chunk-2500-overlap-250/{MODEL_NAME}"
 COORDINATOR_LOCK = (1 << 44) + 613
@@ -302,13 +304,27 @@ def refresh(factory, request: RefreshRequest, *, facts_loader=get_company_facts,
               "started_at": utcnow().isoformat(), "companies": [], "error": None, "openai_calls": 0}
     run_deadline = time.monotonic() + request.max_run_seconds
     try:
+        # Detach/revalidate opt-in constraints before any callback can mutate the
+        # caller's request. Ordinary refresh retains its existing behavior.
+        if request.publication_scope:
+            request = RefreshRequest.model_validate(request.model_dump())
+            report["source_authorization"] = {"scope": request.publication_scope, "status": "not_validated"}
         with coordinator(factory) as owned:
             with factory() as session:
                 catalog = dict(session.execute(select(Company.ticker, Company.cik)).all())
             tickers = sorted({t.upper().strip() for t in request.tickers})
             if any(t not in catalog for t in tickers):
                 raise FinancialSyncError("unknown_ticker")
-            if not request.dry_run:
+            pinned, facts_deadline = None, None
+            if request.publication_scope:
+                facts_deadline = min(run_deadline, time.monotonic() + request.max_seconds)
+                pinned = pin_sources(factory, catalog, facts_loader, inventory_loader, observations, reject_conflicts)
+                scope_require(time.monotonic() < facts_deadline, "canary_preflight_budget_exceeded")
+                owned()
+                report["source_authorization"] = pinned.evidence()
+            # Guarded runs reject unsettled attempts without modifying them;
+            # ordinary refresh keeps its existing abandoned-worker recovery.
+            if not request.dry_run and not request.publication_scope:
                 with publication_session(factory, owned) as s, s.begin():
                     for abandoned in s.scalars(select(RefreshAttempt).where(RefreshAttempt.status == "running")):
                         abandoned.status, abandoned.finished_at = "interrupted", utcnow()
@@ -324,7 +340,8 @@ def refresh(factory, request: RefreshRequest, *, facts_loader=get_company_facts,
                         break
                     owned()
                     result = refresh_stream(factory, ticker, catalog[ticker], stream, request, report["run_id"],
-                        owned, facts_loader, inventory_loader, raw_loader, encoder, run_deadline)
+                        owned, facts_loader, inventory_loader, raw_loader, encoder, run_deadline,
+                        pinned=pinned, source_deadline=facts_deadline if stream == "facts" else None)
                     report["companies"].append(result.model_dump(mode="json"))
                     if result.error == "database_or_failure_report_unavailable":
                         report["error"] = "database_unavailable"
@@ -339,14 +356,32 @@ def refresh(factory, request: RefreshRequest, *, facts_loader=get_company_facts,
                             report["error"] = "report_checkpoint_failed_use_database_ledger"
                     if result.status == "interrupted":
                         report["error"] = "interrupted"
+                    if request.publication_scope and result.status not in {"no_change", "updated", "would_update"}:
+                        report["error"] = report["error"] or result.error or "canary_stream_not_successful"
                     if report["error"]:
                         break
                 if report["error"]:
                     break
     except RefreshBusy:
         report["error"] = "refresh_busy_or_lock_lost"
+    except SourceScopeError as exc:
+        report["error"] = str(exc)
+        authorization = report.setdefault("source_authorization", {"scope": request.publication_scope})
+        if authorization.get("status") != "validated":
+            authorization["status"] = "rejected"
+        authorization["rejection_reason"] = str(exc)
+    except FinancialSyncError as exc:
+        if request.publication_scope:
+            report["error"] = str(exc)  # This exception class contains public codes only.
+            report["source_authorization"].update(status="rejected", rejection_reason=str(exc))
+        else:
+            report["error"] = "refresh_configuration_or_database_failed"
+    except KeyboardInterrupt:
+        report["error"] = "interrupted"
     except Exception:
         report["error"] = "refresh_configuration_or_database_failed"
+        if request.publication_scope and report.get("source_authorization", {}).get("status") == "not_validated":
+            report["source_authorization"].update(status="rejected", rejection_reason="canary_preflight_failed")
     report["finished_at"] = utcnow().isoformat()
     report["not_processed"] = [{"ticker": ticker, "stream": stream}
         for ticker in sorted({t.upper().strip() for t in request.tickers})
@@ -360,9 +395,18 @@ def refresh(factory, request: RefreshRequest, *, facts_loader=get_company_facts,
     return report
 
 
-def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_loader, inventory_loader, raw_loader, encoder, run_deadline=None):
+def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_loader, inventory_loader, raw_loader, encoder, run_deadline=None,
+                   *, pinned: PinnedCanarySources | None = None, source_deadline=None):
     started, deadline, attempt_id = utcnow(), time.monotonic() + request.max_seconds, str(uuid4())
     deadline = min(deadline, run_deadline) if run_deadline is not None else deadline
+    deadline = min(deadline, source_deadline) if source_deadline is not None else deadline
+    if request.publication_scope:
+        scope_require(pinned is not None and ticker == "AAPL" and cik == CANARY_CIK,
+                      "canary_pinned_sources_required")
+        # This is still before stream attempt/state writes. The admission lock
+        # excludes supported writers; recheck against accidental external drift.
+        with factory() as s:
+            validate_inventory(s, pinned.filings()["filings"])
     result = RefreshResult(ticker=ticker, stream=stream, status="failed",
                            inserted_by_metric={m: 0 for m in METRIC_SOURCES} if stream == "facts" else {})
     stage = "discovery"
@@ -379,7 +423,7 @@ def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_l
                 s.add(RefreshAttempt(id=attempt_id, run_id=run_id, company_cik=cik, stream=stream,
                     status="running", started_at=started, details={}))
         if stream == "facts":
-            payload = facts_loader(cik)
+            payload = pinned.facts() if pinned else facts_loader(cik)
             candidates = observations(cik, payload)
             latest = max((r["filed"] for r in candidates), default=None)
             source_digest = hashlib.sha256(json.dumps(sorted(str(fact_identity(r)) for r in candidates)).encode()).hexdigest()
@@ -387,11 +431,13 @@ def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_l
                 reject_conflicts(s, cik, candidates)
                 provisional = merge_company_facts(s, cik, payload, dry_run=True)
             result.would_insert = provisional["would_insert"]
+            if pinned:
+                scope_require(result.would_insert == 0, "canary_new_facts_forbidden")
             targets, complete, staged = [], bool(candidates), []
             if not complete:
                 result.pending_targets = ["supported_company_facts_unavailable"]
         else:
-            inventory = inventory_loader(cik)
+            inventory = pinned.filings() if pinned else inventory_loader(cik)
             targets = inventory["filings"]
             complete = inventory["complete"]
             latest = max((m.filed for m in targets), default=None)
@@ -407,7 +453,12 @@ def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_l
                     if time.monotonic() > deadline:
                         raise TimeoutError()
                     with factory() as s:
-                        chunks, cleaned = stage_filing(s, cik, m, encoder, raw_loader, deadline)
+                        def authorized_raw(source_cik, accession):
+                            raw = raw_loader(source_cik, accession)
+                            if pinned:
+                                validate_raw_submission(raw, source_cik, accession)
+                            return raw
+                        chunks, cleaned = stage_filing(s, cik, m, encoder, authorized_raw, deadline)
                     staged.append((chunks, cleaned))
             result.would_insert = len(missing)
         if time.monotonic() > deadline:
@@ -420,9 +471,15 @@ def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_l
             state = state_row(s, cik)
             if stream == "facts":
                 reject_conflicts(s, cik, candidates)
-                merged = merge_company_facts(s, cik, payload, publish=False)
+                # The guarded facts stream is physically incapable of adding
+                # facts: its transaction only performs the existing dry merge.
+                merged = merge_company_facts(s, cik, payload, dry_run=bool(pinned), publish=False)
+                if pinned:
+                    scope_require(merged["would_insert"] == 0, "canary_new_facts_forbidden")
                 changed = merged["facts_inserted"] > 0
             else:
+                if pinned:
+                    validate_inventory(s, pinned.filings()["filings"])
                 changed = bool(staged)
             if changed:
                 state.data_version += 1
