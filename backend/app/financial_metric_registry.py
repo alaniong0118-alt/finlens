@@ -1,5 +1,7 @@
 """Canonical definitions and explicitly reviewed revenue economic scopes."""
 from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,40 @@ REVENUE_CONCEPTS = {
 # No cross-basis equivalence is established by this dataset or by taxonomy
 # labels alone. Future reviewed declarations belong here, never in ticker rules.
 REVENUE_EQUIVALENCES: frozenset[frozenset[str]] = frozenset()
+
+
+@dataclass(frozen=True)
+class GrossMarginCoverage:
+    """Manually verified consolidated input pair; never an issuer-wide alias."""
+    company_cik: str
+    accession: str
+    start: date
+    end: date
+    revenue_concept: str
+    gross_profit_concept: str
+    revenue: Decimal
+    gross_profit: Decimal
+    unit: str
+    form: str
+    filed: date
+    evidence: str
+
+
+# Local condensed consolidated statement, chunk_0001, in millions:
+# total net sales 109,417 - total cost of sales 54,647 = gross margin 54,770.
+# Pin the reviewed observation, not all Apple periods or customer-contract tags.
+# New periods, amendments or changed values require a new coverage review.
+GROSS_MARGIN_COVERAGE = (
+    GrossMarginCoverage(
+        company_cik="0000320193", accession="0000320193-26-000020",
+        start=date(2026, 3, 29), end=date(2026, 6, 27),
+        revenue_concept="RevenueFromContractWithCustomerExcludingAssessedTax",
+        gross_profit_concept="GrossProfit", revenue=Decimal("109417000000"),
+        gross_profit=Decimal("54770000000"), unit="USD", form="10-Q",
+        filed=date(2026, 7, 31),
+        evidence="aapl-20260627.htm: condensed consolidated statements of operations, chunk_0001",
+    ),
+)
 
 
 def revenue_bases_compatible(left, right):

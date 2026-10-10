@@ -203,6 +203,148 @@ def test_aapl_like_same_filing_gross_profit_does_not_prove_revenue_scope(db):
     assert "scope" in point["reason"]
 
 
+def reviewed_aapl_inputs(db):
+    session, company = db
+    company.ticker, company.cik = "AAPL", "0000320193"
+    session.commit()
+    metadata = dict(start="2026-03-29", end="2026-06-27", filed=date(2026, 7, 31),
+                    accession_number="0000320193-26-000020", fiscal_year=2026,
+                    fiscal_period="Q3", frame="CY2026Q2")
+    revenue = add(db, "RevenueFromContractWithCustomerExcludingAssessedTax", "109417000000", **metadata)
+    gross_profit = add(db, "GrossProfit", "54770000000", **metadata)
+    return revenue, gross_profit
+
+
+def test_reviewed_aapl_consolidated_gross_margin_api_and_provenance(db):
+    from decimal import localcontext
+    revenue, gross_profit = reviewed_aapl_inputs(db)
+    response = TestClient(main.app).get("/companies/AAPL/financials/summary")
+    assert response.status_code == 200
+    metrics = response.json()["metrics"]
+    point = metrics["gross_margin"]
+    with localcontext() as context:
+        context.prec = 28
+        expected = Decimal("54770000000") / Decimal("109417000000")
+    assert point["status"] == "available" and Decimal(point["value"]) == expected
+    assert point["formula"] == "gross_profit / revenue"
+    assert {p["fact_id"] for p in point["provenance"]} == {revenue.id, gross_profit.id}
+    assert all(p["accession_number"] == "0000320193-26-000020" for p in point["provenance"])
+    assert {i["role"] for i in point["inputs"]} == {"gross_profit", "revenue"}
+    # Coverage approval must not leak into other margin/basis calculations.
+    add(db, "NetIncomeLoss", "100", start="2026-03-29", end="2026-06-27", filed=date(2026, 7, 31))
+    api = TestClient(main.app)
+    assert api.get("/companies/AAPL/financials/summary").json()["metrics"]["net_margin"]["value"] is None
+    assert api.get("/companies/AAPL/financials/summary?period=annual").json()["metrics"]["gross_margin"]["value"] is None
+
+
+@pytest.mark.parametrize("mismatch", [
+    "issuer", "revenue_concept", "gross_profit_concept", "revenue_value", "gross_profit_value",
+    "revenue_unit", "gross_profit_unit", "period", "gross_profit_accession", "both_accessions",
+    "filed", "form", "missing", "both_periods", "both_units",
+])
+def test_reviewed_aapl_gross_margin_fails_closed_on_changed_source_pair(db, mismatch):
+    revenue, gross_profit = reviewed_aapl_inputs(db)
+    session, company = db
+    if mismatch == "issuer":
+        company.cik = revenue.company_cik = gross_profit.company_cik = "0000000002"
+    elif mismatch.endswith("concept"):
+        row = revenue if mismatch.startswith("revenue") else gross_profit
+        row.source = "SEC Company Facts API: " + ("SalesRevenueNet" if row is revenue else "OperatingIncomeLoss")
+    elif mismatch.endswith("value"):
+        row = revenue if mismatch.startswith("revenue") else gross_profit
+        row.value += Decimal("1")
+    elif mismatch == "both_units":
+        revenue.unit = gross_profit.unit = "EUR"
+    elif mismatch.endswith("unit"):
+        (revenue if mismatch.startswith("revenue") else gross_profit).unit = "EUR"
+    elif mismatch == "period":
+        gross_profit.period_start = date(2026, 3, 30)
+    elif mismatch == "both_periods":
+        revenue.period_start = gross_profit.period_start = date(2026, 3, 30)
+    elif mismatch == "gross_profit_accession":
+        gross_profit.accession_number = "0000320193-26-000021"
+    elif mismatch == "both_accessions":
+        revenue.accession_number = gross_profit.accession_number = "0000320193-26-000021"
+    elif mismatch == "filed":
+        revenue.filed = gross_profit.filed = date(2026, 8, 1)
+    elif mismatch == "form":
+        revenue.form = gross_profit.form = "10-Q/A"
+    else:
+        session.delete(gross_profit)
+    session.commit()
+    point = TestClient(main.app).get("/companies/AAPL/financials/summary").json()["metrics"]["gross_margin"]
+    assert point["status"] == "unavailable" and point["value"] is None
+
+
+def test_total_revenue_gross_margin_rejects_cross_filing_pair(db):
+    add(db, "Revenues", "100")
+    add(db, "GrossProfit", "40", accession_number="0000000001-25-000002")
+    point = view(db).summary().metrics["gross_margin"]
+    assert point.value is None and "same filing accession" in point.reason
+
+
+@pytest.mark.parametrize("metric", ["revenue", "gross_profit"])
+@pytest.mark.parametrize("approved_last", [False, True])
+@pytest.mark.parametrize("identical", [False, True])
+def test_reviewed_aapl_candidate_values_independent_of_insertion_order(db, metric, approved_last, identical):
+    session, company = db
+    company.ticker, company.cik = "AAPL", "0000320193"
+    session.commit()
+    concept = "GrossProfit" if metric == "gross_profit" else "RevenueFromContractWithCustomerExcludingAssessedTax"
+    approved_value = "54770000000" if metric == "gross_profit" else "109417000000"
+
+    def competing_row():
+        return add(db, concept, approved_value if identical else "60000000000",
+                   start="2026-03-29", end="2026-06-27", filed=date(2026, 7, 31),
+                   accession_number="0000320193-26-000020", frame="CY2026Q2")
+
+    if approved_last:
+        competing = competing_row()
+    revenue, gross_profit = reviewed_aapl_inputs(db)
+    approved = gross_profit if metric == "gross_profit" else revenue
+    if not approved_last:
+        competing = competing_row()
+    assert (approved.id > competing.id) == approved_last
+    response = TestClient(main.app).get("/companies/AAPL/financials/summary")
+    assert response.status_code == 200
+    point = response.json()["metrics"]["gross_margin"]
+    if identical:
+        assert point["status"] == "available"
+        assert Decimal(point["value"]) == Decimal("0.5005620698794520047159033788")
+    else:
+        assert point["status"] == "unavailable" and point["value"] is None
+
+
+@pytest.mark.parametrize("metric", ["revenue", "gross_profit"])
+@pytest.mark.parametrize("context", ["company", "accession", "period", "unit", "concept", "filed"])
+def test_reviewed_aapl_conflict_guard_ignores_unrelated_observations(db, metric, context):
+    revenue, gross_profit = reviewed_aapl_inputs(db)
+    source = gross_profit if metric == "gross_profit" else revenue
+    fields = {column.name: getattr(source, column.name) for column in FinancialFact.__table__.columns
+              if column.name != "id"}
+    fields["value"] = Decimal("60000000000")
+    if context == "company":
+        fields["company_cik"] = "0000000002"
+    elif context == "accession":
+        fields["accession_number"] = "0000320193-26-000019"
+    elif context == "period":
+        fields["period_start"] = date(2026, 1, 1)
+        fields["period_end"] = date(2026, 3, 28)
+    elif context == "unit":
+        fields["unit"] = "EUR"
+    elif context == "concept":
+        fields["source"] = "SEC Company Facts API: OperatingIncomeLoss"
+    else:
+        fields["filed"] = date(2026, 7, 30)
+    # Lower ID for same-period older/contextual facts keeps normal selection fixed.
+    fields["id"] = 0
+    db[0].add(FinancialFact(**fields))
+    db[0].commit()
+    point = TestClient(main.app).get("/companies/AAPL/financials/summary").json()["metrics"]["gross_margin"]
+    assert point["status"] == "available"
+    assert Decimal(point["value"]) == Decimal("0.5005620698794520047159033788")
+
+
 def test_incompatible_period_inputs_not_combined(db):
     add(db)
     add(db, "NetIncomeLoss", "20", start="2025-01-02")

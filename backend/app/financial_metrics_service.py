@@ -5,7 +5,7 @@ import re
 
 from sqlalchemy import select
 
-from app.financial_metric_registry import METRICS, SELECTION_POLICY, REVENUE_CONCEPTS, revenue_bases_compatible
+from app.financial_metric_registry import METRICS, SELECTION_POLICY, REVENUE_CONCEPTS, GROSS_MARGIN_COVERAGE, revenue_bases_compatible
 from app.financial_metric_schemas import (
     FactProvenance, FinancialPeriod, MetricInput, NormalizedMetric,
     NormalizedFinancialSummary, NormalizedMetricHistory, HistoryComparability,
@@ -216,13 +216,51 @@ class FinancialMetrics:
                     "free_cash_flow": ("operating_cash_flow", "capital_expenditures")}[name]
         return self.calculate(name, [self.observation(n, period) for n in operands], period, list(operands))
 
+    def reviewed_gross_margin_scope(self, gross_profit, revenue):
+        """Exact source-pair authorization; no ticker or global basis exception."""
+        if len(gross_profit.provenance) != 1 or len(revenue.provenance) != 1:
+            return False
+        gp, rev = gross_profit.provenance[0], revenue.provenance[0]
+        for coverage in GROSS_MARGIN_COVERAGE:
+            if (self.company.cik == gp.company_cik == rev.company_cik == coverage.company_cik
+                    and gp.accession_number == rev.accession_number == coverage.accession
+                    and gp.period_start == rev.period_start == coverage.start
+                    and gp.period_end == rev.period_end == coverage.end
+                    and gp.unit == rev.unit == coverage.unit
+                    and gp.form == rev.form == coverage.form
+                    and gp.filed == rev.filed == coverage.filed
+                    and gp.original_concept == coverage.gross_profit_concept
+                    and rev.original_concept == coverage.revenue_concept
+                    and gross_profit.value == gp.value == coverage.gross_profit
+                    and revenue.value == rev.value == coverage.revenue):
+                # Inspect raw eligible candidates, independently of row-ID ranking.
+                # Calendar frames/fiscal labels are annotations, not extra scopes.
+                for name, source in (("gross_profit", gp), ("revenue", rev)):
+                    values = {f.value for f in self.facts
+                              if usable(f, METRICS[name])
+                              and original_concept(f) == source.original_concept
+                              and f.accession_number == source.accession_number
+                              and f.period_start == source.period_start
+                              and f.period_end == source.period_end
+                              and f.unit == source.unit
+                              and f.form == source.form and f.filed == source.filed}
+                    if values != {source.value}:
+                        return False
+                return True
+        return False
+
     def calculate(self, name, operands, period, roles):
         if any(p.status != "available" for p in operands):
             return self.missing(name, "Missing or invalid compatible inputs.", period)
         first, second = operands
+        if name == "gross_margin" and (
+                first.provenance[0].accession_number != second.provenance[0].accession_number):
+            return self.missing(name, "Gross profit and revenue must come from the same filing accession.", period)
         if name.endswith("margin"):
             concept = second.provenance[0].original_concept
             approved = REVENUE_CONCEPTS[concept].margin_denominator
+            if name == "gross_margin" and not approved:
+                approved = self.reviewed_gross_margin_scope(first, second)
             if not approved or (self.bank_revenue and second.revenue_basis != "net_interest"):
                 return self.missing(name, "Selected revenue scope does not establish an approved total/net-interest margin denominator.", period)
         if name != "free_cash_flow" and second.value <= 0:
