@@ -13,15 +13,30 @@ from app.models import FinancialFact
 CUSTOMER = "RevenueFromContractWithCustomerExcludingAssessedTax"
 CIK = "0000000001"
 COMPANY = SimpleNamespace(cik=CIK, ticker="TEST", name="Synthetic issuer")
+PRODUCTION_REGISTRIES = (
+    "REVENUE_SELECTION_AUTHORIZATIONS", "DENOMINATOR_AUTHORIZATIONS", "AUTHORIZATION_WITHDRAWALS",
+)
 
 
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch):
-    monkeypatch.setattr(auth, "REVENUE_SELECTION_AUTHORIZATIONS", ())
-    monkeypatch.setattr(auth, "DENOMINATOR_AUTHORIZATIONS", ())
-    monkeypatch.setattr(auth, "AUTHORIZATION_WITHDRAWALS", ())
+    # Check actual production contents before synthetic isolation can mask them.
+    for name in PRODUCTION_REGISTRIES:
+        assert getattr(auth, name) == (), f"{name} must be empty before synthetic test isolation."
+    for name in PRODUCTION_REGISTRIES:
+        monkeypatch.setattr(auth, name, ())
     from app.database import engine
     monkeypatch.setattr(engine, "connect", lambda *a, **k: pytest.fail("Database access forbidden"))
+
+
+@pytest.mark.parametrize("registry", PRODUCTION_REGISTRIES)
+def test_isolation_rejects_populated_production_registry_before_any_patch(monkeypatch, registry):
+    monkeypatch.setattr(auth, registry, (object(),))
+    attempted_patches = []
+    spy = SimpleNamespace(setattr=lambda *args: attempted_patches.append(args))
+    with pytest.raises(AssertionError, match=registry):
+        isolated.__wrapped__(spy)
+    assert attempted_patches == []
 
 
 def fact(number, concept=CUSTOMER, value="100", **changes):
