@@ -157,6 +157,52 @@ def test_margin_formulas_negative_earnings_and_denominators(db, revenue):
         assert point.unit == "ratio"
 
 
+@pytest.mark.parametrize("ticker", ["TSLA", "AAPL", "AMZN", "COST"])
+def test_gross_margin_valid_authoritative_inputs_are_not_ticker_specific(db, ticker):
+    """Compatible synthetic inputs, not a claim of current issuer coverage."""
+    session, company = db
+    company.ticker = ticker
+    session.commit()
+    revenue = add(db, "Revenues", "100")
+    gross_profit = add(db, "GrossProfit", "40")
+    response = TestClient(main.app).get(f"/companies/{ticker}/financials/summary")
+    assert response.status_code == 200
+    point = response.json()["metrics"]["gross_margin"]
+    assert point["status"] == "available" and Decimal(point["value"]) == Decimal(".4")
+    assert {p["fact_id"] for p in point["provenance"]} == {revenue.id, gross_profit.id}
+
+
+@pytest.mark.parametrize("case", ["missing", "period", "unit", "old_period"])
+def test_gross_margin_rejects_missing_or_incompatible_gross_profit(db, case):
+    add(db, "Revenues", "100")
+    if case != "missing":
+        kwargs = {"period": {"start": "2025-01-02"},
+                  "unit": {"unit": "EUR"},
+                  "old_period": {"start": "2024-01-01", "end": "2024-03-31"}}[case]
+        add(db, "GrossProfit", "40", **kwargs)
+    point = TestClient(main.app).get("/companies/TEST/financials/summary").json()["metrics"]["gross_margin"]
+    assert point["status"] == "unavailable" and point["value"] is None
+    assert point["provenance"] == []
+
+
+@pytest.mark.parametrize("concept", ["OperatingExpenses", "CostsAndExpenses", "OperatingIncomeLoss",
+                                     "CostOfRevenue", "CostOfGoodsAndServicesSold"])
+def test_gross_margin_does_not_use_unreviewed_cost_or_expense_fallbacks(db, concept):
+    add(db, "Revenues", "100")
+    add(db, concept, "60")
+    point = view(db).summary().metrics["gross_margin"]
+    assert point.status == "unavailable" and point.value is None
+
+
+def test_aapl_like_same_filing_gross_profit_does_not_prove_revenue_scope(db):
+    """Matching period/unit/accession alone must not waive economic coverage."""
+    add(db, "RevenueFromContractWithCustomerExcludingAssessedTax", "109417000000")
+    add(db, "GrossProfit", "54770000000")
+    point = TestClient(main.app).get("/companies/TEST/financials/summary").json()["metrics"]["gross_margin"]
+    assert point["status"] == "unavailable" and point["value"] is None
+    assert "scope" in point["reason"]
+
+
 def test_incompatible_period_inputs_not_combined(db):
     add(db)
     add(db, "NetIncomeLoss", "20", start="2025-01-02")

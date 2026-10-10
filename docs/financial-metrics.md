@@ -65,6 +65,25 @@ YoY additionally requires compatible revenue bases. All three margins require an
 
 The payments definition requires positive outflows; negative payment observations are unavailable, never converted with `abs`. Item 7 retained 3,296 CapEx observations across 25 issuers, including nine negative observations. Their presence does not authorize changing the convention. A new CapEx concept/sign convention needs explicit review before adoption. Missing inputs, incompatible periods/units and zero/negative denominators return null with a reason.
 
+### Gross Margin local-data diagnosis (2026-10-10)
+
+Read-only diagnosis at Git baseline `eae5c9f`; no ingestion or metric-selection changes. The service currently uses reported `GrossProfit / revenue`, equivalent to `(revenue - cost_of_revenue) / revenue` only when economic coverage is compatible. No cost-of-revenue observations are stored for the four issuers below; cost concepts are not currently imported by the registry-driven sync.
+
+| Issuer | Latest direct quarter | Stored revenue (USD) | Stored GrossProfit (USD) | Result / cause |
+|---|---|---:|---:|---|
+| TSLA | 2026-04-01–2026-06-30 | 28,236,000,000 (`Revenues`) | 4,751,000,000 | Available: 16.8260%; approved total-revenue denominator. |
+| AAPL | 2026-03-29–2026-06-27 | 109,417,000,000 (`RevenueFromContractWithCustomerExcludingAssessedTax`) | 54,770,000,000 | Scope safeguard rejects the customer-contract denominator; inputs otherwise match dates, USD and accession. |
+| AMZN | 2026-04-01–2026-06-30 | 200,606,000,000 (customer-contract concept) | Missing | Stored GrossProfit ends 2009-12-31; no current compatible numerator or costs. |
+| COST | 2026-02-16–2026-05-10 | 70,527,000,000 (customer-contract concept) | Missing | Stored GrossProfit ends 2019-09-01; no current compatible numerator or costs. |
+
+AAPL inputs share accession `0000320193-26-000020`. Local `chunk_0001` contains the consolidated statement: total net sales 109,417, total cost of sales 54,647 and gross margin 54,770 (millions). This supports a manual source-traced calculation of approximately 50.0562%, but the table text is not a normalized cost fact or a machine-readable economic-scope declaration. The service deliberately does not parse excerpts into new financial inputs or waive scope checks based on matching numbers/accessions. AAPL annual FY2025 also has matching USD revenue 416,161,000,000 and GrossProfit 195,201,000,000, rejected for the same scope reason.
+
+AMZN FY2025 revenue is 716,924,000,000; COST FY2025 total `Revenues` is 275,235,000,000. Both lack matching annual GrossProfit. Changing aliases alone cannot create these missing observations. No operating/total expenses or operating income may substitute for cost of revenue. `FinancialFact` stores concept, dates, unit, fiscal metadata, frame and accession, but no explicit XBRL dimensional context; unknown coverage must not be treated as proven compatible.
+
+The four live summary endpoints returned HTTP 200 with these backend states. Research UI displays the returned status/reason without computing margins. Smallest future remediation: reviewed, provenance-backed scope support for AAPL's reported gross-profit denominator; for AMZN/COST, separately authorized acquisition of exact-period authoritative gross profit or cost-of-revenue observations plus reviewed revenue/cost scope compatibility. COST membership revenue versus merchandise costs needs explicit treatment. Do not enable customer-contract denominators globally or reuse old gross-profit periods.
+
+Permanent isolated API/service regressions cover compatible total-revenue/GrossProfit inputs for all four ticker labels (synthetic fixtures, not real coverage), missing/wrong-period/wrong-unit inputs, rejected unreviewed expense/cost fallbacks, and AAPL-like same-filing scope rejection. Validation: `backend/.venv/Scripts/python.exe -B -m pytest tests/test_financial_metrics.py -q` from `backend`: **80 passed**. No production logic or database data changed.
+
 ## Provenance and financial institutions
 
 Base observations expose canonical metric, selected fact ID, original concept, original value/unit, CIK, source label, stored period metadata, source fiscal labels, frame, filed date, form, accession, creation time and the server-built SEC filing URL. Creation time describes local storage, not refresh time. Alternative valid candidates remain visible. Derived observations expose formula, input roles/values/units/periods/fact IDs and the selected input provenance.
