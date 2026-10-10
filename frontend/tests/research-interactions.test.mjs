@@ -155,7 +155,7 @@ function point(ticker, value, metric = 'revenue', kind = 'quarter') {
 }
 function summary(ticker, value, kind = 'quarter') {
   const revenue = point(ticker, value, 'revenue', kind);
-  return { ticker, company_name: `${ticker} fixture`, requested_period: kind, period: revenue.period,
+  return { ticker, company_cik: companies.find(company => company.ticker === ticker).cik, company_name: `${ticker} fixture`, requested_period: kind, period: revenue.period,
     metrics: { revenue }, selection_policy: 'test fixture' };
 }
 function history(ticker, value, metric = 'revenue') {
@@ -194,7 +194,7 @@ async function mount(ctx, configured = false, catalog = companies) {
     assert.ok(found, `Expected pending request ${path} ${JSON.stringify(params)}`);
     return found;
   }
-  async function release(item, payload, status = 200, version = null) {
+  async function release(item, payload, status = 200, version = item.init.headers?.['X-FinLens-Data-Version'] ?? null) {
     assert.equal(item.released, false); item.released = true;
     await act(async () => item.resolve(new Response(JSON.stringify(payload), {
       status, headers: { 'Content-Type': 'application/json', ...(version !== null ? { 'X-FinLens-Data-Version': String(version) } : {}), ...(status === 502 ? { 'X-FinLens-Error-Code': 'UPSTREAM_FAILURE' } : {}) },
@@ -611,6 +611,154 @@ async function focusCheck() {
   await act(async () => window.dispatchEvent(new Event('focus')));
 }
 const latestRequest = (app, path) => app.requests.filter(item => !item.released && item.path === path).at(-1);
+
+const cashMetrics = ['operating_cash_flow', 'capital_expenditures', 'free_cash_flow'];
+function cashSnapshot(ticker, kind = 'quarter', values = {}) {
+  const result = summary(ticker, '1000000000', kind);
+  result.period = { ...result.period, end: { quarter: '2025-03-31', half_year: '2025-06-30', nine_months: '2025-09-30', annual: '2025-12-31' }[kind] };
+  result.metrics.revenue.period = result.period;
+  for (const metric of cashMetrics) {
+    const value = values[metric];
+    result.metrics[metric] = { ...point(ticker, value ?? null, metric, kind), period: result.period,
+      status: value == null ? 'unavailable' : 'available', reason: value == null ? 'No compatible inputs for this period.' : null };
+  }
+  return result;
+}
+const cashHints = app => [...app.snapshot().querySelectorAll('.cash-flow-alternative')];
+
+test('mounted cash-flow alternatives confirm YTD, preserve quarter values and reuse the existing selector/cache', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  assert.equal(cashHints(app).length, 0, 'No speculative hints before the response');
+  const half = app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' });
+  assert.equal(half.init.headers['X-FinLens-Data-Version'], '0');
+  await app.release(half, cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '800000000', capital_expenditures: '200000000', free_cash_flow: '600000000' }), 200, 0);
+  assert.equal(cashHints(app).length, 3);
+  assert.match(cashHints(app)[0].textContent, /Operating cash flow.*Half-year YTD.*Jun 30, 2025/);
+  assert.match(app.snapshot().querySelector('.period-label').textContent, /^Direct quarter/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+  assert.match(app.snapshot().querySelector('.metric-grid').textContent, /Revenue\$1B/);
+  assert.deepEqual([...app.select('Snapshot period').options].map(option => option.value), ['quarter', 'half_year', 'nine_months', 'annual']);
+  const count = app.requests.length;
+  await app.change(app.select('Snapshot period'), 'half_year');
+  assert.equal(app.requests.length, count, 'Selecting a confirmed mode reuses its snapshot');
+  assert.equal(cashHints(app).length, 0);
+  assert.match(app.snapshot().querySelector('.period-label').textContent, /^Half-year YTD.*Jun 30, 2025/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flow\$600M/);
+  await app.change(app.select('Snapshot period'), 'quarter');
+  assert.equal(app.requests.length, count, 'Returning to quarter does not refetch or rediscover');
+  assert.equal(cashHints(app).length, 3);
+  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+});
+
+test('mounted cash-flow alternatives ignore invalid values/units/periods and failed or wrong-company responses', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  const invalid = cashSnapshot('AAPL', 'half_year', { operating_cash_flow: 'NaN', capital_expenditures: '20', free_cash_flow: '60' });
+  invalid.metrics.capital_expenditures.unit = 'USD/shares';
+  invalid.metrics.free_cash_flow.period = { ...invalid.period, kind: 'quarter' };
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' }), invalid);
+  assert.equal(cashHints(app).length, 0);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'nine_months' }), cashSnapshot('JPM', 'nine_months', { free_cash_flow: '99' }));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), { detail: 'Unavailable' }, 503);
+  assert.equal(cashHints(app).length, 0);
+  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+  assert.match(app.snapshot().textContent, /Revenue\$1B/);
+  assert.ok(!app.snapshot().querySelector('[role="alert"]'), 'Optional lookup failure preserves the main snapshot');
+});
+
+test('mounted cash-flow alternatives find annual data only after unavailable YTD modes without automatically switching', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL', 'quarter', { operating_cash_flow: '80', capital_expenditures: '20' }));
+  for (const mode of ['half_year', 'nine_months']) {
+    await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: mode }), cashSnapshot('AAPL', mode));
+    assert.equal(cashHints(app).length, 0);
+  }
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), cashSnapshot('AAPL', 'annual', { free_cash_flow: '600000000' }));
+  assert.equal(cashHints(app).length, 1);
+  assert.match(cashHints(app)[0].textContent, /Free cash flow.*Annual.*Dec 31, 2025/);
+  assert.equal(app.select('Snapshot period').value, 'quarter');
+  const count = app.requests.length;
+  await app.change(app.select('Snapshot period'), 'annual');
+  assert.equal(app.requests.length, count);
+  assert.match(app.snapshot().querySelector('.period-label').textContent, /^Annual/);
+});
+
+test('mounted available cash-flow metrics do not trigger alternative requests', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL', 'quarter', { operating_cash_flow: '80', capital_expenditures: '20', free_cash_flow: '60' }));
+  assert.equal(cashHints(app).length, 0);
+  assert.equal(app.requests.filter(item => item.path.endsWith('/financials/summary')).length, 1);
+});
+
+test('mounted cash-flow alternatives require a confirmed published version', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  for (const mode of ['half_year', 'nine_months', 'annual']) {
+    await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: mode }), cashSnapshot('AAPL', mode, { operating_cash_flow: '80', capital_expenditures: '20', free_cash_flow: '60' }), 200, null);
+  }
+  assert.equal(cashHints(app).length, 0);
+  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+});
+
+test('mounted selecting an alternative while discovery is pending shares its request without stale hints', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  const pending = app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' });
+  const count = app.requests.length;
+  await app.change(app.select('Snapshot period'), 'half_year');
+  assert.equal(app.requests.length, count);
+  assert.equal(pending.init.signal.aborted, false);
+  await app.release(pending, cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '800000000', capital_expenditures: '200000000', free_cash_flow: '600000000' }));
+  assert.match(app.snapshot().querySelector('.period-label').textContent, /^Half-year YTD/);
+  assert.equal(cashHints(app).length, 0);
+  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Operating cash flow\$800M.*Capital expenditures\$200M.*Free cash flow\$600M/);
+});
+
+test('mounted delayed alternative responses cannot cross companies', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  const old = app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' });
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  await app.completeCompany('JPM', '2000000000');
+  assert.equal(old.init.signal.aborted, true);
+  await app.release(old, cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '80', capital_expenditures: '20', free_cash_flow: '60' }));
+  assert.equal(cashHints(app).length, 0);
+  assert.match(app.snapshot().textContent, /Revenue\$2B/);
+});
+
+test('mounted alternative hints and cache invalidate on version changes and reject delayed old responses', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' }), cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '80' }), 200, 0);
+  assert.equal(cashHints(app).length, 1);
+  const old = app.request(companyPath('AAPL', 'financials/summary'), { period: 'nine_months' });
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.equal(cashHints(app).length, 0);
+  assert.equal(old.init.signal.aborted, true);
+  await app.release(old, cashSnapshot('AAPL', 'nine_months', { capital_expenditures: '20', free_cash_flow: '60' }), 200, 0);
+  const freshQuarter = app.request(companyPath('AAPL', 'financials/summary'), { period: 'quarter' });
+  assert.equal(freshQuarter.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(freshQuarter, cashSnapshot('AAPL'), 200, 1);
+  for (const mode of ['half_year', 'nine_months', 'annual']) {
+    const request = app.request(companyPath('AAPL', 'financials/summary'), { period: mode });
+    assert.equal(request.init.headers['X-FinLens-Data-Version'], '1');
+    await app.release(request, cashSnapshot('AAPL', mode), 200, 1);
+  }
+  assert.equal(cashHints(app).length, 0, 'Old confirmed availability is not reused for version 1');
+});
+
+test('mounted alternative responses with a different published version cannot confirm hints', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' }), cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '80', capital_expenditures: '20', free_cash_flow: '60' }), 200, 1);
+  assert.equal(cashHints(app).length, 0);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.equal(cashHints(app).length, 0);
+});
 
 test('mounted published-version change rejects delayed old summary history and sources', async ctx => {
   const app = await mount(ctx);

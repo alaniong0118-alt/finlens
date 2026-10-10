@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { describeApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
   type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
@@ -7,6 +7,31 @@ import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, 
   periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS } from "@/lib/research";
 
 import { useResearchVersion } from "@/components/research-freshness";
+
+const CASH_FLOW_METRICS = ["operating_cash_flow", "capital_expenditures", "free_cash_flow"];
+const ALTERNATIVE_PERIODS: PeriodKind[] = ["half_year", "nine_months", "annual"];
+type SnapshotScope = {
+  ticker: string; cik: string; version: number; controller: AbortController;
+  changed: () => void;
+  responses: Map<PeriodKind, { response: Promise<FinancialSummary>; controller: AbortController; settled: boolean }>;
+};
+function snapshotFor(scope: SnapshotScope, period: PeriodKind) {
+  let entry = scope.responses.get(period);
+  if (!entry) {
+    const controller = versionedController(scope.version, scope.changed);
+    scope.controller.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    const created = { controller, settled: false, response: getFinancialSummary(scope.ticker, period, controller.signal, true).then(result => {
+      if (controller.signal.aborted) throw new DOMException("Request cancelled", "AbortError");
+      if (result.ticker !== scope.ticker || result.company_cik !== scope.cik || result.requested_period !== period) {
+        throw new Error("Financial snapshot does not match this company and period.");
+      }
+      return result;
+    }).finally(() => { created.settled = true; }) };
+    entry = created;
+    scope.responses.set(period, entry);
+  }
+  return entry.response;
+}
 
 export function MetricProvenance({ point, summary = "Sources and details" }: { point: NormalizedMetric; summary?: string }) {
   return <details className="provenance"><summary>{summary}</summary>
@@ -125,29 +150,78 @@ export default function FinancialResearch({ company }: { company: Company }) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const scope = useRef<SnapshotScope | null>(null);
+  const [alternatives, setAlternatives] = useState<{ ticker: string; version: number; hints: { metric: string; snapshot: FinancialSummary }[] } | null>(null);
   useEffect(() => {
-    const controller = versionedController(version, changed);
+    const current: SnapshotScope = { ticker: company.ticker, cik: company.cik, version, changed,
+      controller: new AbortController(), responses: new Map() };
+    scope.current = current;
+    setAlternatives(null);
+    return () => current.controller.abort();
+  }, [company.ticker, company.cik, version, changed]);
+  useEffect(() => {
+    const current = scope.current!;
+    let active = true;
     setLoading(true); setSummary(null); setError(null);
-    getFinancialSummary(company.ticker, period, controller.signal).then((result) => {
-      if (!controller.signal.aborted) { setSummary(result); setLoadedVersion(version); }
-    }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [company.ticker, period, version, changed]);
+    snapshotFor(current, period).then((result) => {
+      if (active && !current.controller.signal.aborted) { setSummary(result); setLoadedVersion(version); }
+    }).catch((failure) => { if (active && !current.controller.signal.aborted) setError(describeApiError(failure)); })
+      .finally(() => { if (active && !current.controller.signal.aborted) setLoading(false); });
+    return () => {
+      active = false;
+      const pending = current.responses.get(period);
+      if (pending && !pending.settled) { pending.controller.abort(); current.responses.delete(period); }
+    };
+  }, [company.ticker, company.cik, period, version, changed]);
+  useEffect(() => {
+    setAlternatives(null);
+    if (period !== "quarter" || !summary || loadedVersion !== version
+        || summary.ticker !== company.ticker || summary.company_cik !== company.cik || summary.requested_period !== period) return;
+    const missing = CASH_FLOW_METRICS.filter(metric => summary.metrics[metric]?.status === "unavailable");
+    if (!missing.length) return;
+    const current = scope.current!;
+    let active = true;
+    const hints: { metric: string; snapshot: FinancialSummary }[] = [];
+    async function discover() {
+      // One shared snapshot per mode, only until each missing metric has a verified alternative.
+      for (const mode of ALTERNATIVE_PERIODS) {
+        if (!active || current.controller.signal.aborted || hints.length === missing.length) break;
+        try {
+          const alternative = await snapshotFor(current, mode);
+          if (!active || current.controller.signal.aborted) break;
+          for (const metric of missing) {
+            const point = alternative.metrics[metric];
+            if (!hints.some(hint => hint.metric === metric) && point?.status === "available"
+                && point.value !== null && point.value.trim() !== "" && Number.isFinite(Number(point.value))
+                && point.metric === metric && point.unit === summary!.metrics[metric].unit
+                && alternative.period?.kind === mode && point.period?.kind === mode
+                && point.period.start === alternative.period?.start && point.period.end === alternative.period?.end) {
+              hints.push({ metric, snapshot: alternative });
+            }
+          }
+          setAlternatives({ ticker: current.ticker, version: current.version, hints: [...hints] });
+        } catch { /* An unverified alternative never replaces the quarterly unavailable state. */ }
+      }
+    }
+    void discover();
+    return () => { active = false; };
+  }, [company.ticker, company.cik, period, summary, loadedVersion, version]);
   const available = summary ? Object.values(summary.metrics).filter((point) => point.status === "available").length : 0;
   return <div className="research-column">
     <section className="panel" aria-labelledby="snapshot-title">
       <div className="section-heading"><div><p className="eyebrow">Company research</p><h2 id="snapshot-title">Financial snapshot</h2></div>
-        <label className="compact-label">Snapshot period<select value={period} onChange={(event) => { setSummary(null); setLoading(true); setPeriod(event.target.value as PeriodKind); }}><option value="quarter">Direct quarter</option><option value="annual">Annual</option></select></label>
+        <label className="compact-label">Snapshot period<select value={period} onChange={(event) => { setSummary(null); setAlternatives(null); setLoading(true); setPeriod(event.target.value as PeriodKind); }}>{["quarter", ...ALTERNATIVE_PERIODS].map(mode => <option key={mode} value={mode}>{PERIOD_LABELS[mode as PeriodKind]}</option>)}</select></label>
       </div>
       <div aria-live="polite" aria-busy={loading}>
         {loading && <p className="loading-state">Loading financial snapshot…</p>}
         {error && <p role="alert" className="error-state">{error}</p>}
-        {summary && !loading && loadedVersion === version && <>
+        {summary && !loading && loadedVersion === version && summary.ticker === company.ticker && summary.requested_period === period && <>
           <p className="period-label">{periodLabel(summary.period)}</p>
           <p className="muted small availability">Financial data: {available ? `${available} of ${Object.keys(summary.metrics).length} metrics available for this snapshot` : "No compatible metrics for this period"}. This snapshot is separate from the selected SEC research filing.</p>
+          {period === "quarter" && alternatives?.ticker === company.ticker && alternatives.version === version && alternatives.hints.map(({ metric, snapshot }) =>
+            <p className="small cash-flow-alternative" key={metric}>{METRIC_LABELS[metric]} is available for {periodLabel(snapshot.period)}. Choose {PERIOD_LABELS[snapshot.requested_period]} in Snapshot period to view it.</p>)}
           <div className="metric-grid">{SNAPSHOT_METRICS.map((key) => summary.metrics[key] && <MetricCard key={key} point={summary.metrics[key]} />)}</div>
-          <details className="secondary-metrics"><summary>Balance sheet and cash flow</summary><div className="metric-grid">{["total_assets", "cash_and_equivalents", "free_cash_flow"].map((key) => summary.metrics[key] && <MetricCard key={key} point={summary.metrics[key]} />)}</div></details>
+          <details className="secondary-metrics"><summary>Balance sheet and cash flow</summary><div className="metric-grid">{["total_assets", "cash_and_equivalents", ...CASH_FLOW_METRICS].map((key) => summary.metrics[key] && <MetricCard key={key} point={summary.metrics[key]} />)}</div></details>
         </>}
       </div>
     </section>

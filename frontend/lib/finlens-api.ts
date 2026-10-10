@@ -87,7 +87,7 @@ export class FinLensApiError extends Error {
   }
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(path: string, init?: RequestInit, requirePublishedVersion = false): Promise<T> {
   const scope = init?.signal ? versionScopes.get(init.signal) : undefined;
   let response: Response;
   try {
@@ -125,6 +125,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       response.status,
       response.headers.get("X-FinLens-Error-Code"),
     );
+  }
+  if (requirePublishedVersion && (!scope || returnedVersion === null)) {
+    throw new FinLensApiError("Financial snapshot version could not be verified.", 502, "INVALID_RESPONSE");
   }
   if (payload === null) {
     throw new FinLensApiError("FinLens returned an empty response.", 502, "INVALID_RESPONSE");
@@ -274,8 +277,8 @@ export function getResearchAnswer(ticker: string, question: string, signal?: Abo
 export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
   return requestJson("/capabilities", { signal });
 }
-export function getFinancialSummary(ticker: string, period: PeriodKind, signal?: AbortSignal): Promise<FinancialSummary> {
-  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/summary?period=${period}`, { signal });
+export function getFinancialSummary(ticker: string, period: PeriodKind, signal?: AbortSignal, requirePublishedVersion = false): Promise<FinancialSummary> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/summary?period=${period}`, { signal }, requirePublishedVersion);
 }
 export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });

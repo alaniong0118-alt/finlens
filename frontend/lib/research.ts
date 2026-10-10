@@ -5,6 +5,7 @@ export const METRIC_LABELS: Record<string, string> = {
   diluted_eps: "Diluted EPS", operating_income: "Operating income", net_margin: "Net margin",
   operating_margin: "Operating margin", total_assets: "Total assets",
   cash_and_equivalents: "Cash and equivalents", free_cash_flow: "Free cash flow",
+  operating_cash_flow: "Operating cash flow", capital_expenditures: "Capital expenditures",
 };
 export const PERIOD_LABELS: Record<PeriodKind, string> = {
   quarter: "Direct quarter", annual: "Annual", half_year: "Half-year YTD",
