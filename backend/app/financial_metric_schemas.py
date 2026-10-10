@@ -16,7 +16,7 @@ class MetricMetadataModel(BaseModel):
     @model_serializer(mode="wrap")
     def serialize_metadata(self, handler):
         result = handler(self)
-        for key in ("revenue_basis", "comparability"):
+        for key in ("revenue_basis", "comparability", "scope_authorization"):
             if key in result and result[key] is None:
                 del result[key]
         return result
@@ -63,6 +63,12 @@ class MetricInput(MetricMetadataModel):
     revenue_basis: RevenueBasis | None = None
 
 
+class ScopeAuthorizationProvenance(BaseModel):
+    permission: Literal["select:revenue", "denominator:net_margin"]
+    approval_id: str
+    version: int
+
+
 class NormalizedMetric(MetricMetadataModel):
     metric: str
     unit: str
@@ -75,6 +81,7 @@ class NormalizedMetric(MetricMetadataModel):
     alternatives: list[FactProvenance] = Field(default_factory=list)
     inputs: list[MetricInput] = Field(default_factory=list)
     revenue_basis: RevenueBasis | None = None
+    scope_authorization: ScopeAuthorizationProvenance | None = None
 
 
 class NormalizedFinancialSummary(BaseModel):

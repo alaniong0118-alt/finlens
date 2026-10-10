@@ -10,10 +10,12 @@ from app.financial_metric_schemas import (
     FactProvenance, FinancialPeriod, MetricInput, NormalizedMetric,
     NormalizedFinancialSummary, NormalizedMetricHistory, HistoryComparability,
     FiscalPeriodRequest, MetricComparison,
+    ScopeAuthorizationProvenance,
 )
 from app.models import Company, FinancialFact
 from app.sec_client import build_filing_url
 from app.sec_parser import classify_period
+from app import revenue_scope_authorizations as scope_permissions
 
 
 class UnknownCompany(ValueError):
@@ -57,9 +59,13 @@ def period_key(point):
 class FinancialMetrics:
     """Normalize an already loaded company dataset; shared by API and coverage audit."""
 
-    def __init__(self, company, facts):
+    def __init__(self, company, facts, *, authorization_evidence=()):
         self.company = company
         self.facts = [f for f in facts if f.company_cik == company.cik]
+        # No production adapter infers XBRL context/dimensions from stored facts.
+        self.authorization_evidence = tuple(authorization_evidence)
+        self.selection_approvals = {}
+        self.selection_rejections = {}
         self.base = {name: [] for name, definition in METRICS.items() if definition.kind != "derived"}
         # Dates of usable revenue observations establish reporting boundaries;
         # their economic scopes are resolved separately before selecting values.
@@ -83,6 +89,10 @@ class FinancialMetrics:
                     eligible = self.revenue_candidates(candidates)
                     if not eligible:
                         point = self.missing(name, "Incompatible revenue scopes; no unambiguous canonical observation.", self.period(*key))
+                        rejected = self.selection_rejections.get(key)
+                        if rejected:
+                            point.reason = f"Revenue selection authorization rejected: {rejected}."
+                            candidates = self.authorization_facts(("revenue",), key[0], key[2])
                         point.alternatives = [self.source(name, f) for f in sorted(candidates, key=lambda f: f.id)]
                         self.base[name].append(point)
                         continue
@@ -99,6 +109,9 @@ class FinancialMetrics:
                     revenue_basis=REVENUE_CONCEPTS[original_concept(chosen)].basis if name == "revenue" else None,
                 ))
                 if name == "revenue":
+                    approval = self.selection_approvals.get((key[0], key[1], key[2]))
+                    if approval:
+                        self.base[name][-1].scope_authorization = self.approval_provenance(approval)
                     self.base[name][-1].alternatives.extend(self.source(name, f) for f in sorted(candidates, key=lambda f: f.id) if f not in eligible)
             self.base[name].sort(key=lambda p: (p.period.end, p.period.start or date.min))
 
@@ -112,7 +125,34 @@ class FinancialMetrics:
             return []
         if "total_revenue" in bases:
             return [f for f in candidates if REVENUE_CONCEPTS[original_concept(f)].basis == "total_revenue"]
-        return []  # Different components without a known total are ambiguous.
+        if not scope_permissions.REVENUE_SELECTION_AUTHORIZATIONS:
+            return []
+        # Only this otherwise ambiguous component branch admits a new selection
+        # permission. Existing total/net-interest selection remains unchanged.
+        first = candidates[0]
+        kind = period_kind(first, METRICS["revenue"])
+        raw = self.authorization_sources(("revenue",), kind, first.period_end)
+        target = scope_permissions.SourceIdentity.from_fact(first).period_scope()
+        decision = scope_permissions.authorize_selection(target, raw, self.authorization_evidence)
+        if not decision.accepted:
+            if decision.reason != "no_authorization":
+                self.selection_rejections[(kind, first.period_start, first.period_end)] = decision.reason
+            return []
+        self.selection_approvals[(kind, first.period_start, first.period_end)] = decision.ref
+        return [f for f in candidates if scope_permissions.SourceIdentity.from_fact(f) == decision.selected]
+
+    def authorization_sources(self, names, kind, end):
+        return tuple(scope_permissions.SourceIdentity.from_fact(f) for f in self.authorization_facts(names, kind, end))
+
+    def authorization_facts(self, names, kind, end):
+        # Include same-end/kind observations with changed starts, not just the
+        # already selected rows. New fiscal boundaries must invalidate review.
+        return [f for f in self.facts if any(usable(f, METRICS[n]) and period_kind(f, METRICS[n]) == kind
+                                            and f.period_end == end for n in names)]
+
+    @staticmethod
+    def approval_provenance(ref):
+        return ScopeAuthorizationProvenance(permission=ref.permission, approval_id=ref.approval_id, version=ref.version)
 
     def period(self, kind, start, end):
         period = FinancialPeriod(kind=kind, start=start, end=end)
@@ -250,6 +290,7 @@ class FinancialMetrics:
         return False
 
     def calculate(self, name, operands, period, roles):
+        denominator_approval = None
         if any(p.status != "available" for p in operands):
             return self.missing(name, "Missing or invalid compatible inputs.", period)
         first, second = operands
@@ -261,6 +302,24 @@ class FinancialMetrics:
             approved = REVENUE_CONCEPTS[concept].margin_denominator
             if name == "gross_margin" and not approved:
                 approved = self.reviewed_gross_margin_scope(first, second)
+            if name == "net_margin" and not approved and scope_permissions.DENOMINATOR_AUTHORIZATIONS:
+                revenue = next((f for f in self.facts if f.id == second.provenance[0].fact_id), None)
+                numerator = next((f for f in self.facts if f.id == first.provenance[0].fact_id), None)
+                if revenue is not None and numerator is not None:
+                    decision = scope_permissions.authorize_denominator(
+                        name, scope_permissions.SourceIdentity.from_fact(revenue),
+                        scope_permissions.SourceIdentity.from_fact(numerator),
+                        self.authorization_sources(("revenue", "net_income"), period.kind, period.end),
+                        self.authorization_evidence)
+                    if decision.accepted:
+                        approved, denominator_approval = True, decision.ref
+                    elif decision.reason != "no_authorization":
+                        rejected = self.missing(name, f"Revenue denominator authorization rejected: {decision.reason}.", period)
+                        raw = self.authorization_facts(("revenue", "net_income"), period.kind, period.end)
+                        rejected.alternatives = [self.source(n, f) for f in sorted(raw, key=lambda f: f.id)
+                                                 for n in ("revenue", "net_income")
+                                                 if original_concept(f) in METRICS[n].concepts]
+                        return rejected
             if not approved or (self.bank_revenue and second.revenue_basis != "net_interest"):
                 return self.missing(name, "Selected revenue scope does not establish an approved total/net-interest margin denominator.", period)
         if name != "free_cash_flow" and second.value <= 0:
@@ -280,6 +339,7 @@ class FinancialMetrics:
             inputs=[MetricInput(role=role, metric=p.metric, value=p.value, unit=p.unit,
                                 period=p.period, fact_ids=[s.fact_id for s in p.provenance], revenue_basis=p.revenue_basis)
                     for role, p in zip(roles, operands, strict=True)],
+            scope_authorization=self.approval_provenance(denominator_approval) if denominator_approval else None,
         )
 
     def metric_periods(self, name, kind):
