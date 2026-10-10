@@ -62,7 +62,8 @@ class FinancialMetrics:
     def __init__(self, company, facts, *, authorization_evidence=()):
         self.company = company
         self.facts = [f for f in facts if f.company_cik == company.cik]
-        # No production adapter infers XBRL context/dimensions from stored facts.
+        # Internal evidence comes from verified original markup, never inferred
+        # from Company Facts frame/fiscal annotations or request parameters.
         self.authorization_evidence = tuple(authorization_evidence)
         self.selection_approvals = {}
         self.selection_rejections = {}
@@ -460,4 +461,5 @@ def load_financial_metrics(session, ticker):
     if company is None:
         raise UnknownCompany(ticker)
     facts = list(session.scalars(select(FinancialFact).where(FinancialFact.company_cik == company.cik).order_by(FinancialFact.id)))
-    return FinancialMetrics(company, facts)
+    from app.sec_evidence_adapter import load_production_evidence
+    return FinancialMetrics(company, facts, authorization_evidence=load_production_evidence(session, company.cik, facts))
