@@ -17,6 +17,7 @@ from app.financial_metric_registry import METRICS, SELECTION_POLICY
 from app.financial_metric_schemas import HistoryComparability, NormalizedMetric, FiscalPeriodRequest, MetricComparison
 from app.financial_metrics_service import FinancialMetrics, UnknownCompany
 from app.models import Company, FinancialFact
+from app.activation_lifecycle import financial_reader
 
 PeriodIntent = Literal["quarter", "annual", "latest_available"]
 EXPLICIT_YOY = re.compile(r"\b(?:yoy|year (?:over|to) year)\b")
@@ -352,6 +353,7 @@ def recognize_historical(question, selected, companies, *, math_intent=None):
                           math_intent, explicit_yoy=explicit_yoy)
 
 
+@financial_reader
 def resolve_historical_answer(service, question, operation):
     # Only these explicitly bound operations may consume revenue levels when
     # the requested metric was growth. Single growth observations retain YoY.
@@ -428,6 +430,7 @@ def format_value(value: Decimal, unit: str):
 PERIOD_TEXT = {"quarter": "quarter", "annual": "year", "half_year": "six-month YTD period", "nine_months": "nine-month YTD period"}
 
 
+@financial_reader
 def resolve_answer(service, question, metric, intent):
     definition = METRICS[metric]
     if intent in {"quarter", "annual"}:
@@ -461,6 +464,7 @@ def resolve_answer(service, question, metric, intent):
     return result
 
 
+@financial_reader
 def answer_research_question(session, ticker, question):
     companies = list(session.scalars(select(Company).order_by(Company.id)))
     selected = next((company for company in companies if company.ticker == ticker.upper()), None)

@@ -23,6 +23,7 @@ from app import revenue_scope_authorizations as auth
 from app.financial_metric_registry import METRICS
 from app.models import CompanyRefreshState, FilingPublication
 from app.sec_parser import classify_period
+from app.activation_lifecycle import financial_reader
 
 IX = "http://www.xbrl.org/2013/inlineXBRL"
 XBRLI = "http://www.xbrl.org/2003/instance"
@@ -517,6 +518,7 @@ def _verify_policy(policy, record, raw, root, snapshot, publications):
     return tuple(evidence)
 
 
+@financial_reader
 def load_production_evidence(session, cik, facts):
     """Internal dataset-loader boundary; no paths/proofs/mode supplied by requests.
 

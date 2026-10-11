@@ -38,6 +38,10 @@ def boundary(monkeypatch):
         # Track original tuples so helper assignments are reverted, too.
         isolated.setattr(auth, "DENOMINATOR_AUTHORIZATIONS", ())
         isolated.setattr(adapter, "PRODUCTION_EVIDENCE_POLICIES", ())
+        # These historical helper tests isolate publication recovery. Only the
+        # new launcher tests exercise production lifecycle/authentication wiring.
+        isolated.setattr(activation, "_require_launcher", lambda: SimpleNamespace(
+            publishing=lambda: None, fail=lambda: None, require_authority=lambda: None))
         yield isolated
     assert_inactive()
     assert activation._ACTIVATION_ENABLED is False

@@ -13,6 +13,11 @@ _ACTIVATION_ENABLED = False
 _activation_lock = Lock()
 
 
+def _require_launcher():
+    from app.activation_lifecycle import require_validation_owner
+    return require_validation_owner()
+
+
 def activate_aapl_net_margin(*, operator_authorized=False, reviewed_ref=None):
     """Install the reviewed pair in this process only after fresh verification.
 
@@ -23,6 +28,8 @@ def activate_aapl_net_margin(*, operator_authorized=False, reviewed_ref=None):
     """
     if _ACTIVATION_ENABLED is not True:
         return False
+
+    controller = _require_launcher()  # The bool/reference alone grant no authority.
 
     import os
     from pathlib import Path
@@ -91,16 +98,21 @@ def activate_aapl_net_margin(*, operator_authorized=False, reviewed_ref=None):
         registration_boundary()  # Recheck lifecycle/conflicts after I/O.
         require(_ACTIVATION_ENABLED is True, "activation_disabled_during_verification")
         require(os.environ.get("FINLENS_SEC_ORIGINAL_STORE", "") == configured_root, "store_configuration_changed")
-        # All validation is complete. Lock-cooperating registry writers serialize;
-        # ordinary readers do not take this lock, so visibility is not atomic.
+        # Bootstrap reader admission closes before either registry store. There
+        # are still two assignments, not an atomic in-memory registry snapshot.
         previous_policies = evidence.PRODUCTION_EVIDENCE_POLICIES
         previous_permissions = auth.DENOMINATOR_AUTHORIZATIONS
         published_policies, published_permissions = (policy,), (record,)
+        controller.require_authority()  # Detect lost maintenance ownership after I/O.
+        controller.publishing()
         try:
             # Policy first: readers in the policy-only interval abstain.
             evidence.PRODUCTION_EVIDENCE_POLICIES = published_policies
             auth.DENOMINATOR_AUTHORIZATIONS = published_permissions
         except BaseException:
+            # Quarantine before cleanup; a second cleanup fault cannot admit
+            # readers or permit the operator launcher to start its server.
+            controller.fail()
             # Revoke our permission first, then restore our policy. Identity checks
             # prevent replacing another owner's tuples after unexpected mutation.
             # Legitimate writers must use this same lock for publication/recovery.

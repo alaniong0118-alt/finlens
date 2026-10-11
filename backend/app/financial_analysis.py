@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.models import FinancialFact
 from app.sec_client import build_filing_url
+from app.activation_lifecycle import financial_reader
 
 
+@financial_reader
 def get_quarterly_revenue(
     session: Session,
     company_cik: str,
@@ -121,6 +123,7 @@ def find_previous_year_record(
     return candidates[0][1]
 
 
+@financial_reader
 def get_revenue_yoy_growth(
     session: Session,
     company_cik: str,
@@ -188,6 +191,7 @@ def get_revenue_yoy_growth(
             ),
         },
     }
+@financial_reader
 def get_quarterly_net_income(
     session: Session,
     company_cik: str,
@@ -211,6 +215,7 @@ def get_quarterly_net_income(
     return list(session.scalars(stmt).all())
 
 
+@financial_reader
 def get_net_income_yoy_growth(
     session: Session,
     company_cik: str,
@@ -273,6 +278,7 @@ def get_net_income_yoy_growth(
             latest,
         ),
     }
+@financial_reader
 def get_financial_history(
     session: Session,
     company_cik: str,
@@ -417,6 +423,7 @@ def get_financial_history(
 
 
 
+@financial_reader
 def get_net_margin(
     session: Session,
     company_cik: str,
@@ -474,6 +481,7 @@ def get_net_margin(
             revenue,
         ),
     }
+@financial_reader
 def get_quarterly_diluted_eps(
     session: Session,
     company_cik: str,
@@ -497,6 +505,7 @@ def get_quarterly_diluted_eps(
     return list(session.scalars(stmt).all())
 
 
+@financial_reader
 def get_diluted_eps_yoy_growth(
     session: Session,
     company_cik: str,
@@ -560,6 +569,7 @@ def get_diluted_eps_yoy_growth(
             latest,
         ),
     }
+@financial_reader
 def get_financial_snapshot(
     session: Session,
     company_cik: str,
@@ -615,6 +625,7 @@ def get_financial_snapshot(
     }
 
 
+@financial_reader
 def get_financial_summary(
     session: Session,
     company_cik: str,
@@ -657,6 +668,7 @@ def get_financial_summary(
     }
 
 
+@financial_reader
 def get_latest_quarter_metric(
     session: Session,
     company_cik: str,

@@ -14,6 +14,7 @@ from typing import Literal
 
 from app.financial_metric_registry import METRICS
 from app.sec_parser import classify_period
+from app.activation_lifecycle import financial_reader
 
 Permission = Literal["select:revenue", "denominator:net_margin"]
 
@@ -247,6 +248,7 @@ def _validate_manifest(bindings, observations, evidence):
     return verified, None
 
 
+@financial_reader
 def authorize_selection(scope, observations, evidence):
     if not REVENUE_SELECTION_AUTHORIZATIONS or not observations:
         return _reject("no_authorization")
@@ -267,6 +269,7 @@ def authorize_selection(scope, observations, evidence):
     return AuthorizationDecision(True, "authorized", record.ref, selected)
 
 
+@financial_reader
 def authorize_denominator(metric, revenue, numerator, observations, evidence):
     if metric != "net_margin" or not DENOMINATOR_AUTHORIZATIONS:
         return _reject("no_authorization")

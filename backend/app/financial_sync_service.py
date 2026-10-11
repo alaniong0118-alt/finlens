@@ -7,11 +7,13 @@ from sqlalchemy import func, select, text
 
 from app.financial_metric_registry import METRICS
 from app.financial_metrics_service import FinancialMetrics
+from app.activation_lifecycle import financial_reader
 from app.models import Company, FinancialFact
 from app.sec_client import get_company_facts
 from app.sec_importer import FinancialSyncError, METRIC_SOURCES, merge_company_facts
 
 
+@financial_reader
 def metric_coverage(session):
     """Two bulk reads; coverage is measured, never assigned by ticker."""
     companies = list(session.scalars(select(Company).order_by(Company.ticker)))
@@ -51,6 +53,7 @@ def failure_details(exc):
     return {"error": "company_sync_failed", "http_status": None}
 
 
+@financial_reader
 def sync_catalog(session_factory, tickers=None, *, dry_run=False, on_result=None, on_progress=None):
     from app.refresh_service import coordinator
     with coordinator(session_factory):

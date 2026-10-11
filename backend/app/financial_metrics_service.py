@@ -4,6 +4,7 @@ from decimal import Decimal, localcontext
 import re
 
 from sqlalchemy import select
+from app.activation_lifecycle import financial_reader
 
 from app.financial_metric_registry import METRICS, SELECTION_POLICY, REVENUE_CONCEPTS, GROSS_MARGIN_COVERAGE, revenue_bases_compatible
 from app.financial_metric_schemas import (
@@ -59,6 +60,7 @@ def period_key(point):
 class FinancialMetrics:
     """Normalize an already loaded company dataset; shared by API and coverage audit."""
 
+    @financial_reader
     def __init__(self, company, facts, *, authorization_evidence=()):
         self.company = company
         self.facts = [f for f in facts if f.company_cik == company.cik]
@@ -116,6 +118,7 @@ class FinancialMetrics:
                     self.base[name][-1].alternatives.extend(self.source(name, f) for f in sorted(candidates, key=lambda f: f.id) if f not in eligible)
             self.base[name].sort(key=lambda p: (p.period.end, p.period.start or date.min))
 
+    @financial_reader
     def revenue_candidates(self, candidates):
         bases = {REVENUE_CONCEPTS[original_concept(f)].basis for f in candidates}
         if all(revenue_bases_compatible(left, right) for left in bases for right in bases):
@@ -225,6 +228,7 @@ class FinancialMetrics:
         return NormalizedMetric(metric=name, unit=METRICS[name].unit, status=status,
                                 reason=reason, period=period, formula=METRICS[name].formula)
 
+    @financial_reader
     def observation(self, name, period):
         if self.bank_revenue and name in {"gross_profit", "gross_margin"}:
             return self.missing(name, "Gross profit/margin is not applicable to the observed net-interest revenue basis.", period, "not_applicable")
@@ -290,6 +294,7 @@ class FinancialMetrics:
                 return True
         return False
 
+    @financial_reader
     def calculate(self, name, operands, period, roles):
         denominator_approval = None
         if any(p.status != "available" for p in operands):
@@ -352,6 +357,7 @@ class FinancialMetrics:
         anchors = self.metric_periods("revenue", kind)
         return anchors or [p.period for points in self.base.values() for p in points if p.period.kind == kind]
 
+    @financial_reader
     def fiscal_observation(self, name, requested: FiscalPeriodRequest):
         """Exact requested normalized fiscal label, with existing vintage selection."""
         definition = METRICS[name]
@@ -370,6 +376,7 @@ class FinancialMetrics:
             period = self.period("instant", None, period.end)
         return self.observation(name, period)
 
+    @financial_reader
     def compare_fiscal(self, name, earlier: FiscalPeriodRequest, later: FiscalPeriodRequest):
         """Read-only comparisons over canonical observations, including input scope."""
         left, right = self.fiscal_observation(name, earlier), self.fiscal_observation(name, later)
@@ -425,6 +432,7 @@ class FinancialMetrics:
                 result.percentage_status = "available"
         return result
 
+    @financial_reader
     def history(self, name, kind="quarter", limit=40):
         if name not in METRICS:
             raise UnknownMetric(name)
@@ -440,6 +448,7 @@ class FinancialMetrics:
                                        status=status, reason=reason, selection_policy=SELECTION_POLICY, history=history,
                                        comparability=HistoryComparability() if name == "diluted_eps" else None)
 
+    @financial_reader
     def summary(self, kind="quarter"):
         anchors = self.reporting_periods(kind)
         anchor = max(anchors, key=lambda p: (p.end, p.start or date.min)) if anchors else None
@@ -456,6 +465,7 @@ class FinancialMetrics:
                                           selection_policy=SELECTION_POLICY, metrics=metrics)
 
 
+@financial_reader
 def load_financial_metrics(session, ticker):
     company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
     if company is None:
