@@ -1,4 +1,4 @@
-import type { FilingContext, FinancialPeriod, MetricHistory, NormalizedMetric, PeriodKind } from "./finlens-api";
+import type { EvidenceContext, FinancialPeriod, MetricHistory, NormalizedMetric, PeriodKind } from "./finlens-api";
 
 export const METRIC_LABELS: Record<string, string> = {
   revenue: "Revenue", revenue_growth_yoy: "Revenue YoY", net_income: "Net income",
@@ -54,7 +54,32 @@ export function historyChartRows(history: MetricHistory) {
 export function epsWarning(history: MetricHistory): string | null {
   return history.comparability ? "Reported as filed · comparability unverified. Split/restatement share bases may differ between periods." : null;
 }
-export function evidencePassages(result: FilingContext) {
+export function evidencePassages(result: EvidenceContext) {
+  if ("retrieval_scope" in result) {
+    // Company metadata is one JSON line. Only fully indented body lines can be
+    // displayed; filename/header text must never become a source's passage.
+    const passages = new Map<string, string>();
+    const pattern = /^\[SOURCE (source_[1-9]\d*)\]\nmetadata: ([^\n]+)\ntext: \|-\n((?:  [^\n]*\n)*)\[END SOURCE \1\](?=\n|$)/gm;
+    const identityKeys = ["company_cik", "accession_number", "filename", "chunk_id", "form", "filed", "start_char", "end_char"] as const;
+    for (const match of result.context.matchAll(pattern)) {
+      const citation = result.citations.find(item => item.citation_id === match[1]);
+      if (!citation || citation.company_cik !== result.company_cik || passages.has(match[1])) continue;
+      try {
+        const metadata: unknown = JSON.parse(match[2]);
+        if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) continue;
+        const identity = metadata as Record<string, unknown>;
+        if (Object.keys(identity).length !== identityKeys.length
+            || identityKeys.some(key => identity[key] !== citation[key])
+            || citation.filename.length < 1 || citation.filename.length > 255
+            || /[^A-Za-z0-9_.-]/.test(citation.filename) || [".", ".."].includes(citation.filename)) continue;
+        passages.set(match[1], match[3].slice(0, -1).split("\n").map(line => line.slice(2)).join("\n"));
+      } catch { /* Invalid metadata never establishes a source passage. */ }
+    }
+    return result.citations.flatMap((citation, index) => {
+      const text = passages.get(citation.citation_id);
+      return text === undefined ? [] : [{ citation, text, rank: index + 1 }];
+    });
+  }
   const blocks = new Map<string, string>();
   const pattern = /^\[SOURCE (source_[1-9]\d*)\]\n[\s\S]*?^text: \|-\n([\s\S]*?)^\[END SOURCE \1\](?=\n|$)/gm;
   for (const match of result.context.matchAll(pattern)) {

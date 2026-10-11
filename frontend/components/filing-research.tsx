@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { citationForClaim, describeApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings,
-  type Company, type FilingAnswer, type FilingContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
+  getCompanyContext, type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
@@ -10,12 +10,12 @@ import { useResearchVersion } from "@/components/research-freshness";
 
 const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artificial intelligence"];
 
-export function EvidenceResults({ result, answer }: { result: FilingContext; answer?: ResearchAnswer | null }) {
+export function EvidenceResults({ result, answer }: { result: EvidenceContext; answer?: ResearchAnswer | null }) {
   const [expanded, setExpanded] = useState(false);
   const passages = evidencePassages(result);
   const previews = passages.map(passage => ({ ...passage, excerpt: evidenceExcerpt(passage.text, result.query, answer, passages.map(item => item.text)) }));
   return <div className="evidence-results" aria-live="polite">
-    <div className="section-heading"><h3>{passages.length ? `${passages.length} SEC evidence passages` : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
+    <div className="section-heading"><h3>{passages.length ? `${passages.length} SEC evidence passages` : "retrieval_scope" in result ? "Insufficient evidence in published company filings" : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
     <p className="muted small">Search: “{result.query}” · Highlights mark matching text, not verified claim support. Excerpts retain the source wording.</p>
     {passages.length === 0 && <div className="empty-state"><p>Try a more specific financial topic. FinLens does not substitute model knowledge when filing evidence is weak.</p></div>}
     <div id="ranked-evidence">{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt }) => <article className="evidence-card" key={citation.citation_id}>
@@ -26,6 +26,7 @@ export function EvidenceResults({ result, answer }: { result: FilingContext; ans
       <details className="provenance"><summary>Filing and retrieval details</summary><div className="details-body wrap-anywhere">
         <p>{citation.citation_id} · {citation.chunk_id} · {citation.filename}</p>
         <p className="mono">Accession {citation.accession_number}</p>
+        {citation.company_cik && <p className="mono">CIK {citation.company_cik}</p>}
         <p>Cleaned text offsets: {citation.start_char.toLocaleString()}–{citation.end_char.toLocaleString()}</p>
         <p>Hybrid rank {rank} · Retrieval rule: {citation.evidence_reason.replaceAll("_", " ")}</p>
         <p>Scores describe retrieval ranking, not factual confidence.</p>
@@ -81,12 +82,13 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
   </section>;
 }
 
-function FilingSearch({ company, filing, configured, query, setQuery }: {
+function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope }: {
   company: Company; filing: FilingSource | null; configured: boolean;
+  retrievalScope: "filing" | "company";
   query: string; setQuery: (value: string) => void;
 }) {
   const { version, changed } = useResearchVersion();
-  const [result, setResult] = useState<FilingContext | null>(null);
+  const [result, setResult] = useState<EvidenceContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<ResearchAnswer | null>(null);
@@ -114,7 +116,8 @@ function FilingSearch({ company, filing, configured, query, setQuery }: {
     setSearchedVersion(version);
     const id = scope.current.start();
     controller.current?.abort(); controller.current = versionedController(version, changed);
-    setLoading(Boolean(filing)); setError(null); setResult(null);
+    const companyWide = retrievalScope === "company";
+    setLoading(companyWide || Boolean(filing)); setError(null); setResult(null);
     setAnswerLoading(true); setAnswerError(null); setAnswer(null);
     const signal = controller.current.signal;
     const question = query.trim();
@@ -124,14 +127,17 @@ function FilingSearch({ company, filing, configured, query, setQuery }: {
       if (scope.current.current(id) && response.ticker === company.ticker && response.question === question) setAnswer(response);
     }).catch(failure => { if (scope.current.current(id)) setAnswerError(describeApiError(failure)); })
       .finally(() => { if (scope.current.current(id)) setAnswerLoading(false); });
-    const evidence = filing ? getFilingContext(company.ticker, filing.accession_number, question, signal).then(response => {
+    const evidence = companyWide ? getCompanyContext(company.ticker, company.cik, question, signal).then(response => {
+      if (scope.current.current(id)) setResult(response);
+    }).catch(failure => { if (scope.current.current(id)) setError(describeApiError(failure)); })
+      .finally(() => { if (scope.current.current(id)) setLoading(false); }) : filing ? getFilingContext(company.ticker, filing.accession_number, question, signal).then(response => {
       if (scope.current.current(id) && response.ticker === company.ticker && response.accession_number === filing.accession_number && response.query === question) setResult(response);
     }).catch(failure => { if (scope.current.current(id)) setError(describeApiError(failure)); })
       .finally(() => { if (scope.current.current(id)) setLoading(false); }) : Promise.resolve();
     await Promise.all([direct, evidence]);
   }
   return <>
-    {filing && <div className="filing-record"><strong>{filing.form ?? "SEC filing"}</strong><span>Filed {formatDate(filing.filed)}</span>
+    {retrievalScope === "filing" && filing && <div className="filing-record"><strong>{filing.form ?? "SEC filing"}</strong><span>Filed {formatDate(filing.filed)}</span>
       <p className="mono small wrap-anywhere">Accession {filing.accession_number}</p>
       {officialSecUrl(filing.sec_url) && <a href={officialSecUrl(filing.sec_url)} target="_blank" rel="noopener noreferrer">Open official filing ↗</a>}
     </div>}
@@ -150,11 +156,15 @@ function FilingSearch({ company, filing, configured, query, setQuery }: {
       {answer?.status === "not_matched" && <p className="muted small">SEC evidence research · this question is outside supported direct financial answers.</p>}
     </div>
     <div aria-live="polite" aria-busy={loading}>
-      {loading && <p className="loading-state">Finding relevant passages in this filing…</p>}
+      {loading && <p className="loading-state">{retrievalScope === "company" ? "Finding relevant passages in published company filings…" : "Finding relevant passages in this filing…"}</p>}
       {error && <p role="alert" className="error-state">{error}</p>}
       {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state"><h3>Explore the filing evidence</h3><p>Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required.</p></div>}
     </div>
-    {searchedVersion === version && result && <><h3>Supporting SEC evidence</h3><p className="small muted">Selected filing only · accession {result.accession_number}. Passages may describe a different period and are research, not validation of the structured answer.</p><EvidenceResults key={`evidence-${result.query}-${result.accession_number}`} result={result} answer={answer} /><AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} /></>}
+    {searchedVersion === version && result && <><h3>Supporting SEC evidence</h3>
+      <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}Passages may describe different periods and are research, not validation of the structured answer.</p>
+      <EvidenceResults key={`evidence-${result.query}-${retrievalScope}`} result={result} answer={"retrieval_scope" in result ? null : answer} />
+      {"retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} />}
+    </>}
   </>;
 }
 
@@ -164,6 +174,7 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const [sourceVersion, setSourceVersion] = useState(-1);
   const [filings, setFilings] = useState<FilingSource[]>([]);
   const [accession, setAccession] = useState("");
+  const [retrievalScope, setRetrievalScope] = useState<"filing" | "company">("filing");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -180,14 +191,17 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const filing = filings.find((item) => item.accession_number === accession);
   return <section className="panel filing-panel" aria-labelledby="filing-title">
     <div className="section-heading"><div><p className="eyebrow">SEC research</p><h2 id="filing-title">Read the evidence</h2></div><span className="badge">No AI required</span></div>
-    <p className="muted small">Search an indexed filing. Metric snapshots may refer to a different period or accession.</p>
-    <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => setAccession(event.target.value)} disabled={loading || !filings.length || !company.has_indexed_filing}>
+    <p className="muted small">Search a selected filing or published filings for this company. Metric snapshots may refer to a different period or accession.</p>
+    <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => setRetrievalScope(event.target.value as "filing" | "company")}>
+      <option value="filing">Selected filing</option><option value="company">Company-wide</option>
+    </select></label>
+    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => setAccession(event.target.value)} disabled={loading || !filings.length || !company.has_indexed_filing}>
       {loading && <option value="">Loading filings…</option>}
       {!loading && !filings.length && <option value="">No indexed filing available</option>}
       {filings.map((item) => <option key={item.accession_number} value={item.accession_number}>{item.form ?? "SEC filing"} · {formatDate(item.filed)}</option>)}
-    </select></label>
+    </select></label>}
     {error && <p role="alert" className="error-state">{error}</p>}
-    {!loading && !error && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
-    {sourceVersion >= 0 && <FilingSearch key={`${company.ticker}-${accession}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} configured={configured} query={query} setQuery={setQuery} />}
+    {retrievalScope === "filing" && !loading && !error && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
+    {(sourceVersion >= 0 || retrievalScope === "company") && <FilingSearch key={`${company.ticker}-${retrievalScope}-${retrievalScope === "filing" ? accession : ""}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} />}
   </section>;
 }

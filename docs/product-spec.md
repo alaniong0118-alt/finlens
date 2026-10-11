@@ -39,7 +39,18 @@ Quarterly/annual requests use the existing summary period and cannot substitute 
 
 The selected company is authoritative. Recognized other catalog names/tickers receive mismatch guidance; unknown wording falls back conservatively without switching company. Answers disclose rounded display value, actual dates and filing metadata, with exact source values/concepts/accessions, alternatives, formulas and operand provenance behind View provenance. Revenue basis and EPS comparability warnings remain visible. Recognized unavailable/not-applicable questions receive an explanation from the metric service, never zero.
 
-Direct answers do not depend on indexed filings or context retrieval. One answer request and one selected-filing context request settle independently; answer/evidence failures and optional AI failure cannot erase the other valid research result. Company/filing changes and question edits invalidate old responses. Narrative supporting passages may concern another period/accession and do not establish validation of the structured answer. No company-wide or multi-filing retrieval is introduced.
+Direct answers do not depend on indexed filings or context retrieval. One answer request and one evidence context request settle independently; answer/evidence failures and optional AI failure cannot erase the other valid research result. Company/filing/scope changes and question edits invalidate old responses. Narrative supporting passages may concern another period/accession and do not establish validation of the structured answer.
+
+Evidence search explicitly offers Selected filing (default) or Company-wide.
+Company-wide searches existing verified complete publications for the selected
+company only; it excludes pending/invalid/unpublished evidence and preserves each
+passage's accession, document, chunk and CIK. It requires publication-version
+metadata and rejects stale responses. Up to 20 publications / 4,000 chunks are
+searchable in this bounded slice; larger scopes receive an explained error and can
+use selected-filing search. Results contain up to five passages in the UI, with
+an insufficient-evidence state when none qualify. Company-wide search exposes no
+AI generation action and does not claim period alignment or numeric support for
+the independently calculated direct answer. Multi-filing generation remains future work.
 
 ### Historical and comparative research answers
 

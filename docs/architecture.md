@@ -36,6 +36,48 @@ The context builder considers up to 50 candidates, removes duplicate identities/
 
 ## Context, model input, and validation
 
+### Company-wide evidence search (retrieval only)
+
+`GET /companies/{ticker}/context?q=...&limit=5` searches the selected CIK's existing
+complete publications. The UI explicitly chooses Selected filing (default) or
+Company-wide. Existing filing context/answer routes are unchanged; company-wide
+results have no AI generation action.
+
+The new mode requires existing publication and company-version metadata. Within
+the existing repeatable-read/read-only snapshot it excludes pending targets,
+verifies whole-filing metadata, contiguous chunks, embeddings, count and content
+digest, and rejects publication versions above the company's evidence version
+before passage retrieval or query embedding. Version zero and older evidence
+remain valid after facts-only data-version advances. Intact older publications remain
+usable after unrelated refresh failures. Response metadata exposes the company,
+data/evidence versions, searched accessions and invalid-publication count.
+
+Inventory is capped at 20 publications and 4,000 stored chunks; an oversized scope
+returns 409 `SEARCH_SCOPE_TOO_LARGE`, with selected-filing search as the alternative.
+No silent inventory truncation or legacy publication reconstruction occurs. A
+bounded ID/accession/SQL-character-length projection precedes any Text loading;
+one chunk exceeding 3,000 characters excludes its entire publication. Exact-boundary
+chunks remain eligible. Only bounded bodies are materialized. Cosine
+similarity uses bounded stored vectors and one query embedding, then existing
+hybrid scoring/evidence thresholds. Stable company-wide ties use accession,
+filename and chunk index. At most 50 ranked passages and 24,000 context characters
+are returned, preserving whole SOURCE blocks. Every citation carries CIK,
+accession, document/chunk identity, filed/form metadata, offsets and official URL.
+These are source metadata, not inferred financial reporting periods.
+
+Company-wide document identities must be plain ASCII SEC basenames (letters,
+digits, dot, underscore or hyphen; at most 255 characters; neither `.` nor `..`).
+Paths, controls and source delimiters exclude the publication even with a matching
+content digest. Company SOURCE metadata is a single JSON-escaped line; the parser
+requires exact citation-identity equality and reads only the indented stored body.
+Stored text, including line endings and literal SOURCE-like strings, is preserved.
+Selected-filing serialization and parsing retain their existing contract.
+
+The frontend requires a matching version header/body, company CIK, query and
+searched-accession citation scope, and invalidates responses on scope/company/
+version changes. Company-wide highlighting uses query phrases, without numeric
+marks implying correspondence to an independently selected financial observation.
+
 Passages have complete SOURCE/END SOURCE boundaries and IDs mapped to stored metadata. Partial overlap remains intact. The answer service verifies matching blocks/metadata and caps input at eight sources and 24,000 characters.
 
 Questions/context are untrusted user-message data beneath policy; no tools are supplied. Responses API uses structured output, `store=false`, 60-second timeout, no automatic retries, and an 8,192-token output budget. Insufficient retrieval and certain advice requests bypass generation.

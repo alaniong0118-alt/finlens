@@ -37,6 +37,7 @@ export type FilingSource = {
 };
 
 export type Citation = {
+  company_cik?: string;
   citation_id: string;
   chunk_id: string;
   accession_number: string;
@@ -127,7 +128,7 @@ async function requestJson<T>(path: string, init?: RequestInit, requirePublished
     );
   }
   if (requirePublishedVersion && (!scope || returnedVersion === null)) {
-    throw new FinLensApiError("Financial snapshot version could not be verified.", 502, "INVALID_RESPONSE");
+    throw new FinLensApiError("Published response version could not be verified.", 502, "INVALID_RESPONSE");
   }
   if (payload === null) {
     throw new FinLensApiError("FinLens returned an empty response.", 502, "INVALID_RESPONSE");
@@ -242,6 +243,11 @@ export type FilingContext = {
   ticker: string; company_name: string; accession_number: string; query: string;
   context: string; citations: Citation[]; evidence_status: "sufficient" | "insufficient";
 };
+export type CompanyContext = Omit<FilingContext, "accession_number"> & {
+  retrieval_scope: "company"; company_cik: string; data_version: number;
+  evidence_version: number; searched_accessions: string[]; excluded_publication_count: number;
+};
+export type EvidenceContext = FilingContext | CompanyContext;
 
 export type ResearchAnswer = {
   ticker: string; company_name: string; question: string; matched: boolean;
@@ -286,4 +292,19 @@ export function getMetricHistory(ticker: string, metric: string, period: PeriodK
 export function getFilingContext(ticker: string, accession: string, query: string, signal?: AbortSignal): Promise<FilingContext> {
   const params = new URLSearchParams({ q: query, limit: "5" });
   return requestJson(`/companies/${encodeURIComponent(ticker)}/filings/${encodeURIComponent(accession)}/context?${params}`, { signal });
+}
+
+export async function getCompanyContext(ticker: string, cik: string, query: string, signal: AbortSignal): Promise<CompanyContext> {
+  const params = new URLSearchParams({ q: query, limit: "5" });
+  const result = await requestJson<CompanyContext>(`/companies/${encodeURIComponent(ticker)}/context?${params}`, { signal }, true);
+  const scope = versionScopes.get(signal);
+  if (result.ticker !== ticker || result.company_cik !== cik || result.retrieval_scope !== "company"
+      || result.query !== query || result.data_version !== scope?.version
+      || "accession_number" in result || !Number.isSafeInteger(result.evidence_version)
+      || result.evidence_version < 0 || result.evidence_version > result.data_version
+      || !Array.isArray(result.searched_accessions)
+      || result.citations.some(c => c.company_cik !== cik || !result.searched_accessions.includes(c.accession_number))) {
+    throw new FinLensApiError("Evidence does not match this company and publication version.", 409, "EVIDENCE_SCOPE_MISMATCH");
+  }
+  return result;
 }

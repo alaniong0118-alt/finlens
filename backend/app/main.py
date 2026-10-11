@@ -19,7 +19,7 @@ from app.filing_search_service import (
     search_filing_chunks,
     search_filing_chunks_semantic,
 )
-from app.rag_context_service import build_filing_context
+from app.rag_context_service import build_filing_context, build_company_context
 from app.answer_service import (
     AnswerConfigurationError,
     AnswerGenerationError,
@@ -650,6 +650,17 @@ def semantic_search_company_filing(
                 for chunk, similarity in results
             ],
         }
+
+
+@app.get("/companies/{ticker}/context")
+def get_company_context(ticker: str, q: str = Query(min_length=1, max_length=2000),
+                        limit: int = Query(default=5, ge=1, le=50)):
+    with read_session(SessionLocal) as session:
+        company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
+        if company is None:
+            raise HTTPException(404, detail="Unknown company")
+        return {"ticker": company.ticker, "company_name": company.name,
+                **build_company_context(session, company.cik, q, limit)}
 
 
 @app.get(

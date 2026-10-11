@@ -3,10 +3,12 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import timedelta, timezone
 import hashlib
+import re
 from weakref import WeakKeyDictionary
 
 from fastapi import HTTPException
-from sqlalchemy import inspect, select, text
+from sqlalchemy import func, inspect, select, text
+from sqlalchemy.orm import load_only
 
 from app.models import Company, CompanyRefreshState, FilingChunk, FilingPublication
 from app.refresh_contracts import FilingIdentity, Freshness, StreamState, utcnow
@@ -110,3 +112,94 @@ def require_published(session, cik, accession):
         except ValueError:
             pass
     raise HTTPException(409, detail="This filing is not completely published for research.", headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
+
+
+MAX_COMPANY_FILINGS = 20
+MAX_COMPANY_CHUNKS = 4000
+MAX_COMPANY_CHUNK_CHARS = 3000
+
+
+def valid_document_filename(filename):
+    """A plain SEC document basename, never a path or source-framing fragment."""
+    return (isinstance(filename, str) and filename not in {".", ".."}
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", filename) is not None)
+
+
+def published_company_chunks(session, cik):
+    """Read and verify a bounded whole-publication inventory in the read snapshot.
+
+    No legacy reconstruction or writes. Old intact publications remain searchable
+    after an unrelated refresh failure; explicit pending targets are excluded.
+    """
+    if not schema_ready(session.connection()):
+        raise HTTPException(409, "Company-wide search requires publication metadata.",
+                            headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
+    state = session.get(CompanyRefreshState, cik)
+    if state is None:
+        raise HTTPException(409, "Company-wide search requires publication version metadata.",
+                            headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
+    if not 0 <= state.evidence_version <= state.data_version:
+        raise HTTPException(409, "Published data changed. Refresh the research scope.",
+                            headers={"X-FinLens-Error-Code": "DATA_VERSION_CHANGED"})
+    pending = StreamState.model_validate(state.evidence or {}).pending_targets
+    publications = list(session.scalars(select(FilingPublication).options(load_only(
+        FilingPublication.company_cik, FilingPublication.accession_number,
+        FilingPublication.form, FilingPublication.filed, FilingPublication.filename,
+        FilingPublication.chunk_count, FilingPublication.content_digest,
+        FilingPublication.data_version,
+    )).where(FilingPublication.company_cik == cik,
+             FilingPublication.accession_number.not_in(pending))
+        .order_by(FilingPublication.accession_number).limit(MAX_COMPANY_FILINGS + 1)))
+    if len(publications) > MAX_COMPANY_FILINGS:
+        raise HTTPException(409, "Company-wide search exceeds its filing limit. Use selected-filing search.",
+                            headers={"X-FinLens-Error-Code": "SEARCH_SCOPE_TOO_LARGE"})
+    if any(p.data_version < 0 or p.data_version > state.evidence_version for p in publications):
+        raise HTTPException(409, "Published data changed. Refresh the research scope.",
+                            headers={"X-FinLens-Error-Code": "DATA_VERSION_CHANGED"})
+    valid_publications = [p for p in publications if valid_document_filename(p.filename)]
+    inventory = list(session.execute(select(
+        FilingChunk.id, FilingChunk.accession_number, func.length(FilingChunk.text).label("text_length"),
+    ).where(
+        FilingChunk.company_cik == cik,
+        FilingChunk.accession_number.in_([p.accession_number for p in valid_publications]),
+    ).order_by(FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id)
+        .limit(MAX_COMPANY_CHUNKS + 1))) if valid_publications else []
+    if len(inventory) > MAX_COMPANY_CHUNKS:
+        raise HTTPException(409, "Company-wide search exceeds its chunk limit. Use selected-filing search.",
+                            headers={"X-FinLens-Error-Code": "SEARCH_SCOPE_TOO_LARGE"})
+    oversized = {row.accession_number for row in inventory
+                 if row.text_length is None or row.text_length > MAX_COMPANY_CHUNK_CHARS}
+    ids = [row.id for row in inventory if row.accession_number not in oversized]
+    # Text is selected only after the bounded length projection rejects entire
+    # oversized publications. The SQL predicate also prevents a widened body from
+    # materializing on non-PostgreSQL callers without repeatable-read isolation.
+    rows = list(session.scalars(select(FilingChunk).where(
+        FilingChunk.company_cik == cik, FilingChunk.id.in_(ids),
+        func.length(FilingChunk.text) <= MAX_COMPANY_CHUNK_CHARS,
+    ).order_by(FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id)
+        .limit(MAX_COMPANY_CHUNKS + 1))) if ids else []
+    groups = {}
+    for chunk in rows:
+        groups.setdefault(chunk.accession_number, []).append(chunk)
+    chunks, eligible = [], []
+    for publication in valid_publications:
+        group = groups.get(publication.accession_number, [])
+        if (len(group) != publication.chunk_count or not group
+                or any(c.company_cik != cik or not valid_document_filename(c.filename)
+                       or len(c.text) > MAX_COMPANY_CHUNK_CHARS
+                       or any(getattr(c, field) != getattr(publication, field)
+                              for field in ("form", "filed", "filename")) for c in group)):
+            continue
+        try:
+            validate_chunks(group)
+        except (ValueError, TypeError):
+            continue
+        if chunk_digest(group) != publication.content_digest:
+            continue
+        eligible.append(publication.accession_number)
+        chunks.extend(group)
+    return chunks, {
+        "data_version": state.data_version, "evidence_version": state.evidence_version,
+        "searched_accessions": eligible,
+        "excluded_publication_count": len(publications) - len(eligible),
+    }

@@ -8,11 +8,54 @@ import {
   getAnswer,
   getCompanies,
   getFilingSources,
+  getCompanyContext,
   getResearchAnswer,
   readyCompanyCount,
   searchableFilings,
   versionedController,
 } from "../lib/finlens-api.ts";
+
+function companyEvidence(overrides = {}) {
+  return { ticker: 'AAPL', company_cik: '0000320193', company_name: 'Apple', retrieval_scope: 'company',
+    query: 'revenue', data_version: 2, evidence_version: 1, searched_accessions: ['filing-a'],
+    excluded_publication_count: 0, evidence_status: 'insufficient', context: '', citations: [], ...overrides };
+}
+
+test('company evidence uses one version-bound retrieval GET and no provider input', async ctx => {
+  let calls = 0;
+  const controller = versionedController(2, () => assert.fail('unexpected version change'));
+  ctx.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls++;
+    assert.equal(url, '/api/finlens/companies/AAPL/context?q=revenue&limit=5');
+    assert.equal(options.headers['X-FinLens-Data-Version'], '2');
+    assert.equal(options.signal, controller.signal);
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.body, undefined);
+    return new Response(JSON.stringify(companyEvidence()), { headers: { 'X-FinLens-Data-Version': '2' } });
+  });
+  assert.equal((await getCompanyContext('AAPL', '0000320193', 'revenue', controller.signal)).retrieval_scope, 'company');
+  assert.equal(calls, 1);
+});
+
+for (const [name, overrides, header, code] of [
+  ['company', { ticker: 'JPM' }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['CIK', { company_cik: '0000019617' }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['scope', { retrieval_scope: 'filing' }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['mixed scope', { accession_number: 'filing-a' }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['evidence version', { evidence_version: 3 }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['question', { query: 'other' }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['body version', { data_version: 1 }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['citation CIK', { citations: [{ company_cik: '0000019617', accession_number: 'filing-a' }] }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['citation accession', { citations: [{ company_cik: '0000320193', accession_number: 'not-searched' }] }, '2', 'EVIDENCE_SCOPE_MISMATCH'],
+  ['stale header', {}, '3', 'DATA_VERSION_CHANGED'],
+  ['missing header', {}, null, 'INVALID_RESPONSE'],
+]) test(`company evidence rejects mismatched ${name}`, async ctx => {
+  const controller = versionedController(2, () => {});
+  ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(companyEvidence(overrides)), {
+    headers: header === null ? {} : { 'X-FinLens-Data-Version': header },
+  }));
+  await assert.rejects(() => getCompanyContext('AAPL', '0000320193', 'revenue', controller.signal), error => error.code === code);
+});
 
 test("version disagreement rejects a response and asks for one scope refresh", async context => {
   let changes = 0;

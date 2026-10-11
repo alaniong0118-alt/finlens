@@ -172,6 +172,121 @@ function context(ticker, query = 'revenue growth') {
 }
 function companyPath(ticker, suffix) { return `/companies/${ticker}/${suffix}`; }
 
+function companyContext(ticker, query = 'revenue growth', version = 0) {
+  const { accession_number, ...evidence } = context(ticker, query);
+  const cik = companies.find(company => company.ticker === ticker).cik;
+  const citations = evidence.citations.map(citation => ({ ...citation, company_cik: cik }));
+  return { ...evidence, retrieval_scope: 'company', company_cik: cik, data_version: version,
+    evidence_version: 0, searched_accessions: [accession_number], excluded_publication_count: 0,
+    context: companySource(citations[0], `${ticker} test evidence revenue growth.`), citations };
+}
+
+function companySource(citation, text) {
+  const metadata = Object.fromEntries(['company_cik', 'accession_number', 'filename', 'chunk_id',
+    'form', 'filed', 'start_char', 'end_char'].map(key => [key, citation[key]]));
+  return `[SOURCE ${citation.citation_id}]\nmetadata: ${JSON.stringify(metadata)}\ntext: |-\n${text.split('\n').map(line => `  ${line}`).join('\n')}\n[END SOURCE ${citation.citation_id}]`;
+}
+
+async function startCompanySearch(app, ticker = 'AAPL') {
+  await app.change(app.select('Evidence search scope'), 'company');
+  await app.change(app.host.querySelector('textarea'), 'revenue growth');
+  await app.click('Research question');
+  await app.release(app.request(companyPath(ticker, 'research-answer')), {
+    ticker, question: 'revenue growth', matched: false, status: 'not_matched',
+  });
+  return app.request(companyPath(ticker, 'context'));
+}
+
+test('mounted company-wide scope preserves source lineage and exposes no AI action', async ctx => {
+  const app = await mount(ctx, true);
+  await app.completeCompany('AAPL', '1000000000');
+  assert.equal(app.select('Evidence search scope').value, 'filing');
+  const response = await startCompanySearch(app);
+  assert.equal(app.select('Indexed SEC filing'), undefined);
+  assert.equal(response.init.headers['X-FinLens-Data-Version'], '0');
+  await app.release(response, companyContext('AAPL'));
+  assert.match(app.host.textContent, /Company-wide · 1 verified published filings searched/);
+  assert.match(app.evidence().join(''), /CIK 0000320193|CIK 320193/);
+  assert.match(app.evidence().join(''), /AAPL-test-accession/);
+  assert.match(app.evidence().join(''), /AAPL-fixture.htm/);
+  assert.ok(![...app.host.querySelectorAll('button')].some(b => b.textContent === 'Generate AI analysis'));
+  assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
+  assert.equal(app.requests.filter(r => r.path.includes('/filings/') && r.path.endsWith('/context')).length, 0);
+  assert.equal(app.requests.filter(r => r.path === '/companies/AAPL/context').length, 1);
+  await app.change(app.select('Evidence search scope'), 'filing');
+  assert.deepEqual(app.evidence(), []);
+  assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+  await app.release(await app.search('AAPL'), context('AAPL'));
+  assert.match(app.host.textContent, /Selected filing only/);
+  assert.ok([...app.host.querySelectorAll('button')].some(b => b.textContent === 'Generate AI analysis'));
+  assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
+});
+
+test('mounted scope switch discards a delayed company-wide response', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const delayed = await startCompanySearch(app);
+  await app.change(app.select('Evidence search scope'), 'filing');
+  assert.equal(delayed.init.signal.aborted, true);
+  await app.release(delayed, companyContext('AAPL'));
+  assert.deepEqual(app.evidence(), []);
+  assert.doesNotMatch(app.host.textContent, /verified published filings searched/);
+});
+
+test('mounted company switch discards company-wide evidence and restores default scope', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const delayed = await startCompanySearch(app);
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  assert.equal(delayed.init.signal.aborted, true);
+  await app.release(delayed, companyContext('AAPL'));
+  await app.completeCompany('JPM', '2000000000');
+  assert.equal(app.select('Evidence search scope').value, 'filing');
+  assert.deepEqual(app.evidence(), []);
+  assert.doesNotMatch(app.host.textContent, /AAPL test evidence/);
+});
+
+test('mounted company-wide evidence is invalidated by publication version changes', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  const delayed = await startCompanySearch(app);
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.equal(delayed.init.signal.aborted, true);
+  await app.release(delayed, companyContext('AAPL'));
+  assert.deepEqual(app.evidence(), []);
+  assert.equal(app.select('Evidence search scope').value, 'company');
+  assert.match(app.host.textContent, /Data updated; research this question again/);
+});
+
+test('mounted company-wide search presents honest insufficient evidence', async ctx => {
+  const app = await mount(ctx, true);
+  await app.completeCompany('AAPL', '1000000000');
+  const request = await startCompanySearch(app);
+  await app.release(request, { ...companyContext('AAPL'), evidence_status: 'insufficient', context: '', citations: [] });
+  assert.match(app.host.textContent, /Insufficient evidence in published company filings/);
+  assert.deepEqual(app.evidence(), []);
+  assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
+});
+
+test('mounted company-wide search cannot turn financial answer values into numeric proof marks', async ctx => {
+  const app = await mount(ctx, true);
+  await app.completeCompany('AAPL', '1000000000');
+  await app.change(app.select('Evidence search scope'), 'company');
+  await app.change(app.host.querySelector('textarea'), 'latest quarterly revenue');
+  await app.click('Research question');
+  const question = 'latest quarterly revenue';
+  const direct = directAnswer('AAPL', question);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), direct);
+  const evidence = companyContext('AAPL', question);
+  evidence.context = companySource(evidence.citations[0], `Revenue USD ${direct.observation.value}.`);
+  await app.release(app.request(companyPath('AAPL', 'context')), evidence);
+  assert.equal(app.host.querySelectorAll('.evidence-card .value-match').length, 0);
+  assert.ok(app.host.querySelector('.direct-answer'));
+  assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
+});
+
 async function mount(ctx, configured = false, catalog = companies) {
   const requests = [];
   // Intentionally ignore AbortSignal when resolving: cancellation can race with

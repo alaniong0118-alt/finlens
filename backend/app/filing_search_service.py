@@ -1,11 +1,12 @@
 from dataclasses import dataclass
+import math
 import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import FilingChunk
-from app.embedding_service import embed_texts
+from app.embedding_service import embed_texts, validate_embedding
 
 
 # Query-only stop words keep natural questions from diluting term coverage.
@@ -71,6 +72,7 @@ class HybridSearchResult:
 
 def rank_hybrid_chunks(
     candidates: list[tuple[FilingChunk, float]], query: str, limit: int,
+    *, company_wide: bool = False,
 ) -> list[HybridSearchResult]:
     """Rank, then deduplicate; exact phrases outrank purely semantic matches."""
     if not 1 <= limit <= 50:
@@ -84,6 +86,7 @@ def rank_hybrid_chunks(
         ))
     ranked.sort(key=lambda result: (
         -result.hybrid_score, -result.semantic_similarity,
+        *((result.chunk.accession_number, result.chunk.filename) if company_wide else ()),
         result.chunk.chunk_index, result.chunk.id or 0,
     ))
     results = []
@@ -100,6 +103,23 @@ def rank_hybrid_chunks(
         if len(results) == limit:
             break
     return results
+
+
+def hybrid_search_company_chunks(chunks, query, limit=50):
+    """Rank already verified bounded publications, embedding the query once."""
+    if not 1 <= limit <= 50:
+        raise ValueError("limit must be between 1 and 50")
+    if not chunks or not (set(re.findall(r"\w+", query.casefold())) - QUERY_STOP_WORDS):
+        return []
+    vector = embed_texts([query.strip()])[0]
+    validate_embedding(vector)
+    norm = math.hypot(*vector)
+    candidates = []
+    for chunk in chunks:
+        similarity = math.fsum(float(a) * float(b) for a, b in zip(vector, chunk.embedding, strict=True)) / (
+            norm * math.hypot(*chunk.embedding))
+        candidates.append((chunk, similarity))
+    return rank_hybrid_chunks(candidates, query, limit, company_wide=True)
 
 
 def hybrid_search_filing_chunks(
