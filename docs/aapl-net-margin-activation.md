@@ -1,7 +1,7 @@
 # Disabled AAPL Net Margin activation entry point
 
-Status: disabled safety infrastructure prepared for independent Astra High review.
-**Actual activation is not approved or enabled.** Baseline main / d6173d0. The separately
+Status: committed disabled infrastructure; bounded Windows verifier prepared for Astra High review.
+**Actual activation is not approved or enabled.** Verifier baseline main / 6aa273c. The separately
 reviewed [dormant proposal](aapl-net-margin-proposal.md) and its immutable financial
 records/pins remain unchanged. See [implementation](../backend/app/aapl_net_margin_activation.py).
 
@@ -30,11 +30,65 @@ evidence-policy digests, authorized SIDs, deployment ID, interpreter, import roo
 file pins and original-store path. Profiles reject duplicate/extra fields and
 changed pins. These shape/hash checks are not proof of trusted ownership.
 
-The production profile ACL verifier, complete deployment-integrity verifier and
-maintenance-exclusion provider deliberately reject every real invocation. Tests
+The profile ACL verifier implements a conservative Windows custody subset. Complete
+deployment integrity and maintenance exclusion still reject every real invocation. Tests
 replace these private boundaries with reversible synthetic fixtures; production
 has no skip-verification/synthetic flag. No operator profile, real SID allowlist,
 ACL or original-store configuration is installed.
+
+### Bounded Windows verifier and external bootstrap boundary
+
+The profile schema is now version **2**. It retains the exact approval and evidence
+policy digests and authenticated process-token operator allowlist, and additionally
+binds `code_root`, `runtime_roots`, `configuration_files`, `custodian_sids` and
+`custodian_access`. Version 1, unknown/duplicate fields, duplicate roots/SIDs, changed
+pins and caller bootstrap assertions reject. No real profile or identities are shipped.
+
+This initial custody subset permits modification only by the well-known Windows
+SYSTEM and built-in Administrators principals; both must be declared, with
+`custodian_access="full_control"`. They are trusted deployment administrators, not
+an operator allowlist or authenticated approval. Other/delegated custodians are
+unsupported. The allowlist must be installed in an independently protected profile;
+caller-provided SIDs, usernames and public approval IDs cannot establish authority.
+
+Native `GetNamedSecurityInfoW` reads owner, group and DACL; descriptor/control/ACL
+validation precedes parsing. `AccessCheck` uses a duplicate of the actual process
+token (without impersonating the thread) to include group/effective access. API
+failure, absent/null DACL, defaulted owner/DACL, unexpected owner or unsupported
+security data reject. Only ordinary allow ACEs in revision-2 ACLs are supported;
+deny, object, conditional/callback and other ACEs reject conservatively. All inherited
+and group grants are inspected. Untrusted write/append/EA/attribute, delete/delete-child,
+WRITE_DAC or WRITE_OWNER grants reject, including inherit-only descendant grants.
+Protected-DACL status alone is never proof; inherited permissions remain checked.
+
+Every protected object and ancestor is checked. The same conservative mutation
+policy applies to ancestors, so directory replacement permissions cannot be hidden
+by a read-only file ACL. UNC/device/alternate-stream/ambiguous paths, reparse points,
+links, multiple hard links and resolved-path substitutions are unsupported. These
+checks are snapshots, not atomic open-by-handle custody or a maintenance fence;
+trusted administrators remain capable of changes and must obey deployment controls.
+This is a DACL/current-token check, not an audit of every account's privileges or
+group membership. The external trust anchor must also exclude untrusted privileged
+administrators, backup/restore/ownership bypass and deployment changes during use.
+
+Integrity checks bind the running code root, both Python prefixes, interpreter,
+launcher/policy source and declared configuration pins (including backend `.env`
+when present). Import roots must belong to reviewed code/runtime roots. Unisolated
+startup, user-site/ambient import injection, unknown meta-path importers, missing or
+unreviewed search paths and active `.pth` hook/path lines reject. Checks inspect `.pth`
+files directly in declared roots and actual directory search entries; they do not
+claim a recursive/transitive native dependency or DLL-load closure. Empty/comment-only
+`.pth` files satisfy only this structural subset.
+
+**The external bootstrap verifier still always rejects.** Passing these checks
+does not establish that earlier startup hooks, import hooks, Python code or native
+libraries were trustworthy. No profile, boolean or environment value can satisfy
+`_verify_external_bootstrap`. Production authentication cannot succeed in this patch.
+An independently protected OS/deployment launcher must establish the reviewed Python,
+stdlib, extensions, DLL resolution, dependencies, source, configuration and import
+closure before executing Python. Future integration requires separate Astra review;
+self-reported hashes and post-startup introspection cannot replace that trust anchor.
+The current writable development deployment must fail, without any ACL changes.
 
 Commissioning requires independently verified Windows owners/DACLs on the profile,
 all ancestor directories, launcher/backend code, interpreter/DLLs/stdlib/dependencies,

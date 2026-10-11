@@ -83,11 +83,14 @@ def synthetic(tmp_path, isolated):
     file = tmp_path / "synthetic-deployment.txt"
     file.write_text("synthetic fixture only", encoding="utf-8")
     s.profile = tmp_path / "synthetic-profile.json"
-    s.profile_data = dict(version=1, deployment_id="synthetic-reviewed-deployment", operator_sids=[s.sid],
+    s.profile_data = dict(version=2, deployment_id="synthetic-reviewed-deployment", operator_sids=[s.sid],
         approval={"permission": s.record.ref.permission, "id": s.record.ref.approval_id, "version": 1},
         approval_sha256=s.policy.approval_sha256, evidence_policy_sha256=adapter._policy_digest(s.policy),
         python_executable=sys.executable, import_roots=[str(tmp_path)], original_store=str(s.root),
-        protected_files=[dict(path=str(file), sha256=hashlib.sha256(file.read_bytes()).hexdigest())])
+        protected_files=[dict(path=str(file), sha256=hashlib.sha256(file.read_bytes()).hexdigest())],
+        code_root=str(Path(operators.__file__).resolve().parents[1]),
+        runtime_roots=[sys.prefix, sys.base_prefix], configuration_files=[],
+        custodian_sids=sorted(operators._CUSTODIANS), custodian_access="full_control")
     s.profile.write_text(json.dumps(s.profile_data), encoding="utf-8")
     s.maintenance = False
 
@@ -287,7 +290,7 @@ def test_exact_post_publication_verification_rejects_extra_or_missing_entries(sy
 
 
 @pytest.mark.parametrize("boundary,reason", [("_verify_protected_profile", "protected_profile_acl"),
-    ("_verify_deployment_integrity", "deployment_integrity"), ("maintenance_exclusion", "maintenance_exclusion")])
+    ("_verify_deployment_integrity", "deployment_integrity|protected_profile_acl"), ("maintenance_exclusion", "maintenance_exclusion")])
 def test_uncommissioned_security_controls_fail_closed(synthetic, isolated, boundary, reason):
     # Reload only this module to restore the actual rejecting production boundary.
     actual = importlib.reload(operators)
