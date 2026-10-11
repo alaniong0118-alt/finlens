@@ -79,10 +79,13 @@ literal rewrites still require reviewed repinning. No automatic pin renewal exis
 The proposal is a side-effect-free module with immutable literal descriptors.
 No production loader or registry imports it. All four registries remain empty;
 even importing the proposal performs no registration, configuration or evidence I/O.
-There is no runtime environment flag, HTTP switch or activation helper.
-The activation path is deliberately a **separate reviewed code patch** registering
-exactly the denominator record and matching evidence policy. Revenue selection and
-withdrawal registries remain empty at initial activation; global equivalences stay empty.
+There is no runtime environment flag or HTTP switch. The separately prepared
+[internal activation entry point](aapl-net-margin-activation.md) remains behind a
+false source gate, requires an explicit operator call and fresh verification, and
+is never invoked by startup or ordinary requests. Actual activation still requires
+a **separately approved/reviewed source change and invocation** registering exactly
+the denominator record and matching evidence policy. Revenue selection and withdrawal
+registries remain empty at initial activation; global equivalences stay empty.
 
 The operator must separately configure `FINLENS_SEC_ORIGINAL_STORE` to an absolute,
 operator-owned original store outside Git. No machine-specific root is embedded in
