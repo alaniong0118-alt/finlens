@@ -42,6 +42,14 @@ test('company overview renders stored identity/readiness and does not fabricate 
  const unavailable=renderToStaticMarkup(React.createElement(overview.default,{companies:[{...company,has_indexed_filing:false}],company:{...company,has_indexed_filing:false,indexed_filing_count:0},ticker:'TEST',loading:false,error:null,onChange:()=>{}}));
  assert.match(unavailable,/Not indexed/);assert.match(unavailable,/0 indexed filings/);
 });
+
+test('catalog failure exposes a native accessible retry rather than a successful empty catalog',()=>{
+ const html=renderToStaticMarkup(React.createElement(overview.default,{companies:[],ticker:'',loading:false,error:'Temporary API failure',onChange:()=>{},onRetry:()=>{}}));
+ assert.match(html,/role="alert"/);
+ assert.match(html,/Could not load the company list/);
+ assert.match(html,/<button type="button" class="secondary-button">Retry companies<\/button>/);
+ assert.match(html,/aria-live="polite" aria-busy="false"/);
+});
 test('metric card renders server value, period, provenance and economic basis',()=>{
  const html=renderToStaticMarkup(React.createElement(finance.MetricCard,{point}));
  for(const text of ['$1B','Revenues','0000000001-25-000001','total revenue basis','Sources and details','Jan 1, 2025']) assert.ok(html.includes(text),text);

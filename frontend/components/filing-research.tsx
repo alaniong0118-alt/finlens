@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { citationForClaim, describeApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings,
+import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings,
   getCompanyContext, type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
@@ -82,10 +82,11 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
   </section>;
 }
 
-function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope }: {
+function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady }: {
   company: Company; filing: FilingSource | null; configured: boolean;
   retrievalScope: "filing" | "company";
   query: string; setQuery: (value: string) => void;
+  companyEvidenceReady: boolean;
 }) {
   const { version, changed } = useResearchVersion();
   const [result, setResult] = useState<EvidenceContext | null>(null);
@@ -96,44 +97,70 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [answerError, setAnswerError] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const scope = useRef(createRequestScope());
+  const evidenceController = useRef<AbortController | null>(null);
+  const evidenceScope = useRef(createRequestScope());
+  const answerPending = useRef(false);
+  const evidencePending = useRef(false);
+  const evidenceIdentity = retrievalScope === "company" ? (companyEvidenceReady ? "company" : "company-unavailable") : filing?.accession_number ?? "";
+  const [searchedEvidence, setSearchedEvidence] = useState(evidenceIdentity);
   useEffect(() => {
     const currentScope = scope.current;
-    return () => { currentScope.invalidate(); controller.current?.abort(); };
+    const currentEvidenceScope = evidenceScope.current;
+    return () => {
+      currentScope.invalidate(); controller.current?.abort();
+      currentEvidenceScope.invalidate(); evidenceController.current?.abort();
+    };
   }, []);
   const [searchedVersion, setSearchedVersion] = useState(version);
   useEffect(() => {
     scope.current.invalidate(); controller.current?.abort();
+    evidenceScope.current.invalidate(); evidenceController.current?.abort();
+    answerPending.current = false; evidencePending.current = false;
     setResult(null); setAnswer(null); setLoading(false); setAnswerLoading(false);
     setError(null); setAnswerError(null);
   }, [version]);
+  useEffect(() => {
+    // Filing/scope changes cannot erase a valid independent financial answer.
+    evidenceScope.current.invalidate(); evidenceController.current?.abort();
+    evidencePending.current = false;
+    setResult(null); setLoading(false); setError(null);
+  }, [evidenceIdentity]);
   function edit(value: string) {
     scope.current.invalidate(); controller.current?.abort();
+    evidenceScope.current.invalidate(); evidenceController.current?.abort();
+    answerPending.current = false; evidencePending.current = false;
     setQuery(value); setResult(null); setLoading(false); setError(null);
     setAnswer(null); setAnswerLoading(false); setAnswerError(null);
   }
   async function search(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (version === null || !query.trim() || answerLoading || loading) return;
+    event.preventDefault(); if (version === null || !query.trim() || answerPending.current || evidencePending.current) return;
     setSearchedVersion(version);
     const id = scope.current.start();
     controller.current?.abort(); controller.current = versionedController(version, changed);
-    const companyWide = retrievalScope === "company";
-    setLoading(companyWide || Boolean(filing)); setError(null); setResult(null);
+    const evidenceId = evidenceScope.current.start();
+    evidenceController.current?.abort(); evidenceController.current = versionedController(version, changed);
+    const companyWide = retrievalScope === "company" && companyEvidenceReady;
+    const selectedFiling = retrievalScope === "filing" ? filing : null;
+    answerPending.current = true; evidencePending.current = companyWide || Boolean(selectedFiling);
+    setSearchedEvidence(evidenceIdentity);
+    setLoading(companyWide || Boolean(selectedFiling)); setError(null); setResult(null);
     setAnswerLoading(true); setAnswerError(null); setAnswer(null);
     const signal = controller.current.signal;
+    const evidenceSignal = evidenceController.current.signal;
     const question = query.trim();
     // Settle each branch independently: a slow/failed context must never delay
     // or erase a valid direct answer, and answer failure cannot erase evidence.
     const direct = getResearchAnswer(company.ticker, question, signal).then(response => {
       if (scope.current.current(id) && response.ticker === company.ticker && response.question === question) setAnswer(response);
     }).catch(failure => { if (scope.current.current(id)) setAnswerError(describeApiError(failure)); })
-      .finally(() => { if (scope.current.current(id)) setAnswerLoading(false); });
-    const evidence = companyWide ? getCompanyContext(company.ticker, company.cik, question, signal).then(response => {
-      if (scope.current.current(id)) setResult(response);
-    }).catch(failure => { if (scope.current.current(id)) setError(describeApiError(failure)); })
-      .finally(() => { if (scope.current.current(id)) setLoading(false); }) : filing ? getFilingContext(company.ticker, filing.accession_number, question, signal).then(response => {
-      if (scope.current.current(id) && response.ticker === company.ticker && response.accession_number === filing.accession_number && response.query === question) setResult(response);
-    }).catch(failure => { if (scope.current.current(id)) setError(describeApiError(failure)); })
-      .finally(() => { if (scope.current.current(id)) setLoading(false); }) : Promise.resolve();
+      .finally(() => { if (scope.current.current(id)) { answerPending.current = false; setAnswerLoading(false); } });
+    const evidence = companyWide ? getCompanyContext(company.ticker, company.cik, question, evidenceSignal).then(response => {
+      if (evidenceScope.current.current(evidenceId)) setResult(response);
+    }).catch(failure => { if (evidenceScope.current.current(evidenceId)) setError(describeApiError(failure)); })
+      .finally(() => { if (evidenceScope.current.current(evidenceId)) { evidencePending.current = false; setLoading(false); } }) : selectedFiling ? getFilingContext(company.ticker, selectedFiling.accession_number, question, evidenceSignal).then(response => {
+      if (evidenceScope.current.current(evidenceId) && response.ticker === company.ticker && response.accession_number === selectedFiling.accession_number && response.query === question) setResult(response);
+    }).catch(failure => { if (evidenceScope.current.current(evidenceId)) setError(describeApiError(failure)); })
+      .finally(() => { if (evidenceScope.current.current(evidenceId)) { evidencePending.current = false; setLoading(false); } }) : Promise.resolve();
     await Promise.all([direct, evidence]);
   }
   return <>
@@ -145,22 +172,22 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       <label htmlFor="research-query">Research question or search<textarea id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
       <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>
       <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
-      <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). Other questions search SEC evidence. No AI generation.</p>
+      <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). {(retrievalScope === "filing" ? !filing : !companyEvidenceReady) ? "Filing evidence is unavailable for this selection; only direct financial answers can be requested." : "Other questions search SEC evidence."} No AI generation.</p>
     </form>
     {searchedVersion !== version && <p className="notice">Data updated; research this question again.</p>}
     <div aria-live="polite" aria-busy={answerLoading}>
       {answerLoading && <p className="loading-state">Checking stored financial observations…</p>}
-      {answerError && <p className="notice">Direct financial answer unavailable: {answerError} SEC evidence research continues independently.</p>}
+      {answerError && <p className="notice">Direct financial answer unavailable: {answerError} {(retrievalScope === "company" ? companyEvidenceReady : filing) && "SEC evidence research continues independently."}</p>}
       {searchedVersion === version && answer?.matched && <DirectResearchAnswer answer={answer} />}
-      {answer?.status === "company_mismatch" && <p className="notice">{answer.explanation}</p>}
-      {answer?.status === "not_matched" && <p className="muted small">SEC evidence research · this question is outside supported direct financial answers.</p>}
+      {searchedVersion === version && answer?.status === "company_mismatch" && <p className="notice">{answer.explanation}</p>}
+      {searchedVersion === version && answer?.status === "not_matched" && <p className="muted small">This question is outside supported direct financial answers.{(retrievalScope === "company" ? companyEvidenceReady : filing) && " SEC evidence research continues independently."}</p>}
     </div>
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">{retrievalScope === "company" ? "Finding relevant passages in published company filings…" : "Finding relevant passages in this filing…"}</p>}
       {error && <p role="alert" className="error-state">{error}</p>}
       {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state"><h3>Explore the filing evidence</h3><p>Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required.</p></div>}
     </div>
-    {searchedVersion === version && result && <><h3>Supporting SEC evidence</h3>
+    {searchedVersion === version && searchedEvidence === evidenceIdentity && result && <><h3>Supporting SEC evidence</h3>
       <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}Passages may describe different periods and are research, not validation of the structured answer.</p>
       <EvidenceResults key={`evidence-${result.query}-${retrievalScope}`} result={result} answer={"retrieval_scope" in result ? null : answer} />
       {"retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} />}
@@ -177,18 +204,32 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const [retrievalScope, setRetrievalScope] = useState<"filing" | "company">("filing");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [sourceAttempt, setSourceAttempt] = useState(0);
+  const sourcePending = useRef(false);
   useEffect(() => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setErrorCode(null);
     if (version === null) return;
+    sourcePending.current = true;
     const controller = versionedController(version, changed);
     getFilingSources(company.ticker, controller.signal).then((data) => {
       if (controller.signal.aborted) return;
       const indexed = searchableFilings(data); setFilings(indexed); setSourceVersion(version);
       setAccession(previous => indexed.some(item => item.accession_number === previous) ? previous : indexed[0]?.accession_number ?? "");
-    }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [company.ticker, version, changed]);
+    }).catch((failure) => {
+      if (!controller.signal.aborted) {
+        setError(describeApiError(failure));
+        setErrorCode(failure instanceof FinLensApiError ? failure.code : null);
+      }
+    }).finally(() => { if (!controller.signal.aborted) { sourcePending.current = false; setLoading(false); } });
+    return () => { controller.abort(); sourcePending.current = false; };
+  }, [company.ticker, version, changed, sourceAttempt]);
+  function retrySources() {
+    if (version === null || sourcePending.current) return;
+    if (errorCode === "DATA_VERSION_CHANGED") { changed(); return; }
+    sourcePending.current = true;
+    setSourceAttempt(attempt => attempt + 1);
+  }
   const filing = filings.find((item) => item.accession_number === accession);
   return <section className="panel filing-panel" aria-labelledby="filing-title">
     <div className="section-heading"><div><p className="eyebrow">SEC research</p><h2 id="filing-title">Read the evidence</h2></div><span className="badge">No AI required</span></div>
@@ -198,11 +239,14 @@ export default function FilingResearch({ company, configured }: { company: Compa
     </select></label>
     {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => setAccession(event.target.value)} disabled={loading || !filings.length || !company.has_indexed_filing}>
       {loading && <option value="">Loading filings…</option>}
-      {!loading && !filings.length && <option value="">No indexed filing available</option>}
+      {!loading && !filings.length && <option value="">{error ? "Filing list unavailable" : "No indexed filing available"}</option>}
       {filings.map((item) => <option key={item.accession_number} value={item.accession_number}>{item.form ?? "SEC filing"} · {formatDate(item.filed)}</option>)}
     </select></label>}
-    {error && <p role="alert" className="error-state">{error}</p>}
+    <div aria-live="polite" aria-busy={loading}>
+      {error && <><p role="alert" className="error-state">Could not load the filing list. {error}</p>
+        <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retrySources}>{errorCode === "DATA_VERSION_CHANGED" ? "Retry data check" : "Retry filing list"}</button></>}
+    </div>
     {retrievalScope === "filing" && !loading && !error && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
-    {(sourceVersion >= 0 || retrievalScope === "company") && <FilingSearch key={`${company.ticker}-${retrievalScope}-${retrievalScope === "filing" ? accession : ""}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} />}
+    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceVersion === version && company.has_indexed_filing && filings.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} />
   </section>;
 }

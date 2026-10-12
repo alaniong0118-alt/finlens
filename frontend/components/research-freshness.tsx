@@ -11,6 +11,10 @@ export default function ResearchFreshness({ ticker, children, catalogChanged }: 
 }) {
   const [data, setData] = useState<CompanyFreshness | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [publicationChanged, setPublicationChanged] = useState(false);
+  const publicationInvalidated = useRef(false);
+  const rejectedVersion = useRef<number | null>(null);
   const pending = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const latest = useRef<CompanyFreshness | null>(null);
@@ -32,17 +36,43 @@ export default function ResearchFreshness({ ticker, children, catalogChanged }: 
   const check = useCallback(() => {
     if (pending.current || !mounted.current) return;
     pending.current = true;
+    setChecking(true);
     controller.current = new AbortController();
     const signal = controller.current.signal;
     getFreshness(ticker, signal).then(next => {
-      if (signal.aborted || next.ticker !== ticker) return;
+      if (signal.aborted) return;
+      if (next.ticker !== ticker) throw new Error("Publication company does not match");
       if (!Number.isSafeInteger(next.data_version) || next.data_version < 0) throw new Error("Invalid publication version");
-      if (next.data_version < (latest.current?.data_version ?? 0)) return;
+      if (next.data_version < (latest.current?.data_version ?? 0)) throw new Error("Publication version regressed");
+      if (rejectedVersion.current !== null && next.data_version <= rejectedVersion.current) throw new Error("Rejected publication has not reconciled");
       latest.current = next; setData(next); setUnavailable(false);
+      publicationInvalidated.current = false;
+      rejectedVersion.current = null;
+      setPublicationChanged(false);
       reconcileCatalog(next.evidence_version);
     }).catch(() => { if (!signal.aborted) setUnavailable(true); })
-      .finally(() => { if (controller.current?.signal === signal) pending.current = false; });
+      .finally(() => {
+        if (controller.current?.signal !== signal) return;
+        pending.current = false;
+        if (!signal.aborted) setChecking(false);
+      });
   }, [ticker, reconcileCatalog]);
+  const publicationVersion = data?.data_version ?? null;
+  const changed = useCallback(() => {
+    // versionedController retains this callback for its originating publication.
+    // Freshness can verify a newer pin before React commits cancellation: an old
+    // rejection must not invalidate that independently verified publication.
+    if (!mounted.current || publicationVersion === null || publicationVersion !== latest.current?.data_version) return;
+    // A rejected pin cannot authorize manual research while reconciliation waits.
+    if (!publicationInvalidated.current) {
+      publicationInvalidated.current = true;
+      rejectedVersion.current = publicationVersion;
+      // A check started before the mismatch may itself describe the old version.
+      controller.current?.abort(); controller.current = null; pending.current = false;
+    }
+    setPublicationChanged(true);
+    check();
+  }, [check, publicationVersion]);
   useEffect(() => {
     mounted.current = true; check();
     const visible = () => { if (!document.hidden) check(); };
@@ -55,8 +85,8 @@ export default function ResearchFreshness({ ticker, children, catalogChanged }: 
       window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible);
     };
   }, [check]);
-  return <VersionContext.Provider value={{ version: data?.data_version ?? null, changed: check }}>
-    <section className="notice" aria-label="Data freshness" aria-live="polite">
+  return <VersionContext.Provider value={{ version: publicationChanged ? null : data?.data_version ?? null, changed }}>
+    <section className="notice" aria-label="Data freshness" aria-live="polite" aria-busy={checking}>
       <strong>Stored data · {unavailable ? "check unavailable" : data?.status ?? "unknown"}</strong>
       {data && <> · version {data.data_version}<p className="small">Financial facts: {data.facts.status} · Evidence: {data.evidence.status}.
         {data.facts.last_checked_at && <> FinLens checked facts {new Date(data.facts.last_checked_at).toLocaleString()}.</>}
@@ -67,7 +97,12 @@ export default function ResearchFreshness({ ticker, children, catalogChanged }: 
           {data.evidence.pending_targets.length > 0 && <> {data.evidence.pending_targets.length} filing targets pending.</>}</p>
         {data.migration_required && <p className="small">Refresh metadata is not installed. Existing stored research remains available; source currency is unknown.</p>}
       </details></>}
-      {unavailable && <p className="small">Freshness check unavailable. Previously stored research remains usable; currency is not verified.</p>}
+      {unavailable && <><p className="small">{data && !publicationChanged
+        ? "Freshness check unavailable. Already loaded research remains available; currency is not verified."
+        : "Freshness check unavailable. Could not verify this company’s data version. Retry to load research."}</p>
+        <button type="button" className="secondary-button" disabled={checking} onClick={check}>Retry data check</button></>}
+      {checking && <p className="small">Checking the company’s published data…</p>}
+      {publicationChanged && <p className="small">Published data changed. Research waits until its publication version is verified again.</p>}
       {catalogPending && <p className="small">Filing availability check pending. FinLens retries on the next freshness check.</p>}
       <p className="small muted">A recent check does not guarantee complete SEC coverage. No live data acquisition is triggered by this page.</p>
     </section>

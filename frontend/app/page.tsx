@@ -15,6 +15,22 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [configured, setConfigured] = useState(false);
+  const initialCatalogController = useRef<AbortController | null>(null);
+  const loadCatalog = useCallback(() => {
+    if (initialCatalogController.current && !initialCatalogController.current.signal.aborted) return;
+    const controller = new AbortController(); initialCatalogController.current = controller;
+    setLoading(true); setError(null);
+    getCompanies(controller.signal).then((data) => {
+      if (controller.signal.aborted) return;
+      setCompanies(data);
+      setTicker(previous => data.some(item => item.ticker === previous) ? previous : firstReadyCompany(data)?.ticker ?? "");
+    }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
+      .finally(() => {
+        if (initialCatalogController.current !== controller) return;
+        initialCatalogController.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      });
+  }, []);
   const catalogController = useRef<AbortController | null>(null);
   const catalogChanged = useCallback(async (signal: AbortSignal): Promise<boolean> => {
     catalogController.current?.abort();
@@ -35,12 +51,11 @@ export default function Home() {
   }, []);
   useEffect(() => () => catalogController.current?.abort(), []);
   useEffect(() => {
+    loadCatalog();
+    return () => { initialCatalogController.current?.abort(); initialCatalogController.current = null; };
+  }, [loadCatalog]);
+  useEffect(() => {
     const controller = new AbortController();
-    getCompanies(controller.signal).then((data) => {
-      if (controller.signal.aborted) return;
-      setCompanies(data); setTicker(firstReadyCompany(data)?.ticker ?? "");
-    }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     getCapabilities(controller.signal).then((data) => {
       if (!controller.signal.aborted) setConfigured(data.ai_analysis_configured);
     }).catch(() => { /* Unknown capability keeps optional AI disabled; research remains usable. */ });
@@ -58,7 +73,7 @@ export default function Home() {
         <p>Explore reported financials and SEC filings. Research Mode works without AI; grounded analysis is an optional next step.</p>
         <ul className="hero-badges" aria-label="Research capabilities">{["SEC-sourced", "Deterministic metrics", "Hybrid evidence search", "Traceable sources"].map((label) => <li key={label}>{label}</li>)}</ul>
       </div>
-      <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} />
+      <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} />
       <nav className="workspace-nav" aria-label="Research sections"><a href="#snapshot-title">Company research</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
         <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} /></div>

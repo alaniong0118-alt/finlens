@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { describeApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
+import { describeApiError, FinLensApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
   type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
 import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, officialSecUrl,
   periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS } from "@/lib/research";
@@ -26,6 +26,10 @@ function snapshotFor(scope: SnapshotScope, period: PeriodKind) {
         throw new Error("Financial snapshot does not match this company and period.");
       }
       return result;
+    }).catch(failure => {
+      // A cancelled older request must not evict its replacement for this period.
+      if (scope.responses.get(period) === created) scope.responses.delete(period);
+      throw failure;
     }).finally(() => { created.settled = true; }) };
     entry = created;
     scope.responses.set(period, entry);
@@ -151,6 +155,9 @@ export default function FinancialResearch({ company }: { company: Company }) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [snapshotAttempt, setSnapshotAttempt] = useState(0);
+  const snapshotPending = useRef(false);
   const scope = useRef<SnapshotScope | null>(null);
   const [alternatives, setAlternatives] = useState<{ ticker: string; version: number; hints: { metric: string; snapshot: FinancialSummary }[] } | null>(null);
   useEffect(() => {
@@ -163,20 +170,34 @@ export default function FinancialResearch({ company }: { company: Company }) {
     return () => current.controller.abort();
   }, [company.ticker, company.cik, version, changed]);
   useEffect(() => {
-    setLoading(true); setSummary(null); setError(null);
+    setLoading(true); setSummary(null); setError(null); setErrorCode(null);
     const current = scope.current;
     if (version === null || !current) return;
     let active = true;
+    snapshotPending.current = true;
     snapshotFor(current, period).then((result) => {
       if (active && !current.controller.signal.aborted) { setSummary(result); setLoadedVersion(version); }
-    }).catch((failure) => { if (active && !current.controller.signal.aborted) setError(describeApiError(failure)); })
-      .finally(() => { if (active && !current.controller.signal.aborted) setLoading(false); });
+    }).catch((failure) => {
+      if (active && !current.controller.signal.aborted) {
+        setError(describeApiError(failure));
+        setErrorCode(failure instanceof FinLensApiError ? failure.code : null);
+      }
+    }).finally(() => {
+      if (active && !current.controller.signal.aborted) { snapshotPending.current = false; setLoading(false); }
+    });
     return () => {
       active = false;
+      snapshotPending.current = false;
       const pending = current.responses.get(period);
       if (pending && !pending.settled) { pending.controller.abort(); current.responses.delete(period); }
     };
-  }, [company.ticker, company.cik, period, version, changed]);
+  }, [company.ticker, company.cik, period, version, changed, snapshotAttempt]);
+  function retrySnapshot() {
+    if (version === null || snapshotPending.current) return;
+    if (errorCode === "DATA_VERSION_CHANGED") { changed(); return; }
+    snapshotPending.current = true;
+    setSnapshotAttempt(attempt => attempt + 1);
+  }
   useEffect(() => {
     setAlternatives(null);
     if (version === null || period !== "quarter" || !summary || loadedVersion !== version
@@ -218,7 +239,8 @@ export default function FinancialResearch({ company }: { company: Company }) {
       </div>
       <div aria-live="polite" aria-busy={loading}>
         {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading financial snapshot…"}</p>}
-        {error && <p role="alert" className="error-state">{error}</p>}
+        {error && <><p role="alert" className="error-state">{error}</p>
+          <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retrySnapshot}>{errorCode === "DATA_VERSION_CHANGED" ? "Retry data check" : "Retry snapshot"}</button></>}
         {summary && !loading && loadedVersion === version && summary.ticker === company.ticker && summary.requested_period === period && <>
           <p className="period-label">{periodLabel(summary.period)}</p>
           <p className="muted small availability">Financial data: {available ? `${available} of ${Object.keys(summary.metrics).length} metrics available for this snapshot` : "No compatible metrics for this period"}. This snapshot is separate from the selected SEC research filing.</p>
