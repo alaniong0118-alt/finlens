@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, parseTheme, periodLabel, persistTheme, resolveTheme } from '../lib/research.ts';
+import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, parseTheme, periodLabel, persistTheme, resolveTheme, METRIC_CATALOG, METRIC_GROUPS, METRIC_LABELS, SNAPSHOT_METRICS, guidedQuestion } from '../lib/research.ts';
 import { describeApiError, getAnswer, getCapabilities, getFinancialSummary, getFilingContext, getMetricHistory } from '../lib/finlens-api.ts';
 
 // Compile the actual TSX components with the existing TypeScript dependency.
@@ -34,6 +35,84 @@ const source = {fact_id:1, original_concept:'Revenues',value:'1000000000',unit:'
 const point = {metric:'revenue',unit:'USD',status:'available',value:'1000000000',reason:null,period,formula:null,provenance:[source],alternatives:[],inputs:[],revenue_basis:'total_revenue'};
 const context = {ticker:'TEST',query:'revenue',evidence_status:'sufficient',accession_number:source.accession_number,context:'[SOURCE source_1]\nchunk_id: chunk_0001\ntext: |-\n  Actual fixture excerpt <script> is untrusted text.\n[END SOURCE source_1]',citations:[{citation_id:'source_1',chunk_id:'chunk_0001',form:'10-Q',filed:source.filed,sec_url:source.sec_url,accession_number:source.accession_number,start_char:0,end_char:60,filename:'fixture.htm',evidence_reason:'lexical_support'}]};
 
+test('FD-01 catalog contains exactly the existing 15 metrics, grouped with correct display periods', () => {
+ const expected=['revenue','gross_profit','operating_income','net_income','diluted_eps','cash_and_equivalents','total_assets','total_liabilities','operating_cash_flow','capital_expenditures','free_cash_flow','revenue_growth_yoy','gross_margin','operating_margin','net_margin'];
+ assert.deepEqual(METRIC_CATALOG.map(item=>item.id).sort(),expected.sort());
+ assert.equal(new Set(METRIC_CATALOG.map(item=>item.id)).size,15);
+ assert.deepEqual(SNAPSHOT_METRICS,['revenue','revenue_growth_yoy','net_income','diluted_eps','operating_income','net_margin']);
+ for(const entry of METRIC_CATALOG){
+  assert.ok(entry.label && entry.description && entry.questionTerm);
+  assert.equal(METRIC_LABELS[entry.id],entry.label);
+  assert.ok(METRIC_GROUPS.some(group=>group.id===entry.group));
+  assert.deepEqual(entry.periods,entry.group==='balance'?['instant']:['quarter','annual','half_year','nine_months']);
+  assert.deepEqual(entry.questionScopes,entry.group==='balance'?['latest_available']:['latest_available','quarter','annual']);
+ }
+ assert.equal(guidedQuestion('unsupported','latest_available'),null);
+ assert.equal(guidedQuestion('total_assets','quarter'),null);
+});
+
+test('FD-01 every advertised guided question resolves with actual backend metric and period semantics offline', () => {
+ const cases=METRIC_CATALOG.flatMap(entry=>entry.questionScopes.map(scope=>({metric:entry.id,scope,question:guidedQuestion(entry.id,scope)})));
+ assert.equal(cases.length,39);
+ const backend=fileURLToPath(new URL('../../backend/',import.meta.url));
+ const python=['.venv/Scripts/python.exe','.venv/bin/python'].map(path=>fileURLToPath(new URL(`../../backend/${path}`,import.meta.url))).find(existsSync)??'python';
+ const run=spawnSync(python,['-B','-c',`
+import json, sys
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from unittest.mock import patch
+with patch('sqlalchemy.engine.Engine.connect', side_effect=AssertionError('Database access forbidden')), \\
+     patch('socket.socket.connect', side_effect=AssertionError('Network access forbidden')), \\
+     patch('socket.create_connection', side_effect=AssertionError('Network access forbidden')):
+    from app.models import Company, FinancialFact
+    from app.financial_metric_registry import METRICS
+    from app.research_answer_service import answer_research_question
+    company = Company(id=1, ticker='TEST', name='Fixture company', cik='0000000001', exchange='NYSE')
+    facts = []
+    windows = [('2023-01-01','2023-12-31','10-K'), ('2024-01-01','2024-03-31','10-Q'),
+               ('2024-01-01','2024-06-30','10-Q'), ('2024-01-01','2024-12-31','10-K'),
+               ('2025-01-01','2025-03-31','10-Q'), ('2025-01-01','2025-06-30','10-Q')]
+    for metric, definition in METRICS.items():
+        if definition.kind == 'derived': continue
+        for index, (start, end, form) in enumerate(windows):
+            concept = 'Revenues' if metric == 'revenue' else definition.concepts[0]
+            amount = {'revenue':'100','gross_profit':'40','operating_income':'20','net_income':'10',
+                      'diluted_eps':'1.2345','operating_cash_flow':'30','capital_expenditures':'5'}.get(metric,'200')
+            end = date.fromisoformat(end)
+            facts.append(FinancialFact(id=len(facts)+1, company_cik=company.cik, metric=concept,
+                value=Decimal(amount), unit=definition.source_unit,
+                period_start=None if definition.kind=='instant' else date.fromisoformat(start), period_end=end,
+                period_type='fixture', fiscal_year=end.year, fiscal_period=None, frame=None,
+                form=form, filed=end+timedelta(days=31), accession_number=f'0000000001-25-{index+1:06d}',
+                source=f'SEC Company Facts API: {concept}', created_at=datetime(2026,1,1)))
+    class DetachedSession:
+        def scalars(self, statement):
+            entity = statement.column_descriptions[0]['entity']
+            if entity is Company: return [company]
+            if entity is FinancialFact: return facts
+            raise AssertionError('Unexpected query')
+    answers = [answer_research_question(DetachedSession(), 'TEST', item['question']).model_dump(mode='json')
+               for item in json.load(sys.stdin)]
+    print(json.dumps({'registry':list(METRICS),'answers':answers}))
+`],{cwd:backend,input:JSON.stringify(cases),encoding:'utf8',env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'},timeout:30000});
+ assert.equal(run.status,0,run.stderr || run.error?.message);
+ const result=JSON.parse(run.stdout);
+ assert.deepEqual(result.registry.sort(),METRIC_CATALOG.map(entry=>entry.id).sort());
+ result.answers.forEach((answer,index)=>{
+  const entry=cases[index]; const instant=METRIC_CATALOG.find(item=>item.id===entry.metric).group==='balance';
+  assert.equal(answer.matched,true,entry.question); assert.equal(answer.status,'available',entry.question);
+  assert.equal(answer.metric,entry.metric); assert.equal(answer.period_intent,entry.scope);
+  assert.equal(answer.question,entry.question); assert.equal(answer.ticker,'TEST');
+  const kind=instant?'instant':entry.scope==='latest_available'?'half_year':entry.scope;
+  assert.equal(answer.observation.period.kind,kind,entry.question);
+  const end=entry.scope==='quarter'?'2025-03-31':entry.scope==='annual'?'2024-12-31':'2025-06-30';
+  assert.equal(answer.observation.period.end,end);
+  assert.ok(answer.observation.provenance.every(item=>item.company_cik==='0000000001'));
+  if(instant){assert.equal(answer.observation.period.start,null);assert.match(answer.answer_text,/as of June 30, 2025/);assert.doesNotMatch(answer.answer_text,/quarter ended|year ended/);}
+  if(kind==='half_year')assert.match(answer.answer_text,/six-month YTD period/);
+ });
+});
+
 test('company overview renders stored identity/readiness and does not fabricate metadata',()=>{
  const company={id:1,ticker:'TEST',name:'Fixture Issuer',exchange:'NYSE',has_indexed_filing:true,indexed_filing_count:1};
  const html=renderToStaticMarkup(React.createElement(overview.default,{companies:[company],company,ticker:'TEST',loading:false,error:null,onChange:()=>{}}));
@@ -53,6 +132,23 @@ test('catalog failure exposes a native accessible retry rather than a successful
 test('metric card renders server value, period, provenance and economic basis',()=>{
  const html=renderToStaticMarkup(React.createElement(finance.MetricCard,{point}));
  for(const text of ['$1B','Revenues','0000000001-25-000001','total revenue basis','Sources and details','Jan 1, 2025']) assert.ok(html.includes(text),text);
+});
+test('FD-01 cards expose exact reasons, signs, units and as-of dates without fabricating values', () => {
+ const render = value => renderToStaticMarkup(React.createElement(finance.MetricCard, { point: value }));
+ for (const [status, label] of [['unavailable', 'Unavailable'], ['not_applicable', 'Not applicable']]) {
+  const reason = 'Authoritative source has no economically compatible observation.';
+  const html = render({ ...point, status, value: null, reason, provenance: [] });
+  assert.match(html, new RegExp(`class="small metric-reason">${reason}`));
+  assert.ok(html.includes(label)); assert.doesNotMatch(html, /\$0/);
+ }
+ assert.match(render({ ...point, value: '0' }), />\$0<\/p>/);
+ assert.match(render({ ...point, value: '-123456789.0123' }), /-\$123\.46M/);
+ assert.match(render({ ...point, value: '-123456789.0123' }), /-123456789\.0123 USD/);
+ assert.match(render({ ...point, metric: 'diluted_eps', unit: 'USD/share', value: '1.2345' }), /\$1\.2345/);
+ const instant = render({ ...point, metric: 'total_liabilities', period: { ...period, kind: 'instant', start: null } });
+ assert.match(instant, /class="small metric-period">As of date · Mar 31, 2025/);
+ assert.doesNotMatch(instant.match(/class="small metric-period">([^<]+)/)[1], /quarter|annual|YTD|Jan 1/);
+ assert.match(instant, /Revenues/); assert.match(instant, /0000000001-25-000001/);
 });
 test('unavailable and not-applicable metrics remain distinct, never substitute zero',()=>{
  for(const [status,label] of [['unavailable','Unavailable'],['not_applicable','Not applicable']]) {

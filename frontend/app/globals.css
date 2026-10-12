@@ -54,6 +54,19 @@ select:hover,textarea:hover { border-color:var(--accent); } summary { cursor:poi
 .basis-label { color:var(--accent); margin-top:4px; } .provenance { margin-top:9px; border-top:1px solid var(--border); }
 .details-body { font-size:11px; line-height:1.7; padding-bottom:9px; overflow-wrap:anywhere; } .details-body p + p { margin-top:5px; } .source-record { margin-top:10px; padding-top:9px; border-top:1px solid var(--border); }
 .secondary-metrics { margin-top:17px; } .secondary-metrics > summary { font-size:13px; }
+.metric-description,.metric-period,.metric-reason { margin-top:7px; overflow-wrap:anywhere; }
+.secondary-metrics .metric-grid { margin-top:12px; }
+.question-guide { min-width:0; border:1px solid var(--border); border-radius:12px; padding:14px; margin:0 0 18px; }
+.question-guide legend { padding:0 6px; font-size:13px; font-weight:650; }
+.guide-controls { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-bottom:10px; }
+.guide-controls label { min-width:0; }
+.question-guide p + p { margin-top:10px; }
+.question-preview { font-size:13px; overflow-wrap:anywhere; }
+.recorded-filings { margin:16px 0; padding-top:12px; border-top:1px solid var(--border); }
+.recorded-filings > p { margin:10px 0; }
+.filing-list { list-style:none; padding:0; display:grid; gap:10px; }
+.filing-list .source-link { min-height:44px; }
+@media (max-width:767px) { .guide-controls { grid-template-columns:minmax(0,1fr); } }
 .history-controls { display:grid; grid-template-columns:1.1fr 1fr; gap:14px; margin:4px 0 16px; }
 .financial-chart { width:100%; min-width:0; height:250px; margin-top:8px; }
 .history-table { margin-top:8px; } .history-table > summary { font-size:13px; }

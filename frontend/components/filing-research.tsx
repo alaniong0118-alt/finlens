@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings,
+import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness,
   getCompanyContext, type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
-import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl } from "@/lib/research";
+import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, type QuestionScope } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
 
@@ -95,6 +95,11 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [answer, setAnswer] = useState<ResearchAnswer | null>(null);
   const [answerLoading, setAnswerLoading] = useState(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
+  const [guideMetric, setGuideMetric] = useState("revenue");
+  const [guideScope, setGuideScope] = useState<QuestionScope>("latest_available");
+  const questionInput = useRef<HTMLTextAreaElement | null>(null);
+  const presentation = METRIC_CATALOG.find(item => item.id === guideMetric)!;
+  const preparedQuestion = guidedQuestion(guideMetric, guideScope);
   const controller = useRef<AbortController | null>(null);
   const scope = useRef(createRequestScope());
   const evidenceController = useRef<AbortController | null>(null);
@@ -169,7 +174,24 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       {officialSecUrl(filing.sec_url) && <a href={officialSecUrl(filing.sec_url)} target="_blank" rel="noopener noreferrer">Open official filing ↗</a>}
     </div>}
     <form onSubmit={search} className="search-form">
-      <label htmlFor="research-query">Research question or search<textarea id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
+      <fieldset className="question-guide">
+        <legend>Prepare a financial question</legend>
+        <div className="guide-controls">
+          <label>Question metric<select value={guideMetric} onChange={event => {
+            const next = METRIC_CATALOG.find(item => item.id === event.target.value)!;
+            setGuideMetric(next.id);
+            if (!next.questionScopes.includes(guideScope)) setGuideScope("latest_available");
+          }}>{METRIC_GROUPS.map(group => <optgroup key={group.id} label={group.label}>{METRIC_CATALOG.filter(item => item.group === group.id).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label>
+          <label>Question reporting scope<select value={guideScope} onChange={event => setGuideScope(event.target.value as QuestionScope)}>{presentation.questionScopes.map(item => <option key={item} value={item}>{QUESTION_SCOPE_LABELS[item]}</option>)}</select></label>
+        </div>
+        <p className="muted small">{presentation.description} {presentation.group === "balance" ? "This is a value as of a date, not a reporting-interval flow." : "Latest available may be an annual or YTD interval. A direct quarter requires a reported quarter observation."} Availability is checked only when you submit.</p>
+        <p className="question-preview">{preparedQuestion}</p>
+        <button type="button" className="secondary-button" disabled={!preparedQuestion} onClick={() => {
+          if (preparedQuestion) { edit(preparedQuestion); questionInput.current?.focus(); }
+        }}>Use question</button>
+        <p className="muted small">Fills the editor below. Review or edit it, then submit explicitly.</p>
+      </fieldset>
+      <label htmlFor="research-query">Research question or search<textarea ref={questionInput} id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
       <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>
       <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
       <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). {(retrievalScope === "filing" ? !filing : !companyEvidenceReady) ? "Filing evidence is unavailable for this selection; only direct financial answers can be requested." : "Other questions search SEC evidence."} No AI generation.</p>
@@ -195,6 +217,22 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   </>;
 }
 
+function RecordedFilings({ filings, unknown = false }: { filings: FilingSource[]; unknown?: boolean }) {
+  const [visible, setVisible] = useState(10);
+  if (!filings.length) return null;
+  return <details className="recorded-filings">
+    <summary>{unknown ? "Evidence status unverified" : "Other recorded filings · metadata only"} ({filings.length})</summary>
+    <p className="muted small">{unknown ? "Indexed evidence availability could not be verified for these records." : "These records have no indexed searchable evidence."} They cannot be selected for filing search or filing-specific AI analysis. Follow an official SEC link where provided; stored full text is not guaranteed.</p>
+    <ul className="filing-list">{filings.slice(0, visible).map(item => <li className="filing-record" key={item.accession_number}>
+      <strong>{item.form ?? "SEC filing"}</strong><span>Filed {formatDate(item.filed)}</span>
+      <p className="small mono wrap-anywhere">Accession {item.accession_number}</p>
+      <p className="small muted">{unknown ? "Evidence status unverified" : "Metadata only"}</p>
+      {officialSecUrl(item.sec_url) && <a className="source-link" href={officialSecUrl(item.sec_url)} target="_blank" rel="noopener noreferrer">Open official SEC filing ↗</a>}
+    </li>)}</ul>
+    {visible < filings.length && <button type="button" className="secondary-button" onClick={() => setVisible(count => count + 10)}>Show more recorded filings ({filings.length - visible})</button>}
+  </details>;
+}
+
 export default function FilingResearch({ company, configured }: { company: Company; configured: boolean }) {
   const { version, changed } = useResearchVersion();
   const [query, setQuery] = useState("");
@@ -214,7 +252,8 @@ export default function FilingResearch({ company, configured }: { company: Compa
     const controller = versionedController(version, changed);
     getFilingSources(company.ticker, controller.signal).then((data) => {
       if (controller.signal.aborted) return;
-      const indexed = searchableFilings(data); setFilings(indexed); setSourceVersion(version);
+      if (!Array.isArray(data) || data.some(item => !item || typeof item.accession_number !== "string" || !item.accession_number.trim())) throw new Error("Invalid filing list response.");
+      const indexed = searchableFilings(data); setFilings(data); setSourceVersion(version);
       setAccession(previous => indexed.some(item => item.accession_number === previous) ? previous : indexed[0]?.accession_number ?? "");
     }).catch((failure) => {
       if (!controller.signal.aborted) {
@@ -223,30 +262,38 @@ export default function FilingResearch({ company, configured }: { company: Compa
       }
     }).finally(() => { if (!controller.signal.aborted) { sourcePending.current = false; setLoading(false); } });
     return () => { controller.abort(); sourcePending.current = false; };
-  }, [company.ticker, version, changed, sourceAttempt]);
+  }, [company.ticker, company.cik, version, changed, sourceAttempt]);
   function retrySources() {
     if (version === null || sourcePending.current) return;
     if (errorCode === "DATA_VERSION_CHANGED") { changed(); return; }
     sourcePending.current = true;
     setSourceAttempt(attempt => attempt + 1);
   }
-  const filing = filings.find((item) => item.accession_number === accession);
+  const currentSources = sourceVersion === version ? filings : [];
+  const indexed = searchableFilings(currentSources);
+  const filing = indexed.find((item) => item.accession_number === accession);
   return <section className="panel filing-panel" aria-labelledby="filing-title">
     <div className="section-heading"><div><p className="eyebrow">SEC research</p><h2 id="filing-title">Read the evidence</h2></div><span className="badge">No AI required</span></div>
     <p className="muted small">Search a selected filing or published filings for this company. Metric snapshots may refer to a different period or accession.</p>
     <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => setRetrievalScope(event.target.value as "filing" | "company")}>
       <option value="filing">Selected filing</option><option value="company">Company-wide</option>
     </select></label>
-    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => setAccession(event.target.value)} disabled={loading || !filings.length || !company.has_indexed_filing}>
+    <p className="muted small">{loading ? "Checking indexed SEC evidence…" : error ? "Indexed evidence list unavailable." : `Indexed searchable SEC evidence (${indexed.length}).`} Searchable passages do not guarantee complete filing text or sufficient evidence for AI analysis.</p>
+    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => setAccession(event.target.value)} disabled={loading || !indexed.length || !company.has_indexed_filing}>
       {loading && <option value="">Loading filings…</option>}
-      {!loading && !filings.length && <option value="">{error ? "Filing list unavailable" : "No indexed filing available"}</option>}
-      {filings.map((item) => <option key={item.accession_number} value={item.accession_number}>{item.form ?? "SEC filing"} · {formatDate(item.filed)}</option>)}
+      {!loading && !indexed.length && <option value="">{error ? "Filing list unavailable" : "No indexed filing available"}</option>}
+      {indexed.map((item) => <option key={item.accession_number} value={item.accession_number}>{item.form ?? "SEC filing"} · {formatDate(item.filed)} · {item.accession_number}</option>)}
     </select></label>}
     <div aria-live="polite" aria-busy={loading}>
       {error && <><p role="alert" className="error-state">Could not load the filing list. {error}</p>
         <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retrySources}>{errorCode === "DATA_VERSION_CHANGED" ? "Retry data check" : "Retry filing list"}</button></>}
     </div>
     {retrievalScope === "filing" && !loading && !error && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
-    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceVersion === version && company.has_indexed_filing && filings.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} />
+    {!loading && !error && currentSources.length === 0 && <p className="muted small">No recorded filings were returned for this publication.</p>}
+    {!loading && !error && <>
+      <RecordedFilings key={`${company.ticker}-${company.cik}-${sourceVersion}-metadata`} filings={currentSources.filter(item => filingReadiness(item) === "metadata_only")} />
+      <RecordedFilings key={`${company.ticker}-${company.cik}-${sourceVersion}-unknown`} unknown filings={currentSources.filter(item => filingReadiness(item) === "unknown")} />
+    </>}
+    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceVersion === version && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} />
   </section>;
 }

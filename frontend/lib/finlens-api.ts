@@ -166,7 +166,13 @@ export function getAnswer(
 }
 
 export function searchableFilings(filings: FilingSource[]): FilingSource[] {
-  return filings.filter((filing) => filing.has_filing_chunks);
+  return filings.filter(filing => filingReadiness(filing) === "indexed");
+}
+
+export function filingReadiness(filing: FilingSource): "indexed" | "metadata_only" | "unknown" {
+  if (filing?.has_filing_chunks === true) return "indexed";
+  if (filing?.has_filing_chunks === false) return "metadata_only";
+  return "unknown";
 }
 
 export function citationForClaim(

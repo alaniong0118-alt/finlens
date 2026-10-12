@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { describeApiError, FinLensApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
   type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
 import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, officialSecUrl,
-  periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS } from "@/lib/research";
+  periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS, METRIC_CATALOG, METRIC_GROUPS } from "@/lib/research";
 
 import { useResearchVersion } from "@/components/research-freshness";
 
@@ -66,9 +66,20 @@ export function MetricCard({ point }: { point: NormalizedMetric }) {
   return <article className="metric-card">
     <h3>{METRIC_LABELS[point.metric] ?? point.metric}</h3>
     <p className={`metric-value ${point.status !== "available" ? "missing-value" : ""}`}>{formatMetric(point)}</p>
+    <p className="small muted metric-description">{METRIC_CATALOG.find(metric => metric.id === point.metric)?.description}</p>
+    <p className="small metric-period">{periodLabel(point.period)}</p>
+    {point.status !== "available" && <p className="small metric-reason">{point.reason ?? "No compatible observation returned for this selection."}</p>}
     <p className="muted small">{point.unit === "ratio" ? "Ratio shown as percent" : point.unit === "USD/share" ? "USD per diluted share · reported as filed" : "USD · rounded for display"}</p>
     {point.revenue_basis && <p className="small basis-label">{point.revenue_basis.replaceAll("_", " ")} basis</p>}
     <MetricProvenance point={point} />
+  </article>;
+}
+
+function SnapshotMetric({ metric, point }: { metric: string; point: NormalizedMetric | undefined }) {
+  if (point?.metric === metric) return <MetricCard point={point} />;
+  return <article className="metric-card"><h3>{METRIC_LABELS[metric]}</h3>
+    <p className="small muted metric-description">{METRIC_CATALOG.find(item => item.id === metric)?.description}</p>
+    <p className="missing-value">Status unavailable</p><p className="small">This metric was not returned for this selection.</p>
   </article>;
 }
 
@@ -80,7 +91,7 @@ function HistoryView({ data }: { data: MetricHistory }) {
   const scale = data.unit === "USD" ? 1e9 : data.unit === "ratio" ? 0.01 : 1;
   return <>
     {warning && <p className="notice" role="note">{warning}</p>}
-    <p className="muted small">{PERIOD_LABELS[data.requested_period]} observations only · {unitLabel}. Bars are reported periods, not a continuous comparable series. Basis changes and missing observations are preserved.</p>
+    <p className="muted small">{PERIOD_LABELS[data.requested_period]} observations only · {unitLabel}. {data.requested_period === "instant" ? "Bars are values as of each date." : "Bars are reported intervals, not a continuous comparable series."} Basis changes and missing observations are preserved.</p>
     {hasValues ? <>
       <div className="financial-chart" role="img" aria-label={`${METRIC_LABELS[data.metric]} by ${PERIOD_LABELS[data.requested_period].toLowerCase()}. Exact observations and sources are in the table below.`}>
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -97,12 +108,12 @@ function HistoryView({ data }: { data: MetricHistory }) {
         <div className="table-scroll"><table><caption className="sr-only">{METRIC_LABELS[data.metric]} · {PERIOD_LABELS[data.requested_period]}</caption>
           <thead><tr><th scope="col">Period</th><th scope="col">Reported value</th><th scope="col">Provenance</th></tr></thead>
           <tbody>{rows.map((row, index) => <tr key={`${row.date}-${index}`}>
-            <td>{periodLabel(row.point.period)}</td><td>{row.label}{row.point.revenue_basis && <span className="small muted block">{row.point.revenue_basis.replaceAll("_", " ")}</span>}</td>
+            <td>{periodLabel(row.point.period)}</td><td>{row.label}{row.point.status !== "available" && row.point.reason && <p className="small metric-reason">{row.point.reason}</p>}{row.point.revenue_basis && <span className="small muted block">{row.point.revenue_basis.replaceAll("_", " ")}</span>}</td>
             <td><MetricProvenance point={row.point} /></td>
           </tr>)}</tbody>
         </table></div>
       </details>
-    </> : <div className="empty-state"><h3>No compatible history for this selection</h3><p>{data.reason?.replaceAll("_", " ") ?? "Try another metric or period. No values are substituted."}</p></div>}
+    </> : <div className="empty-state"><h3>{data.status === "not_applicable" ? `${METRIC_LABELS[data.metric]} is not applicable` : "No compatible history for this selection"}</h3><p>{data.reason ?? "Try another metric or period. No values are substituted."}</p></div>}
   </>;
 }
 
@@ -114,16 +125,21 @@ function MetricHistoryPanel({ company }: { company: Company }) {
   const [data, setData] = useState<MetricHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const presentation = METRIC_CATALOG.find(item => item.id === metric)!;
   useEffect(() => {
     setLoading(true); setData(null); setError(null);
     if (version === null) return;
     const controller = versionedController(version, changed);
     getMetricHistory(company.ticker, metric, period, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      if (result.ticker !== company.ticker || result.company_cik !== company.cik || result.metric !== metric || result.requested_period !== period) {
+        throw new Error("Financial history does not match this company, metric and period.");
+      }
       if (!controller.signal.aborted) { setData(result); setLoadedVersion(version); }
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [company.ticker, metric, period, version, changed]);
+  }, [company.ticker, company.cik, metric, period, version, changed]);
   // Changing controls clears the previous series synchronously, before the next effect.
   return <section className="panel" aria-labelledby="history-title">
     <div className="section-heading"><div><p className="eyebrow">Historical research</p><h2 id="history-title">Reported financial trends</h2></div><span className="badge">No AI required</span></div>
@@ -131,15 +147,16 @@ function MetricHistoryPanel({ company }: { company: Company }) {
       <label>Metric<select value={metric} onChange={(event) => {
         const next = event.target.value;
         setData(null); setLoading(true); setMetric(next);
-        if (next === "total_assets" || next === "cash_and_equivalents") setPeriod("instant");
-        else if (period === "instant") setPeriod("quarter");
+        const periods = METRIC_CATALOG.find(item => item.id === next)!.periods;
+        if (!periods.includes(period)) setPeriod(periods[0]);
       }}>
-        {["revenue", "net_income", "diluted_eps", "revenue_growth_yoy", "net_margin", "operating_margin", "free_cash_flow", "total_assets", "cash_and_equivalents"].map((key) => <option key={key} value={key}>{METRIC_LABELS[key]}</option>)}
+        {METRIC_GROUPS.map(group => <optgroup key={group.id} label={group.label}>{METRIC_CATALOG.filter(item => item.group === group.id).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
       </select></label>
       <label>History period<select value={period} onChange={(event) => { setData(null); setLoading(true); setPeriod(event.target.value as PeriodKind); }}>
-        {(metric === "total_assets" || metric === "cash_and_equivalents" ? ["instant"] : ["quarter", "annual", "half_year", "nine_months"]).map((kind) => <option key={kind} value={kind}>{PERIOD_LABELS[kind as PeriodKind]}</option>)}
+        {presentation.periods.map(kind => <option key={kind} value={kind}>{PERIOD_LABELS[kind]}</option>)}
       </select></label>
     </div>
+    <p className="small muted metric-description">{presentation.description} {presentation.periods[0] === "instant" ? "Balance-sheet observations are values as of a date." : "Choose the reporting interval; annual and YTD values are not substituted for direct quarters."} History availability is checked separately from the snapshot.</p>
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading selected history…"}</p>}
       {error && <p role="alert" className="error-state">{error}</p>}
@@ -246,8 +263,12 @@ export default function FinancialResearch({ company }: { company: Company }) {
           <p className="muted small availability">Financial data: {available ? `${available} of ${Object.keys(summary.metrics).length} metrics available for this snapshot` : "No compatible metrics for this period"}. This snapshot is separate from the selected SEC research filing.</p>
           {period === "quarter" && alternatives?.ticker === company.ticker && alternatives.version === version && alternatives.hints.map(({ metric, snapshot }) =>
             <p className="small cash-flow-alternative" key={metric}>{METRIC_LABELS[metric]} is available for {periodLabel(snapshot.period)}. Choose {PERIOD_LABELS[snapshot.requested_period]} in Snapshot period to view it.</p>)}
-          <div className="metric-grid">{SNAPSHOT_METRICS.map((key) => summary.metrics[key] && <MetricCard key={key} point={summary.metrics[key]} />)}</div>
-          <details className="secondary-metrics"><summary>Balance sheet and cash flow</summary><div className="metric-grid">{["total_assets", "cash_and_equivalents", ...CASH_FLOW_METRICS].map((key) => summary.metrics[key] && <MetricCard key={key} point={summary.metrics[key]} />)}</div></details>
+          <div className="metric-grid">{SNAPSHOT_METRICS.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} />)}</div>
+          {[
+            { label: "More income and profitability", ids: METRIC_CATALOG.filter(item => ["income", "profitability"].includes(item.group) && !SNAPSHOT_METRICS.includes(item.id)).map(item => item.id) },
+            { label: "Balance sheet · as of the reporting date", ids: METRIC_CATALOG.filter(item => item.group === "balance").map(item => item.id) },
+            { label: "Cash flow · reported intervals", ids: METRIC_CATALOG.filter(item => item.group === "cash_flow").map(item => item.id) },
+          ].map(group => <details className="secondary-metrics" key={group.label}><summary>{group.label}</summary><div className="metric-grid">{group.ids.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} />)}</div></details>)}
         </>}
       </div>
     </section>

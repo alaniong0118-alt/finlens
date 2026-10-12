@@ -12,8 +12,18 @@ import {
   getResearchAnswer,
   readyCompanyCount,
   searchableFilings,
+  filingReadiness,
   versionedController,
 } from "../lib/finlens-api.ts";
+
+test('FD-01 filing readiness requires exact booleans and preserves the complete input', () => {
+  const flags = [true, false, undefined, null, 'true', 'false', 1, 0, {}, []];
+  const records = flags.map((flag, index) => ({ accession_number: `fixture-${index}`, ...(flag === undefined ? {} : { has_filing_chunks: flag }) }));
+  const original = structuredClone(records);
+  assert.deepEqual(records.map(filingReadiness), ['indexed', 'metadata_only', ...Array(8).fill('unknown')]);
+  assert.deepEqual(searchableFilings(records), [records[0]]);
+  assert.deepEqual(records, original);
+});
 
 function companyEvidence(overrides = {}) {
   return { ticker: 'AAPL', company_cik: '0000320193', company_name: 'Apple', retrieval_scope: 'company',

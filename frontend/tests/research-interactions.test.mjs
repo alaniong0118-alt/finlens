@@ -159,7 +159,7 @@ function summary(ticker, value, kind = 'quarter') {
     metrics: { revenue }, selection_policy: 'test fixture' };
 }
 function history(ticker, value, metric = 'revenue') {
-  return { ticker, metric, unit: 'USD', requested_period: 'quarter', status: 'available', reason: null,
+  return { ticker, company_cik: companies.find(company => company.ticker === ticker).cik, metric, unit: 'USD', requested_period: 'quarter', status: 'available', reason: null,
     history: [point(ticker, value, metric)] };
 }
 function context(ticker, query = 'revenue growth') {
@@ -882,7 +882,7 @@ test('mounted cash-flow alternatives confirm YTD, preserve quarter values and re
   assert.equal(cashHints(app).length, 3);
   assert.match(cashHints(app)[0].textContent, /Operating cash flow.*Half-year YTD.*Jun 30, 2025/);
   assert.match(app.snapshot().querySelector('.period-label').textContent, /^Direct quarter/);
-  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
   assert.match(app.snapshot().querySelector('.metric-grid').textContent, /Revenue\$1B/);
   assert.deepEqual([...app.select('Snapshot period').options].map(option => option.value), ['quarter', 'half_year', 'nine_months', 'annual']);
   const count = app.requests.length;
@@ -890,11 +890,11 @@ test('mounted cash-flow alternatives confirm YTD, preserve quarter values and re
   assert.equal(app.requests.length, count, 'Selecting a confirmed mode reuses its snapshot');
   assert.equal(cashHints(app).length, 0);
   assert.match(app.snapshot().querySelector('.period-label').textContent, /^Half-year YTD.*Jun 30, 2025/);
-  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flow\$600M/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flow\$600M/);
   await app.change(app.select('Snapshot period'), 'quarter');
   assert.equal(app.requests.length, count, 'Returning to quarter does not refetch or rediscover');
   assert.equal(cashHints(app).length, 3);
-  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
 });
 
 test('mounted cash-flow alternatives ignore invalid values/units/periods and failed or wrong-company responses', async ctx => {
@@ -908,7 +908,7 @@ test('mounted cash-flow alternatives ignore invalid values/units/periods and fai
   await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'nine_months' }), cashSnapshot('JPM', 'nine_months', { free_cash_flow: '99' }));
   await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), { detail: 'Unavailable' }, 503);
   assert.equal(cashHints(app).length, 0);
-  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
   assert.match(app.snapshot().textContent, /Revenue\$1B/);
   assert.ok(!app.snapshot().querySelector('[role="alert"]'), 'Optional lookup failure preserves the main snapshot');
 });
@@ -944,7 +944,7 @@ test('mounted cash-flow alternatives require a confirmed published version', asy
     await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: mode }), cashSnapshot('AAPL', mode, { operating_cash_flow: '80', capital_expenditures: '20', free_cash_flow: '60' }), 200, null);
   }
   assert.equal(cashHints(app).length, 0);
-  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Free cash flowUnavailable/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
 });
 
 test('mounted selecting an alternative while discovery is pending shares its request without stale hints', async ctx => {
@@ -958,7 +958,7 @@ test('mounted selecting an alternative while discovery is pending shares its req
   await app.release(pending, cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '800000000', capital_expenditures: '200000000', free_cash_flow: '600000000' }));
   assert.match(app.snapshot().querySelector('.period-label').textContent, /^Half-year YTD/);
   assert.equal(cashHints(app).length, 0);
-  assert.match(app.snapshot().querySelector('.secondary-metrics').textContent, /Operating cash flow\$800M.*Capital expenditures\$200M.*Free cash flow\$600M/);
+  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Operating cash flow\$800M.*Capital expenditures\$200M.*Free cash flow\$600M/);
 });
 
 test('mounted delayed alternative responses cannot cross companies', async ctx => {
@@ -1533,6 +1533,319 @@ async function drainResponseMicrotasks() {
   // Never yield to a timer/scheduler or exit act before the second delivery.
   for (let turn = 0; turn < 20; turn++) await Promise.resolve();
 }
+
+const discoveryGroups = {
+  Income: { revenue: 'Revenue', gross_profit: 'Gross profit', operating_income: 'Operating income', net_income: 'Net income', diluted_eps: 'Diluted EPS' },
+  'Growth and margins': { revenue_growth_yoy: 'Revenue YoY', gross_margin: 'Gross margin', operating_margin: 'Operating margin', net_margin: 'Net margin' },
+  'Balance sheet': { cash_and_equivalents: 'Cash and equivalents', total_assets: 'Total assets', total_liabilities: 'Total liabilities' },
+  'Cash flow': { operating_cash_flow: 'Operating cash flow', capital_expenditures: 'Capital expenditures', free_cash_flow: 'Free cash flow' },
+};
+const discoveryMetrics = Object.keys(Object.assign({}, ...Object.values(discoveryGroups)));
+const balanceMetrics = Object.keys(discoveryGroups['Balance sheet']);
+function discoverySnapshot(ticker) {
+  const result = summary(ticker, '0');
+  for (const metric of discoveryMetrics) {
+    const observation = point(ticker, metric === 'net_income' ? '-123456789.0123' : '1000000000', metric);
+    if (balanceMetrics.includes(metric)) {
+      observation.period = { ...observation.period, kind: 'instant', start: null };
+      observation.provenance = observation.provenance.map(source => ({ ...source, period_start: null }));
+    }
+    if (metric.includes('margin') || metric === 'revenue_growth_yoy') observation.unit = 'ratio';
+    if (metric === 'diluted_eps') { observation.unit = 'USD/share'; observation.value = '1.2345'; }
+    result.metrics[metric] = observation;
+  }
+  result.metrics.revenue.value = '0';
+  result.metrics.gross_margin = { ...result.metrics.gross_margin, value: null, status: 'not_applicable', reason: 'Gross margin is not applicable on this economic revenue basis.' };
+  result.metrics.gross_profit = { ...result.metrics.gross_profit, value: null, status: 'unavailable', reason: 'No compatible reported gross profit for this interval.' };
+  return result;
+}
+function metricCard(app, label) {
+  return [...app.snapshot().querySelectorAll('.metric-card')].find(card => card.querySelector('h3').textContent === label);
+}
+function discoveryHistory(metric, kind = balanceMetrics.includes(metric) ? 'instant' : 'quarter') {
+  const result = history('AAPL', '0', metric);
+  result.requested_period = kind;
+  const end = { annual: '2025-12-31', half_year: '2025-06-30', nine_months: '2025-09-30' }[kind] ?? '2025-03-31';
+  result.history[0].period = { ...result.history[0].period, kind, start: kind === 'instant' ? null : '2025-01-01', end };
+  result.history[0].provenance[0].period_start = result.history[0].period.start;
+  result.history[0].provenance[0].period_end = end;
+  return result;
+}
+
+test('FD-01 mounted snapshot keeps six primary cards and discovers all 15 with original statuses and provenance', async ctx => {
+  const app = await mount(ctx);
+  const payload = discoverySnapshot('AAPL'); const original = structuredClone(payload);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  const primary = [...app.snapshot().querySelector('.metric-grid').querySelectorAll('h3')].map(node => node.textContent);
+  assert.deepEqual(primary, ['Revenue', 'Revenue YoY', 'Net income', 'Diluted EPS', 'Operating income', 'Net margin']);
+  assert.equal(app.snapshot().querySelectorAll('.metric-card').length, 15);
+  const labels = Object.values(discoveryGroups).flatMap(group => Object.values(group));
+  assert.deepEqual([...app.snapshot().querySelectorAll('.metric-card h3')].map(node => node.textContent).sort(), labels.sort());
+  assert.equal(metricCard(app, 'Revenue').querySelector('.metric-value').textContent, '$0');
+  assert.equal(metricCard(app, 'Net income').querySelector('.metric-value').textContent, '-$123.46M');
+  assert.match(metricCard(app, 'Net income').querySelector('.provenance').textContent, /-123456789\.0123 USD/);
+  assert.equal(metricCard(app, 'Diluted EPS').querySelector('.metric-value').textContent, '$1.2345');
+  for (const [label, status, reason] of [['Gross profit', 'Unavailable', payload.metrics.gross_profit.reason], ['Gross margin', 'Not applicable', payload.metrics.gross_margin.reason]]) {
+    const card = metricCard(app, label);
+    assert.equal(card.querySelector('.metric-value').textContent, status);
+    assert.equal(card.querySelector('.metric-reason').textContent, reason);
+    assert.ok(card.querySelector('.provenance').textContent.includes(reason));
+    assert.doesNotMatch(card.querySelector('.metric-value').textContent, /\$0/);
+  }
+  for (const label of Object.values(discoveryGroups['Balance sheet'])) {
+    const card = metricCard(app, label);
+    assert.match(card.querySelector('.metric-period').textContent, /^As of date · Mar 31, 2025/);
+    assert.doesNotMatch(card.querySelector('.metric-period').textContent, /quarter|annual|YTD|Jan 1/);
+    assert.match(card.querySelector('.provenance').textContent, /As of Mar 31, 2025/);
+  }
+  for (const detail of app.snapshot().querySelectorAll('.secondary-metrics')) {
+    assert.equal(detail.open, false); detail.querySelector('summary').focus();
+    assert.equal(document.activeElement, detail.querySelector('summary'));
+    await act(async () => detail.querySelector('summary').click()); assert.equal(detail.open, true);
+  }
+  assert.equal(app.requests.filter(item => item.path.endsWith('/financials/summary')).length, 1, 'Discovery adds no snapshot fan-out');
+  assert.deepEqual(payload, original);
+});
+
+test('FD-01 missing snapshot metrics remain named and cannot fabricate available values', async ctx => {
+  const app = await mount(ctx); const payload = summary('AAPL', '0');
+  payload.metrics.total_liabilities = point('AAPL', '900', 'total_assets');
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  const card = metricCard(app, 'Total liabilities');
+  assert.match(card.textContent, /Status unavailable.*not returned/); assert.doesNotMatch(card.textContent, /900|\$/);
+  assert.equal(app.snapshot().querySelectorAll('.metric-card').length, 15);
+});
+
+test('FD-01 mounted history groups all 15 metrics with instant dates and direct duration requests', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const picker = app.select('Metric');
+  assert.equal(picker.options.length, 15);
+  assert.deepEqual([...picker.querySelectorAll('optgroup')].map(group => [group.label, [...group.querySelectorAll('option')].map(option => [option.value, option.textContent])]), Object.entries(discoveryGroups).map(([label, group]) => [label, Object.entries(group)]));
+  for (const metric of discoveryMetrics.filter(metric => metric !== 'revenue')) {
+    const count = app.requests.length;
+    await app.change(picker, metric);
+    const kind = balanceMetrics.includes(metric) ? 'instant' : 'quarter';
+    assert.equal(app.select('History period').value, kind);
+    assert.deepEqual([...app.select('History period').options].map(option => option.value), kind === 'instant' ? ['instant'] : ['quarter', 'annual', 'half_year', 'nine_months']);
+    const pending = app.request(companyPath('AAPL', `financials/metrics/${metric}`), { period: kind });
+    assert.equal(pending.init.headers['X-FinLens-Data-Version'], '0');
+    assert.equal(app.requests.length, count + 1);
+    await app.release(pending, discoveryHistory(metric));
+    assert.equal(app.trends().querySelectorAll('tbody tr').length, 1);
+    if (kind === 'instant') {
+      assert.match(app.trends().textContent, /Bars are values as of each date/);
+      assert.match(app.trends().querySelector('tbody td').textContent, /^As of date · Mar 31, 2025/);
+    }
+  }
+  await app.change(picker, 'gross_profit');
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_profit')), discoveryHistory('gross_profit'));
+  await app.change(app.select('History period'), 'annual');
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_profit'), { period: 'annual' }), discoveryHistory('gross_profit', 'annual'));
+  await app.change(picker, 'operating_income');
+  assert.equal(app.select('History period').value, 'annual', 'Compatible chosen period is retained');
+  assert.equal(app.request(companyPath('AAPL', 'financials/metrics/operating_income')).params.get('period'), 'annual');
+});
+
+test('FD-01 history availability is independent and missing/not-applicable reasons remain visible', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), discoverySnapshot('AAPL'));
+  await app.change(app.select('Metric'), 'gross_profit');
+  const available = discoveryHistory('gross_profit');
+  const missing = { ...available.history[0], value: null, status: 'unavailable', reason: 'No direct-quarter source; annual data is not substituted.' };
+  const inapplicable = { ...missing, status: 'not_applicable', reason: 'Not applicable for this filing basis.' };
+  available.history.push(missing, inapplicable);
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_profit')), available);
+  assert.equal(app.trends().querySelectorAll('tbody tr').length, 3);
+  assert.deepEqual([...app.trends().querySelectorAll('tbody .metric-reason')].map(item => item.textContent), [missing.reason, inapplicable.reason]);
+  assert.match(app.trends().textContent, /\$0/);
+  await app.change(app.select('Metric'), 'gross_margin');
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_margin')), { ...discoveryHistory('gross_margin'), history: [], status: 'not_applicable', reason: inapplicable.reason });
+  assert.match(app.trends().textContent, /Gross margin is not applicable/);
+  assert.ok(app.trends().textContent.includes(inapplicable.reason));
+});
+
+for (const [field, value] of [['ticker', 'JPM'], ['company_cik', '0000019617'], ['metric', 'total_assets'], ['requested_period', 'annual']]) test(`FD-01 history rejects mismatched ${field}`, async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), { ...discoveryHistory('revenue'), [field]: value });
+  assert.ok(app.trends().querySelector('[role="alert"]')); assert.ok(!app.trends().querySelector('tbody'));
+});
+
+test('FD-01 ignored-abort instant history and filing records cannot cross companies or control selections', async ctx => {
+  const app = await mount(ctx);
+  const sources = app.request(companyPath('AAPL', 'sources'));
+  await app.change(app.select('Metric'), 'total_liabilities');
+  const old = app.request(companyPath('AAPL', 'financials/metrics/total_liabilities'));
+  await app.change(app.select('Metric'), 'gross_profit');
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_profit')), discoveryHistory('gross_profit'));
+  await app.release(old, discoveryHistory('total_liabilities'));
+  assert.equal(old.init.signal.aborted, true); assert.equal(app.select('Metric').value, 'gross_profit');
+  assert.doesNotMatch(app.trends().querySelector('tbody').textContent, /As of date/);
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  await app.completeCompany('JPM', '2000000000');
+  await app.release(sources, [{ ...filing('AAPL'), has_filing_chunks: false }]);
+  assert.doesNotMatch(app.host.textContent, /AAPL-test-accession/);
+  assert.ok(!app.host.querySelector('.recorded-filings'));
+});
+
+for (const version of [0, 1]) test(`FD-01 guided questions prepare without requests and submit explicitly at pin ${version}`, async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: version });
+  await app.release(app.request(companyPath('AAPL', 'sources')), [], 200, version);
+  const guide = app.select('Question metric');
+  assert.equal(guide.options.length, 15);
+  const count = app.requests.length;
+  await app.change(app.select('Question reporting scope'), 'annual');
+  await app.change(guide, 'gross_profit');
+  await app.click('Use question');
+  assert.equal(app.host.querySelector('textarea').value, 'What is the latest annual gross profit?');
+  assert.equal(document.activeElement, app.host.querySelector('textarea'));
+  await app.change(guide, 'total_liabilities');
+  assert.deepEqual([...app.select('Question reporting scope').options].map(option => option.value), ['latest_available']);
+  assert.equal(app.select('Question reporting scope').value, 'latest_available');
+  assert.match(app.host.querySelector('.question-guide').textContent, /as of a date, not a reporting-interval flow/);
+  await app.click('Use question');
+  const question = 'What is the latest available total liabilities?';
+  assert.equal(app.host.querySelector('textarea').value, question);
+  assert.equal(app.requests.length, count, 'Selection and preparation never fetch');
+  await app.click('Research question');
+  const pending = app.request(companyPath('AAPL', 'research-answer'));
+  assert.equal(pending.init.headers['X-FinLens-Data-Version'], String(version));
+  assert.equal(JSON.parse(pending.init.body).question, question);
+  assert.equal(app.requests.length, count + 1, 'No indexed evidence exists, so only direct research runs');
+  await app.release(pending, directAnswer('AAPL', question), 200, version);
+  assert.ok(app.host.querySelector('.direct-answer'));
+});
+
+test('FD-01 preparation with unknown publication stays editable but cannot submit unpinned requests', async ctx => {
+  const app = await mount(ctx, true, companies, { initialVersion: null });
+  await app.click('Use question');
+  assert.equal(app.host.querySelector('textarea').value, 'What is the latest available revenue?');
+  assert.equal(app.requests.filter(item => /research-answer|\/context$|\/answer$|\/sources$|financials/.test(item.path)).length, 0);
+  assert.equal([...app.host.querySelectorAll('button')].find(button => button.textContent === 'Research question').disabled, true);
+  await act(async () => app.host.querySelector('.search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(dependentRequests(app).length, 0);
+});
+
+test('FD-01 Use question cancels pending direct/evidence and discards late responses', async ctx => {
+  const app = await mount(ctx, true); await app.completeCompany('AAPL', '1000000000');
+  const evidence = await app.search('AAPL', 'old question', true);
+  const answer = app.request(companyPath('AAPL', 'research-answer'));
+  const count = app.requests.length;
+  await app.change(app.select('Question metric'), 'operating_income'); await app.click('Use question');
+  assert.equal(evidence.init.signal.aborted, true); assert.equal(answer.init.signal.aborted, true);
+  assert.equal(app.requests.length, count);
+  await app.release(evidence, context('AAPL', 'old question'));
+  await app.release(answer, directAnswer('AAPL', 'old question'));
+  assert.ok(!app.host.querySelector('.direct-answer')); assert.deepEqual(app.evidence(), []);
+  assert.equal(app.host.querySelector('textarea').value, 'What is the latest available operating income?');
+});
+
+test('FD-01 Use question clears resolved answer/evidence and cancels pending AI without generating', async ctx => {
+  const app = await mount(ctx, true); await app.completeCompany('AAPL', '1000000000');
+  const pending = await app.search('AAPL', 'latest revenue', true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', 'latest revenue'));
+  await app.release(pending, context('AAPL', 'latest revenue'));
+  await app.click('Generate AI analysis');
+  const ai = app.request(companyPath('AAPL', `filings/${filing('AAPL').accession_number}/answer`));
+  const count = app.requests.length;
+  await app.click('Use question');
+  assert.equal(ai.init.signal.aborted, true); assert.equal(app.requests.length, count);
+  assert.ok(!app.host.querySelector('.direct-answer')); assert.ok(!app.host.querySelector('.ai-panel'));
+  assert.deepEqual(app.evidence(), []);
+  await app.release(ai, { evidence_status: 'sufficient', answer: 'OBSOLETE AI', claims: [], citations: [] });
+  assert.doesNotMatch(app.host.textContent, /OBSOLETE AI/);
+});
+
+test('FD-01 filing discovery retains metadata/unknown records, strict selection, verified links and progressive disclosure', async ctx => {
+  const app = await mount(ctx, true);
+  const metadata = Array.from({ length: 12 }, (_, index) => ({ ...filing('AAPL'), accession_number: `metadata-${index}`, form: '10-K', has_filing_chunks: false,
+    sec_url: index === 0 ? 'https://www.sec.gov/Archives/metadata' : index === 1 ? 'https://sec.gov.evil.test/filing' : index === 2 ? 'javascript:alert(1)' : '' }));
+  const unknown = [undefined, null, 'true', 'false', 1, 0, {}].map((flag, index) => ({ ...filing('AAPL'), accession_number: `unknown-${index}`, has_filing_chunks: flag, sec_url: 'http://www.sec.gov/Archives/unknown' }));
+  const records = [filing('AAPL'), ...metadata, ...unknown]; const original = structuredClone(records);
+  await app.release(app.request(companyPath('AAPL', 'sources')), records);
+  assert.deepEqual([...app.select('Indexed SEC filing').options].map(option => option.value), [filing('AAPL').accession_number]);
+  const lists = [...app.host.querySelectorAll('.recorded-filings')]; assert.equal(lists.length, 2);
+  assert.match(lists[0].querySelector('summary').textContent, /metadata only \(12\)/);
+  assert.match(lists[1].querySelector('summary').textContent, /unverified \(7\)/);
+  assert.equal(lists[0].querySelectorAll('li').length, 10); assert.equal(lists[1].querySelectorAll('li').length, 7);
+  assert.equal(lists[0].querySelectorAll('a').length, 1); assert.equal(lists[1].querySelectorAll('a').length, 0);
+  assert.equal(lists[0].querySelector('a').href, metadata[0].sec_url);
+  assert.equal(lists[0].querySelector('a').rel, 'noopener noreferrer');
+  assert.doesNotMatch(lists[0].textContent, /Jan 1|Mar 31|AI-ready/);
+  const count = app.requests.length;
+  await act(async () => lists[0].querySelector('summary').click());
+  await app.click('Show more recorded filings (2)');
+  assert.equal(lists[0].querySelectorAll('li').length, 12);
+  assert.equal(app.requests.length, count); assert.deepEqual(records, original);
+  assert.ok(!lists[0].querySelector('select')); assert.ok(!lists[1].querySelector('select'));
+  assert.equal(app.requests.filter(item => /\/text$|\/chunks$|\/context$|\/answer$/.test(item.path)).length, 0);
+});
+
+for (const retrievalScope of ['filing', 'company']) test(`FD-01 metadata-only and malformed readiness cannot authorize ${retrievalScope} evidence or AI`, async ctx => {
+  const app = await mount(ctx, true);
+  await app.release(app.request(companyPath('AAPL', 'sources')), [false, 'true', null].map((flag, index) => ({ ...filing('AAPL'), accession_number: `ineligible-${index}`, has_filing_chunks: flag })));
+  assert.equal(app.select('Indexed SEC filing').disabled, true);
+  await app.change(app.select('Evidence search scope'), retrievalScope);
+  await app.click('Use question'); await app.click('Research question');
+  const question = app.host.querySelector('textarea').value;
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', question));
+  assert.ok(app.host.querySelector('.direct-answer'));
+  assert.ok(!app.host.querySelector('.ai-panel')); assert.deepEqual(app.evidence(), []);
+  assert.equal(app.requests.filter(item => /\/context$|\/answer$|\/text$/.test(item.path)).length, 0);
+});
+
+test('FD-01 failed discovery differs from verified empty and guide/direct answer survive source retry', async ctx => {
+  const app = await mount(ctx, true);
+  await app.release(app.request(companyPath('AAPL', 'sources')), {}, 503);
+  const panel = app.host.querySelector('.filing-panel');
+  assert.match(panel.textContent, /Indexed evidence list unavailable/);
+  assert.doesNotMatch(panel.textContent, /No recorded filings were returned|Indexed searchable SEC evidence \(0\)/);
+  await app.change(app.select('Question metric'), 'net_income'); await app.click('Use question'); await app.click('Research question');
+  const question = 'What is the latest available net income?';
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', question));
+  const answer = app.host.querySelector('.direct-answer'); const count = app.requests.length;
+  await app.click('Retry filing list'); await app.release(app.request(companyPath('AAPL', 'sources')), []);
+  assert.equal(app.requests.length, count + 1); assert.equal(app.host.querySelector('.direct-answer'), answer);
+  assert.equal(app.select('Question metric').value, 'net_income'); assert.equal(app.host.querySelector('textarea').value, question);
+  assert.match(panel.textContent, /No recorded filings were returned/);
+  assert.match(panel.textContent, /Indexed searchable SEC evidence \(0\)/);
+  assert.ok(!panel.querySelector('[role="alert"]'));
+});
+
+test('FD-01 malformed filing lists fail visibly and recover through one explicit retry', async ctx => {
+  const app = await mount(ctx, true);
+  await app.release(app.request(companyPath('AAPL', 'sources')), [null]);
+  const panel = app.host.querySelector('.filing-panel');
+  assert.ok(panel.querySelector('[role="alert"]'));
+  assert.doesNotMatch(panel.textContent, /No recorded filings were returned/);
+  assert.ok(!panel.querySelector('.recorded-filings'));
+  const count = app.requests.length;
+  await app.click('Retry filing list');
+  await app.release(app.request(companyPath('AAPL', 'sources')), [{ ...filing('AAPL'), has_filing_chunks: false }]);
+  assert.equal(app.requests.length, count + 1);
+  assert.ok(!panel.querySelector('[role="alert"]')); assert.ok(panel.querySelector('.recorded-filings'));
+  assert.equal(app.select('Indexed SEC filing').disabled, true);
+});
+
+test('FD-01 metadata disclosure resets at new verified publication and isolates company switching', async ctx => {
+  const app = await mount(ctx);
+  const metadata = Array.from({ length: 12 }, (_, index) => ({ ...filing('AAPL'), accession_number: `old-metadata-${index}`, has_filing_chunks: false }));
+  await app.release(app.request(companyPath('AAPL', 'sources')), metadata);
+  await app.click('Show more recorded filings (2)');
+  assert.equal(app.host.querySelectorAll('.recorded-filings li').length, 12);
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.ok(!app.host.querySelector('.recorded-filings'), 'Older publication records vanish while new sources load');
+  const fresh = app.request(companyPath('AAPL', 'sources'));
+  assert.equal(fresh.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(fresh, metadata.map(item => ({ ...item, accession_number: item.accession_number.replace('old-', 'new-') })), 200, 1);
+  assert.equal(app.host.querySelectorAll('.recorded-filings li').length, 10);
+  assert.doesNotMatch(app.host.textContent, /old-metadata/);
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  assert.ok(!app.host.querySelector('.recorded-filings'));
+  assert.doesNotMatch(app.host.textContent, /new-metadata|old-metadata/);
+  await app.completeCompany('JPM', '2000000000');
+  assert.ok(!app.host.querySelector('.recorded-filings'));
+});
 
 for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2 obsolete ${version} 409 cannot reject verified ${version + 1}${strict ? ' in StrictMode' : ''}`, async ctx => {
   const app = await mount(ctx, false, companies, { initialVersion: version, strict });

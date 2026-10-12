@@ -1,12 +1,47 @@
 import type { EvidenceContext, FinancialPeriod, MetricHistory, NormalizedMetric, PeriodKind } from "./finlens-api";
 
-export const METRIC_LABELS: Record<string, string> = {
-  revenue: "Revenue", revenue_growth_yoy: "Revenue YoY", net_income: "Net income",
-  diluted_eps: "Diluted EPS", operating_income: "Operating income", net_margin: "Net margin",
-  operating_margin: "Operating margin", total_assets: "Total assets",
-  cash_and_equivalents: "Cash and equivalents", free_cash_flow: "Free cash flow",
-  operating_cash_flow: "Operating cash flow", capital_expenditures: "Capital expenditures",
+export type QuestionScope = "latest_available" | "quarter" | "annual";
+export const QUESTION_SCOPE_LABELS: Record<QuestionScope, string> = {
+  latest_available: "Latest available", quarter: "Latest direct quarter", annual: "Latest annual",
 };
+export const METRIC_GROUPS = [
+  { id: "income", label: "Income" }, { id: "profitability", label: "Growth and margins" },
+  { id: "balance", label: "Balance sheet" }, { id: "cash_flow", label: "Cash flow" },
+] as const;
+type MetricPresentation = {
+  id: string; label: string; description: string; group: typeof METRIC_GROUPS[number]["id"];
+  periods: readonly PeriodKind[]; questionTerm: string; questionScopes: readonly QuestionScope[];
+};
+const durationPeriods: readonly PeriodKind[] = ["quarter", "annual", "half_year", "nine_months"];
+const durationQuestions: readonly QuestionScope[] = ["latest_available", "quarter", "annual"];
+const instantPeriods: readonly PeriodKind[] = ["instant"];
+const instantQuestions: readonly QuestionScope[] = ["latest_available"];
+// Display vocabulary only. The server owns metric definitions, calculations,
+// period selection and availability; supported does not mean available here.
+export const METRIC_CATALOG: readonly MetricPresentation[] = [
+  { id: "revenue", label: "Revenue", description: "Reported revenue on the source economic basis.", group: "income", periods: durationPeriods, questionTerm: "revenue", questionScopes: durationQuestions },
+  { id: "gross_profit", label: "Gross profit", description: "Reported gross profit for the reporting interval.", group: "income", periods: durationPeriods, questionTerm: "gross profit", questionScopes: durationQuestions },
+  { id: "operating_income", label: "Operating income", description: "Profit or loss from operations.", group: "income", periods: durationPeriods, questionTerm: "operating income", questionScopes: durationQuestions },
+  { id: "net_income", label: "Net income", description: "Net profit or loss for the reporting interval.", group: "income", periods: durationPeriods, questionTerm: "net income", questionScopes: durationQuestions },
+  { id: "diluted_eps", label: "Diluted EPS", description: "Earnings per diluted share, reported as filed.", group: "income", periods: durationPeriods, questionTerm: "diluted eps", questionScopes: durationQuestions },
+  { id: "revenue_growth_yoy", label: "Revenue YoY", description: "Revenue change from a comparable prior-year period.", group: "profitability", periods: durationPeriods, questionTerm: "revenue growth yoy", questionScopes: durationQuestions },
+  { id: "gross_margin", label: "Gross margin", description: "Gross profit as a share of compatible revenue.", group: "profitability", periods: durationPeriods, questionTerm: "gross margin", questionScopes: durationQuestions },
+  { id: "operating_margin", label: "Operating margin", description: "Operating income as a share of compatible revenue.", group: "profitability", periods: durationPeriods, questionTerm: "operating margin", questionScopes: durationQuestions },
+  { id: "net_margin", label: "Net margin", description: "Net income as a share of compatible revenue.", group: "profitability", periods: durationPeriods, questionTerm: "net margin", questionScopes: durationQuestions },
+  { id: "cash_and_equivalents", label: "Cash and equivalents", description: "Cash and cash equivalents as of the reported date.", group: "balance", periods: instantPeriods, questionTerm: "cash and equivalents", questionScopes: instantQuestions },
+  { id: "total_assets", label: "Total assets", description: "Reported assets as of the reported date.", group: "balance", periods: instantPeriods, questionTerm: "total assets", questionScopes: instantQuestions },
+  { id: "total_liabilities", label: "Total liabilities", description: "Reported liabilities as of the reported date.", group: "balance", periods: instantPeriods, questionTerm: "total liabilities", questionScopes: instantQuestions },
+  { id: "operating_cash_flow", label: "Operating cash flow", description: "Cash provided by or used in operations.", group: "cash_flow", periods: durationPeriods, questionTerm: "operating cash flow", questionScopes: durationQuestions },
+  { id: "capital_expenditures", label: "Capital expenditures", description: "Payments for property, plant and equipment; positive outflows.", group: "cash_flow", periods: durationPeriods, questionTerm: "capital expenditures", questionScopes: durationQuestions },
+  { id: "free_cash_flow", label: "Free cash flow", description: "Operating cash flow after capital expenditures.", group: "cash_flow", periods: durationPeriods, questionTerm: "free cash flow", questionScopes: durationQuestions },
+];
+export const METRIC_LABELS: Record<string, string> = Object.fromEntries(METRIC_CATALOG.map(metric => [metric.id, metric.label]));
+export function guidedQuestion(metric: string, scope: QuestionScope): string | null {
+  const entry = METRIC_CATALOG.find(item => item.id === metric);
+  if (!entry?.questionScopes.includes(scope)) return null;
+  const wording = { latest_available: "latest available", quarter: "latest quarterly", annual: "latest annual" };
+  return `What is the ${wording[scope]} ${entry.questionTerm}?`;
+}
 export const PERIOD_LABELS: Record<PeriodKind, string> = {
   quarter: "Direct quarter", annual: "Annual", half_year: "Half-year YTD",
   nine_months: "Nine-month YTD", instant: "As of date",
