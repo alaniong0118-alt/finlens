@@ -88,3 +88,21 @@ footer { margin:32px 0 5px; border-top:1px solid var(--border); padding-top:18px
 @media (max-width:767px) { .workspace { padding:22px 16px 16px; } .header-inner { padding:13px 16px; } .company-overview { flex-direction:column; align-items:stretch; gap:18px; } .company-picker { width:100%; } .panel { padding:19px; } .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .brand small { max-width:155px; letter-spacing:0; font-size:9px; } .brand { font-size:21px; gap:8px; } .theme-control { gap:5px; } .theme-control select { width:82px; padding:9px 6px; } .hero { padding-bottom:22px; } .hero > p:not(.eyebrow) { font-size:14px; } .metric-value { font-size:23px; } .financial-chart { height:225px; } }
 @media (prefers-reduced-motion:reduce) { * { transition:none!important; scroll-behavior:auto!important; } }
 @media (max-width:767px) { .metric-card:has(> .provenance[open]) { grid-column:1 / -1; } }
+.company-comparison { margin-top:24px; }
+.comparison-controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-top:18px; }
+.comparison-picker { min-width:0; }
+.comparison-remove { min-height:36px; color:var(--muted); font-size:12px; padding:5px 0; text-decoration:underline; }
+.comparison-actions { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:16px 0; }
+.comparison-actions .secondary-button { width:auto; min-height:44px; margin:0; }
+.comparison-actions label { min-width:180px; }
+.comparison-scroll { margin-top:12px; border:1px solid var(--border); border-radius:10px; }
+.comparison-table { min-width:640px; }
+.comparison-table caption { text-align:left; padding:12px; color:var(--muted); }
+.comparison-table thead { background:var(--surface); }
+.comparison-table th,.comparison-table td { padding:16px; min-width:200px; max-width:300px; overflow-wrap:anywhere; }
+.comparison-table th:first-child { min-width:160px; width:160px; }
+.comparison-table thead th strong { display:block; color:var(--text); font-size:17px; }
+.comparison-table thead th span { display:block; margin-top:6px; font-weight:400; }
+.comparison-table .metric-value { font-size:23px; }
+.comparison-table .provenance { margin-top:10px; }
+@media (max-width:767px) { .comparison-controls { grid-template-columns:minmax(0,1fr); } .comparison-actions label { width:100%; } .comparison-table th,.comparison-table td { padding:12px; } }

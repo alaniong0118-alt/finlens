@@ -12,6 +12,7 @@ from app.financial_metric_schemas import (
     NormalizedFinancialSummary, NormalizedMetricHistory, HistoryComparability,
     FiscalPeriodRequest, MetricComparison,
     ScopeAuthorizationProvenance,
+    AnnualFinancialComparison,
 )
 from app.models import Company, FinancialFact
 from app.sec_client import build_filing_url
@@ -25,6 +26,12 @@ class UnknownCompany(ValueError):
 
 class UnknownMetric(ValueError):
     pass
+
+
+ANNUAL_COMPARISON_METRICS = (
+    "revenue", "revenue_growth_yoy", "operating_margin", "net_margin",
+    "operating_cash_flow", "capital_expenditures", "free_cash_flow",
+)
 
 
 def original_concept(fact):
@@ -447,6 +454,37 @@ class FinancialMetrics:
                                        metric=name, unit=METRICS[name].unit, requested_period=kind,
                                        status=status, reason=reason, selection_policy=SELECTION_POLICY, history=history,
                                        comparability=HistoryComparability() if name == "diluted_eps" else None)
+
+    @financial_reader
+    def annual_comparison(self, fiscal_year=None):
+        """Discover observed labels or resolve one exact annual reporting window.
+
+        Fiscal labels follow period(), including fiscal end-year labeling for week
+        calendars. Filing-context FY annotations are not reporting-period labels.
+        No latest-period or per-metric period fallback is permitted here.
+        """
+        # CC-01 coverage is the union of its metrics' existing annual anchors.
+        # Revenue-first reporting_periods remains unchanged for other endpoints.
+        anchors = [p for name in ANNUAL_COMPARISON_METRICS
+                   for p in self.metric_periods(name, "annual")]
+        years = sorted({p.fiscal_year for p in anchors
+                        if p.fiscal_year is not None and 1900 <= p.fiscal_year <= 2099}, reverse=True)
+        anchor, reason, metrics = None, None, {}
+        if fiscal_year is not None:
+            matches = {(p.start, p.end): p for p in anchors
+                       if p.fiscal_year == fiscal_year and p.fiscal_period == "FY"}
+            if len(matches) == 1:
+                anchor = next(iter(matches.values()))
+                metrics = {name: self.observation(name, anchor) for name in ANNUAL_COMPARISON_METRICS}
+            else:
+                reason = ("Multiple stored annual reporting windows have this fiscal end-year; selection is ambiguous."
+                          if matches else "No stored annual reporting window for the requested fiscal end-year. Other years, quarterly and YTD observations are not substituted.")
+                metrics = {name: self.missing(name, reason) for name in ANNUAL_COMPARISON_METRICS}
+        return AnnualFinancialComparison(
+            ticker=self.company.ticker, company_name=self.company.name, company_cik=self.company.cik,
+            period=anchor, selection_policy=SELECTION_POLICY, metrics=metrics,
+            requested_fiscal_year=fiscal_year, fiscal_years=years, period_reason=reason,
+        )
 
     @financial_reader
     def summary(self, kind="quarter"):

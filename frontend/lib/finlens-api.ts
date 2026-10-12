@@ -227,12 +227,18 @@ export type NormalizedMetric = {
   value: string | null; reason: string | null; period: FinancialPeriod | null;
   formula: string | null; revenue_basis?: string;
   provenance: FactProvenance[]; alternatives: FactProvenance[];
-  inputs: { role: string; metric: string; value: string; unit: string; fact_ids: number[]; revenue_basis?: string }[];
+  inputs: { role: string; metric: string; value: string; unit: string; fact_ids: number[]; revenue_basis?: string; period?: FinancialPeriod }[];
 };
 export type FinancialSummary = {
   ticker: string; company_name: string; company_cik: string;
   requested_period: PeriodKind; period: FinancialPeriod | null;
   metrics: Record<string, NormalizedMetric>; selection_policy: string;
+};
+export type AnnualFinancialComparison = FinancialSummary & {
+  requested_period: "annual";
+  requested_fiscal_year: number | null;
+  fiscal_years: number[];
+  period_reason: string | null;
 };
 export type MetricHistory = {
   ticker: string; company_cik: string; metric: string; unit: string; requested_period: PeriodKind;
@@ -285,6 +291,10 @@ export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
 }
 export function getFinancialSummary(ticker: string, period: PeriodKind, signal?: AbortSignal, requirePublishedVersion = false): Promise<FinancialSummary> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/summary?period=${period}`, { signal }, requirePublishedVersion);
+}
+export function getAnnualFinancials(ticker: string, fiscalYear: number | null, signal: AbortSignal): Promise<AnnualFinancialComparison> {
+  const query = fiscalYear === null ? "" : `?fiscal_year=${fiscalYear}`;
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/annual${query}`, { signal }, true);
 }
 export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });

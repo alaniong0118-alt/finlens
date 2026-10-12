@@ -29,7 +29,7 @@ from app.answer_service import (
 )
 from app.models import Company, FinancialFact, FilingChunk
 from app.financial_metrics_service import load_financial_metrics, UnknownCompany, UnknownMetric
-from app.financial_metric_schemas import NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
+from app.financial_metric_schemas import AnnualFinancialComparison, NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
 from app.research_answer_service import ResearchAnswer, ResearchAnswerRequest, answer_research_question
 from app.freshness_service import freshness, read_session, request_scope, require_published, schema_ready, stored_chunks, validate_chunks
 from app.refresh_contracts import Freshness
@@ -199,6 +199,18 @@ def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
     with read_session(SessionLocal) as session:
         try:
             return load_financial_metrics(session, ticker).summary(period)
+        except UnknownCompany:
+            raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
+
+
+@app.get("/companies/{ticker}/financials/annual", response_model=AnnualFinancialComparison)
+def annual_financial_comparison(ticker: str, fiscal_year: int | None = Query(default=None, ge=1900, le=2099)):
+    with read_session(SessionLocal) as session:
+        try:
+            model = load_financial_metrics(session, ticker)
+            if model.company.ticker != ticker.upper():
+                raise HTTPException(409, detail="Financial company identity could not be verified.")
+            return model.annual_comparison(fiscal_year)
         except UnknownCompany:
             raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
 

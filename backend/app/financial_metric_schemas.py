@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_serializer
+from pydantic import BaseModel, Field, model_serializer, model_validator
 
 PeriodKind = Literal["quarter", "half_year", "nine_months", "annual", "instant"]
 Availability = Literal["available", "unavailable", "not_applicable"]
@@ -92,6 +92,34 @@ class NormalizedFinancialSummary(BaseModel):
     requested_period: PeriodKind
     selection_policy: str
     metrics: dict[str, NormalizedMetric]
+
+
+class AnnualFinancialComparison(NormalizedFinancialSummary):
+    requested_period: Literal["annual"] = "annual"
+    requested_fiscal_year: int | None = Field(default=None, ge=1900, le=2099)
+    fiscal_years: list[int]
+    period_reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_scope(self):
+        if self.requested_fiscal_year is None:
+            if self.period is not None or self.metrics:
+                raise ValueError("Annual discovery must not select financial observations.")
+        elif self.period is not None:
+            p = self.period
+            if (p.kind != "annual" or p.start is None or p.start > p.end
+                    or p.fiscal_year != self.requested_fiscal_year or p.fiscal_period != "FY"
+                    or p.end.year != self.requested_fiscal_year):
+                raise ValueError("Annual reporting window does not match the requested fiscal end-year.")
+        for name, point in self.metrics.items():
+            if point.metric != name or point.period != self.period:
+                raise ValueError("Metric reporting window does not match the selected annual window.")
+            if self.period is None and point.status == "available":
+                raise ValueError("An unresolved annual window cannot have an available metric.")
+            if any(source.company_cik != self.company_cik
+                   for source in (*point.provenance, *point.alternatives)):
+                raise ValueError("Financial provenance does not belong to the requested company.")
+        return self
 
 
 class FiscalPeriodRequest(BaseModel):
