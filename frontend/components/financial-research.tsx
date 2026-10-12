@@ -111,8 +111,9 @@ function MetricHistoryPanel({ company }: { company: Company }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const controller = versionedController(version, changed);
     setLoading(true); setData(null); setError(null);
+    if (version === null) return;
+    const controller = versionedController(version, changed);
     getMetricHistory(company.ticker, metric, period, controller.signal).then((result) => {
       if (!controller.signal.aborted) { setData(result); setLoadedVersion(version); }
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
@@ -136,7 +137,7 @@ function MetricHistoryPanel({ company }: { company: Company }) {
       </select></label>
     </div>
     <div aria-live="polite" aria-busy={loading}>
-      {loading && <p className="loading-state">Loading selected history…</p>}
+      {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading selected history…"}</p>}
       {error && <p role="alert" className="error-state">{error}</p>}
       {data && !loading && loadedVersion === version && <HistoryView data={data} />}
     </div>
@@ -153,16 +154,19 @@ export default function FinancialResearch({ company }: { company: Company }) {
   const scope = useRef<SnapshotScope | null>(null);
   const [alternatives, setAlternatives] = useState<{ ticker: string; version: number; hints: { metric: string; snapshot: FinancialSummary }[] } | null>(null);
   useEffect(() => {
+    scope.current = null;
+    setAlternatives(null);
+    if (version === null) return;
     const current: SnapshotScope = { ticker: company.ticker, cik: company.cik, version, changed,
       controller: new AbortController(), responses: new Map() };
     scope.current = current;
-    setAlternatives(null);
     return () => current.controller.abort();
   }, [company.ticker, company.cik, version, changed]);
   useEffect(() => {
-    const current = scope.current!;
-    let active = true;
     setLoading(true); setSummary(null); setError(null);
+    const current = scope.current;
+    if (version === null || !current) return;
+    let active = true;
     snapshotFor(current, period).then((result) => {
       if (active && !current.controller.signal.aborted) { setSummary(result); setLoadedVersion(version); }
     }).catch((failure) => { if (active && !current.controller.signal.aborted) setError(describeApiError(failure)); })
@@ -175,7 +179,7 @@ export default function FinancialResearch({ company }: { company: Company }) {
   }, [company.ticker, company.cik, period, version, changed]);
   useEffect(() => {
     setAlternatives(null);
-    if (period !== "quarter" || !summary || loadedVersion !== version
+    if (version === null || period !== "quarter" || !summary || loadedVersion !== version
         || summary.ticker !== company.ticker || summary.company_cik !== company.cik || summary.requested_period !== period) return;
     const missing = CASH_FLOW_METRICS.filter(metric => summary.metrics[metric]?.status === "unavailable");
     if (!missing.length) return;
@@ -213,7 +217,7 @@ export default function FinancialResearch({ company }: { company: Company }) {
         <label className="compact-label">Snapshot period<select value={period} onChange={(event) => { setSummary(null); setAlternatives(null); setLoading(true); setPeriod(event.target.value as PeriodKind); }}>{["quarter", ...ALTERNATIVE_PERIODS].map(mode => <option key={mode} value={mode}>{PERIOD_LABELS[mode as PeriodKind]}</option>)}</select></label>
       </div>
       <div aria-live="polite" aria-busy={loading}>
-        {loading && <p className="loading-state">Loading financial snapshot…</p>}
+        {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading financial snapshot…"}</p>}
         {error && <p role="alert" className="error-state">{error}</p>}
         {summary && !loading && loadedVersion === version && summary.ticker === company.ticker && summary.requested_period === period && <>
           <p className="period-label">{periodLabel(summary.period)}</p>

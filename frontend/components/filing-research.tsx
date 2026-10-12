@@ -48,7 +48,7 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
     return () => { currentScope.invalidate(); controller.current?.abort(); };
   }, []);
   async function analyze() {
-    if (!configured || result.evidence_status !== "sufficient" || loading) return;
+    if (version === null || !configured || result.evidence_status !== "sufficient" || loading) return;
     controller.current?.abort(); controller.current = versionedController(version, changed);
     const id = scope.current.start();
     setLoading(true); setMessage(null); setAnswer(null);
@@ -63,7 +63,7 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
     <div className="section-heading"><div><p className="eyebrow">Optional enhancement</p><h3 id="ai-title">AI Analysis</h3></div><span className="badge neutral">{configured ? "Configured · availability may vary" : "Not configured"}</span></div>
     <p className="muted small">Generate a grounded explanation from the filing evidence. Research Mode works independently.</p>
     {!configured && <p className="notice">AI analysis is not configured. Financial data and SEC evidence remain available.</p>}
-    <button type="button" className="secondary-button" onClick={analyze} disabled={!configured || loading || result.evidence_status !== "sufficient"}>{loading ? "Preparing optional analysis…" : "Generate AI analysis"}</button>
+    <button type="button" className="secondary-button" onClick={analyze} disabled={version === null || !configured || loading || result.evidence_status !== "sufficient"}>{loading ? "Preparing optional analysis…" : "Generate AI analysis"}</button>
     <div aria-live="polite" aria-busy={loading}>
       {message && <p className="notice">{message}</p>}
       {answer?.evidence_status === "insufficient" && <p className="notice">Insufficient evidence for a generated answer. The retrieved passages and any direct financial answer remain available.</p>}
@@ -112,7 +112,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     setAnswer(null); setAnswerLoading(false); setAnswerError(null);
   }
   async function search(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!query.trim() || answerLoading || loading) return;
+    event.preventDefault(); if (version === null || !query.trim() || answerLoading || loading) return;
     setSearchedVersion(version);
     const id = scope.current.start();
     controller.current?.abort(); controller.current = versionedController(version, changed);
@@ -144,7 +144,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     <form onSubmit={search} className="search-form">
       <label htmlFor="research-query">Research question or search<textarea id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
       <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>
-      <button className="primary-button" disabled={!query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
+      <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
       <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). Other questions search SEC evidence. No AI generation.</p>
     </form>
     {searchedVersion !== version && <p className="notice">Data updated; research this question again.</p>}
@@ -178,8 +178,9 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const controller = versionedController(version, changed);
     setLoading(true); setError(null);
+    if (version === null) return;
+    const controller = versionedController(version, changed);
     getFilingSources(company.ticker, controller.signal).then((data) => {
       if (controller.signal.aborted) return;
       const indexed = searchableFilings(data); setFilings(indexed); setSourceVersion(version);

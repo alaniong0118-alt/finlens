@@ -2,7 +2,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { getFreshness, type CompanyFreshness } from "@/lib/finlens-api";
 
-const VersionContext = createContext({ version: 0, changed: () => {} });
+// Zero is a valid publication. Only null means freshness has not established a pin.
+const VersionContext = createContext<{ version: number | null; changed: () => void }>({ version: null, changed: () => {} });
 export const useResearchVersion = () => useContext(VersionContext);
 
 export default function ResearchFreshness({ ticker, children, catalogChanged }: {
@@ -34,7 +35,9 @@ export default function ResearchFreshness({ ticker, children, catalogChanged }: 
     controller.current = new AbortController();
     const signal = controller.current.signal;
     getFreshness(ticker, signal).then(next => {
-      if (signal.aborted || next.ticker !== ticker || next.data_version < (latest.current?.data_version ?? 0)) return;
+      if (signal.aborted || next.ticker !== ticker) return;
+      if (!Number.isSafeInteger(next.data_version) || next.data_version < 0) throw new Error("Invalid publication version");
+      if (next.data_version < (latest.current?.data_version ?? 0)) return;
       latest.current = next; setData(next); setUnavailable(false);
       reconcileCatalog(next.evidence_version);
     }).catch(() => { if (!signal.aborted) setUnavailable(true); })
@@ -52,7 +55,7 @@ export default function ResearchFreshness({ ticker, children, catalogChanged }: 
       window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible);
     };
   }, [check]);
-  return <VersionContext.Provider value={{ version: data?.data_version ?? 0, changed: check }}>
+  return <VersionContext.Provider value={{ version: data?.data_version ?? null, changed: check }}>
     <section className="notice" aria-label="Data freshness" aria-live="polite">
       <strong>Stored data · {unavailable ? "check unavailable" : data?.status ?? "unknown"}</strong>
       {data && <> · version {data.data_version}<p className="small">Financial facts: {data.facts.status} · Evidence: {data.evidence.status}.
