@@ -1,0 +1,4 @@
+[
+  {"date":"2026-01-05T00:00:00.000Z","open":100,"high":100,"low":100,"close":100,"volume":1000,"adjOpen":99,"adjHigh":99,"adjLow":99,"adjClose":99,"adjVolume":1000,"divCash":0,"splitFactor":1},
+  {"date":"2026-01-06T00:00:00.000Z","open":99,"high":99,"low":99,"close":99,"volume":1000,"adjOpen":99,"adjHigh":99,"adjLow":99,"adjClose":99,"adjVolume":1000,"divCash":1,"splitFactor":1}
+]
