@@ -1925,3 +1925,84 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2
   assert.equal(recovered.length, 3);
   assert.ok(recovered.every(r => r.init.headers['X-FinLens-Data-Version'] === String(version + 1)));
 });
+
+
+// UX-01A adds presentation acceptance without changing existing assertions.
+test('UX-01A history region is labelled and focusable with unchanged values, dates and sources', async ctx => {
+  const app = await mount(ctx);
+  const data = history('AAPL', '0');
+  data.history.push(point('AAPL', '-123456789.0123'), { ...point('AAPL', null), status: 'unavailable', reason: 'No compatible quarterly observation.', provenance: [] });
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), data);
+  const region = app.trends().querySelector('[role="region"]');
+  assert.equal(region.getAttribute('aria-label'), 'Revenue historical observations and SEC sources');
+  assert.equal(region.tabIndex, 0);
+  const help = document.getElementById(region.getAttribute('aria-describedby'));
+  assert.match(help.textContent, /scroll horizontally.*arrow keys/);
+  region.focus(); assert.equal(document.activeElement, region);
+  assert.equal(region.querySelector('table caption').textContent, 'Revenue · Direct quarter');
+  assert.deepEqual([...region.querySelectorAll('th')].map(th => [th.textContent, th.scope]), [['Period', 'col'], ['Reported value', 'col'], ['Provenance', 'col']]);
+  const rows = region.querySelectorAll('tbody tr');
+  assert.equal(rows.length, 3);
+  assert.match(rows[0].textContent, /Jan 1, 2025.*Mar 31, 2025.*\$0/);
+  assert.match(rows[1].textContent, /-\$123\.46M/);
+  assert.match(rows[2].textContent, /Unavailable.*No compatible quarterly observation/);
+  const count = app.requests.length;
+  const disclosure = rows[1].querySelector('summary');
+  disclosure.focus(); assert.equal(document.activeElement, disclosure);
+  await act(async () => disclosure.click());
+  assert.equal(disclosure.parentElement.open, true);
+  assert.match(rows[1].textContent, /-123456789\.0123 USD/);
+  assert.equal(rows[1].querySelector('a').href, filing('AAPL').sec_url);
+  assert.equal(app.requests.length, count, 'Focus and source disclosure must not request data');
+});
+
+test('UX-01A historical navigation resolves to the existing trends section without fetching', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const link = [...app.host.querySelectorAll('nav a')].find(item => item.textContent === 'Historical trends');
+  assert.equal(link.getAttribute('href'), '#history-title');
+  assert.equal(document.getElementById('history-title').textContent, 'Reported financial trends');
+  const count = app.requests.length;
+  link.focus(); assert.equal(document.activeElement, link);
+  await act(async () => link.click());
+  assert.equal(app.requests.length, count);
+  assert.equal(app.select('Company').value, 'AAPL');
+});
+
+for (const indexed of [true, false]) test(`UX-01A filing readiness explicitly qualifies indexing for ${indexed}`, async ctx => {
+  const catalog = [{ ...companies[0], has_indexed_filing: indexed, indexed_filing_count: indexed ? 1 : 0 }];
+  const app = await mount(ctx, false, catalog);
+  const overview = app.host.querySelector('.company-overview');
+  assert.equal(overview.querySelector('.badge').textContent, indexed ? 'Ready for filing research' : 'Not indexed for filing research');
+  assert.match(overview.textContent, /Filing indexing does not establish financial completeness or data freshness/);
+  assert.equal(app.select('Company').value, 'AAPL');
+});
+
+for (const retrievalScope of ['filing', 'company']) test(`UX-01A ${retrievalScope} empty guidance follows verified searchable availability without requests`, async ctx => {
+  const app = await mount(ctx, true);
+  const panel = app.host.querySelector('.filing-panel');
+  await app.release(app.request(companyPath('AAPL', 'sources')), [false, 'true', null].map((flag, index) => ({ ...filing('AAPL'), accession_number: `ineligible-${index}`, has_filing_chunks: flag })));
+  await app.change(app.select('Evidence search scope'), retrievalScope);
+  assert.match(panel.textContent, /Explore financial questions/);
+  assert.match(panel.textContent, /Searchable filing evidence is unavailable.*direct answers.*may be unavailable/);
+  assert.doesNotMatch(panel.textContent, /Explore the filing evidence/);
+  const count = app.requests.length;
+  await app.click('Use question');
+  assert.equal(app.requests.length, count, 'Guidance and preparation must not retrieve or generate');
+  await app.click('Research question');
+  assert.equal(app.requests.length, count + 1, 'Only the existing direct financial request is authorized');
+  assert.equal(app.requests.at(-1).path, companyPath('AAPL', 'research-answer'));
+  assert.equal(app.requests.at(-1).init.headers['X-FinLens-Data-Version'], '0');
+  assert.equal(app.requests.filter(item => /\/context$|\/answer$/.test(item.path)).length, 0);
+});
+
+test('UX-01A both eligible evidence scopes retain filing exploration guidance', async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const count = app.requests.length;
+  for (const retrievalScope of ['filing', 'company']) {
+    await app.change(app.select('Evidence search scope'), retrievalScope);
+    const panel = app.host.querySelector('.filing-panel');
+    assert.match(panel.textContent, /Explore the filing evidence/);
+    assert.doesNotMatch(panel.textContent, /Explore financial questions/);
+  }
+  assert.equal(app.requests.length, count);
+});

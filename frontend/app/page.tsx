@@ -74,7 +74,7 @@ export default function Home() {
         <ul className="hero-badges" aria-label="Research capabilities">{["SEC-sourced", "Deterministic metrics", "Hybrid evidence search", "Traceable sources"].map((label) => <li key={label}>{label}</li>)}</ul>
       </div>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} />
-      <nav className="workspace-nav" aria-label="Research sections"><a href="#snapshot-title">Company research</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><span>AI Analysis · optional</span></nav>
+      <nav className="workspace-nav" aria-label="Research sections"><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
         <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} /></div>
       </ResearchFreshness>}

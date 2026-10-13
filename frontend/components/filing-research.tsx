@@ -207,7 +207,12 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">{retrievalScope === "company" ? "Finding relevant passages in published company filings…" : "Finding relevant passages in this filing…"}</p>}
       {error && <p role="alert" className="error-state">{error}</p>}
-      {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state"><h3>Explore the filing evidence</h3><p>Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required.</p></div>}
+      {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state">
+        <h3>{(retrievalScope === "company" ? companyEvidenceReady : filing) ? "Explore the filing evidence" : "Explore financial questions"}</h3>
+        <p>{(retrievalScope === "company" ? companyEvidenceReady : filing)
+          ? "Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required."
+          : "Searchable filing evidence is unavailable for this selection. Prepare a supported financial question above; direct answers use stored financial observations and may be unavailable. No OpenAI access is required."}</p>
+      </div>}
     </div>
     {searchedVersion === version && searchedEvidence === evidenceIdentity && result && <><h3>Supporting SEC evidence</h3>
       <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}Passages may describe different periods and are research, not validation of the structured answer.</p>

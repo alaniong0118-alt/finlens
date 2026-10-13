@@ -105,7 +105,8 @@ function HistoryView({ data }: { data: MetricHistory }) {
         </ResponsiveContainer>
       </div>
       <details className="history-table" open><summary>Observations and SEC sources ({rows.length})</summary>
-        <div className="table-scroll"><table><caption className="sr-only">{METRIC_LABELS[data.metric]} · {PERIOD_LABELS[data.requested_period]}</caption>
+        <p className="small muted table-scroll-help" id="history-scroll-help">On narrow screens, scroll horizontally to read values and sources. Keyboard users can focus the table region and use the arrow keys.</p>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label={`${METRIC_LABELS[data.metric]} historical observations and SEC sources`} aria-describedby="history-scroll-help"><table><caption className="sr-only">{METRIC_LABELS[data.metric]} · {PERIOD_LABELS[data.requested_period]}</caption>
           <thead><tr><th scope="col">Period</th><th scope="col">Reported value</th><th scope="col">Provenance</th></tr></thead>
           <tbody>{rows.map((row, index) => <tr key={`${row.date}-${index}`}>
             <td>{periodLabel(row.point.period)}</td><td>{row.label}{row.point.status !== "available" && row.point.reason && <p className="small metric-reason">{row.point.reason}</p>}{row.point.revenue_basis && <span className="small muted block">{row.point.revenue_basis.replaceAll("_", " ")}</span>}</td>
