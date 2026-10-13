@@ -305,7 +305,12 @@ class FinancialMetrics:
     def calculate(self, name, operands, period, roles):
         denominator_approval = None
         if any(p.status != "available" for p in operands):
-            return self.missing(name, "Missing or invalid compatible inputs.", period)
+            failures = []
+            for role, operand in zip(roles, operands, strict=True):
+                if operand.status != "available":
+                    label = f"{role} {operand.metric}" if role in {"current", "prior"} else role
+                    failures.append(f"{label.replace('_', ' ').capitalize()}: {operand.reason or 'No failure reason supplied.'}")
+            return self.missing(name, "Missing or invalid compatible inputs. " + " ".join(failures), period)
         first, second = operands
         if name == "gross_margin" and (
                 first.provenance[0].accession_number != second.provenance[0].accession_number):
