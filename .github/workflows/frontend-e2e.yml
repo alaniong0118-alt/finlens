@@ -1,0 +1,47 @@
+name: Frontend browser E2E
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-e2e.yml'
+permissions:
+  contents: read
+concurrency:
+  group: frontend-e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test:qa01
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:isolation
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: chromium-failure-diagnostics
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

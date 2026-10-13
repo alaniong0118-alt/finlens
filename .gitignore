@@ -35,6 +35,8 @@ coverage/
 model_cache/
 hf_cache/
 *.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
 
 # Local database files, dumps, backups, logs and scratch files
 *.sql

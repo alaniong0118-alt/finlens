@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:qa01": "node --test tests/qa01-*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list --reporter=list",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:isolation": "node scripts/e2e-server.mjs --check-isolation"
   },
   "dependencies": {
     "next": "^15.5.27",
@@ -16,6 +21,7 @@
     "recharts": "3.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@types/node": "22.15.0",
     "@types/react": "19.1.0",
     "@types/react-dom": "19.1.0",
