@@ -2,6 +2,7 @@
 from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
+from html import escape
 import hashlib
 import inspect
 import json
@@ -19,6 +20,7 @@ CIK = "0000000001"
 ACCESSION = "0000000001-25-000001"
 CUSTOMER = "RevenueFromContractWithCustomerExcludingAssessedTax"
 COMPANY = SimpleNamespace(cik=CIK, ticker="TEST", name="Synthetic issuer")
+PARSER_VERSIONS = (adapter.PARSER_VERSION, adapter.PARSER_V3_VERSION)
 XML = f'''<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="{adapter.XHTML}" xmlns:ix="{adapter.IX}" xmlns:xbrli="{adapter.XBRLI}"
  xmlns:xbrldi="{adapter.XBRLDI}" xmlns:us-gaap="http://fasb.org/us-gaap/2025"
@@ -50,9 +52,193 @@ def pin_for(data, **changes):
     return replace(pin, **changes)
 
 
-def parse(xml=XML, **changes):
+def parse(xml=XML, *, parser_version=adapter.PARSER_VERSION, **changes):
     data = xml.encode()
-    return adapter._parse_artifact(pin_for(data, **changes), data)
+    return adapter._parse_artifact(pin_for(data, **changes), data, parser_version=parser_version)
+
+
+def amendment_xml(value, format_name=None, attributes=""):
+    original = '<ix:nonNumeric id="dei-amend" name="dei:AmendmentFlag" contextRef="c-q">false</ix:nonNumeric>'
+    transform = f' format="{escape(format_name, quote=True)}"' if format_name is not None else ""
+    fact = f'<ix:nonNumeric id="dei-amend" name="dei:AmendmentFlag" contextRef="c-q"{transform}{attributes}>{escape(value)}</ix:nonNumeric>'
+    return XML.replace(original, fact)
+
+
+@pytest.mark.parametrize("value", ["", "false", "true", "0", "1", "False", "FALSE", "arbitrary text", "☐", "☑", " \t\n ", "<&>\"'"])
+@pytest.mark.parametrize("prefix", ["ixt", "registry"])
+def test_fixed_false_requires_v3_and_accepts_any_string_by_expanded_qname(value, prefix):
+    xml = amendment_xml(value, f"{prefix}:fixed-false")
+    if prefix != "ixt":
+        # A declaration on the fact itself is sufficient; prefix spelling has no meaning.
+        xml = xml.replace('id="dei-amend"', f'id="dei-amend" xmlns:{prefix}="{adapter.IXT}"')
+    # Neither an omitted selector nor an explicit v2 may gain v3 semantics.
+    data = xml.encode()
+    with pytest.raises(adapter.EvidenceRejected, match="^unsupported_identity_transform$"):
+        adapter._parse_artifact(pin_for(data), data)
+    with pytest.raises(adapter.EvidenceRejected, match="^unsupported_identity_transform$"):
+        parse(xml, parser_version=adapter.PARSER_VERSION)
+    parsed, original = parse(xml, parser_version=adapter.PARSER_V3_VERSION), parse(XML)
+    assert parsed.document_text == xml
+    assert parsed.observations == original.observations
+    assert (parsed.inline_fact_count, parsed.context_count, parsed.unit_count) == (6, 1, 1)
+    a, b = parsed.statement_ranges[0]
+    c, d = original.statement_ranges[0]
+    assert parsed.document_text[a:b] == original.document_text[c:d]
+
+
+@pytest.mark.parametrize("namespace", [
+    "urn:unknown-transform", adapter.IXT + "/", adapter.IXT.replace("http:", "https:"),
+    adapter.IXT.replace("www.xbrl.org", "www.xbrl.org.example"),
+    "http://www.xbrl.org/inlineXBRL/transformation/2015-02-26",
+])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_unknown_or_lookalike_namespace(namespace, parser_version):
+    xml = amendment_xml("any input", "other:fixed-false", f' xmlns:other="{namespace}"')
+    with pytest.raises(adapter.EvidenceRejected, match="^unsupported_identity_transform$"):
+        parse(xml, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("format_name", ["", "fixed-false", "ixt:", ":fixed-false", "ixt:fixed-false:extra",
+    " ixt:fixed-false", "ixt:fixed-false ", "ixt:fixed false", "ixt:1fixed-false", "{" + adapter.IXT + "}fixed-false"])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_malformed_transform_qnames(format_name, parser_version):
+    reason = "unresolved_qname" if parser_version == adapter.PARSER_V3_VERSION else "unsupported_identity_transform"
+    with pytest.raises(adapter.EvidenceRejected, match=f"^{reason}$"):
+        parse(amendment_xml("false", format_name), parser_version=parser_version)
+
+
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_undeclared_or_later_declared_prefix(parser_version):
+    xml = amendment_xml("false", "later:fixed-false")
+    for document in (xml, xml.replace('</body>', f'<span xmlns:later="{adapter.IXT}"/></body>')):
+        reason = "unresolved_namespace" if parser_version == adapter.PARSER_V3_VERSION else "unsupported_identity_transform"
+        with pytest.raises(adapter.EvidenceRejected, match=f"^{reason}$"):
+            parse(document, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_rebound_prefix_even_to_approved_namespace(parser_version):
+    xml = amendment_xml("false", "other:fixed-false", f' xmlns:other="{adapter.IXT}"')
+    xml = xml.replace('<html ', '<html xmlns:other="urn:other" ', 1)
+    with pytest.raises(adapter.EvidenceRejected, match="^namespace_rebinding$"):
+        parse(xml, parser_version=parser_version)
+    xml = amendment_xml("false", "ixt:fixed-false", ' xmlns:ixt="urn:other"')
+    with pytest.raises(adapter.EvidenceRejected, match="^namespace_rebinding$"):
+        parse(xml, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("value", ["", "False", "FALSE", "yes", "no", "2", "true false", "☐", "0", "1"])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_untransformed_amendment_lexical_subset_stays_strict(value, parser_version):
+    # 0/1 are xs:boolean spellings, but remain outside this adapter's existing subset.
+    with pytest.raises(adapter.EvidenceRejected, match="^filing_identity_mismatch$"):
+        parse(amendment_xml(value), parser_version=parser_version)
+
+
+@pytest.mark.parametrize("format_name", ["ixt:fixed-true", "ixt:boolean-false", "ixt:boolean-true",
+    "ixt:date-monthname-day-year-en", "ixt:num-dot-decimal", "ixt:fixed-False"])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_other_amendment_transforms_remain_unsupported(format_name, parser_version):
+    with pytest.raises(adapter.EvidenceRejected, match="^unsupported_identity_transform$"):
+        parse(amendment_xml("false", format_name), parser_version=parser_version)
+
+
+@pytest.mark.parametrize("fact_id,reason", [("dei-cik", "unsupported_identity_transform"),
+    ("dei-form", "unsupported_identity_transform"), ("dei-end", "unsupported_date_transform"),
+    ("f-rev", "unsupported_numeric_transform")])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_is_supported_only_for_amendment_flag(fact_id, reason, parser_version):
+    xml = XML.replace(f'id="{fact_id}"', f'id="{fact_id}" format="ixt:fixed-false"')
+    if fact_id == "f-rev":
+        xml = XML.replace('format="ixt:num-dot-decimal">100', 'format="ixt:fixed-false">100')
+    with pytest.raises(adapter.EvidenceRejected, match=f"^{reason}$"):
+        parse(xml, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("value,format_name", [("false", None), ("true", None),
+    ("false", "ixt:fixed-false"), ("true", "ixt:fixed-false")])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_duplicate_or_conflicting_amendment_flags_rejected_in_both_profiles(value, format_name, parser_version):
+    v3 = parser_version == adapter.PARSER_V3_VERSION
+    xml = amendment_xml("arbitrary input", "ixt:fixed-false") if v3 else amendment_xml("false")
+    # Use a supported first flag in each profile to reach the duplicate check.
+    format_name = format_name if v3 else None
+    other = amendment_xml(value, format_name)
+    start = other.index('<ix:nonNumeric id="dei-amend"')
+    end = other.index('</ix:nonNumeric>', start) + len('</ix:nonNumeric>')
+    extra = other[start:end].replace('id="dei-amend"', 'id="dei-amend-other"')
+    with pytest.raises(adapter.EvidenceRejected, match="^ambiguous_filing_identity$"):
+        parse(xml.replace('</body>', extra + '</body>'), parser_version=parser_version)
+
+
+@pytest.mark.parametrize("context_ref", [None, "missing"])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_requires_existing_identity_context(context_ref, parser_version):
+    xml = amendment_xml("false", "ixt:fixed-false")
+    replacement = '' if context_ref is None else f' contextRef="{context_ref}"'
+    xml = xml.replace('name="dei:AmendmentFlag" contextRef="c-q"', 'name="dei:AmendmentFlag"' + replacement)
+    with pytest.raises(adapter.EvidenceRejected, match="^unresolved_filing_identity$"):
+        parse(xml, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("container", ["segment", "scenario"])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_dimensioned_identity_context(container, parser_version):
+    xml = amendment_xml("false", "ixt:fixed-false")
+    start = XML.index('<xbrli:context')
+    end = XML.index('</xbrli:context>') + len('</xbrli:context>')
+    context = XML[start:end].replace('id="c-q"', 'id="c-dim"')
+    member = f'<xbrli:{container}><xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">us-gaap:ProductMember</xbrldi:explicitMember></xbrli:{container}>'
+    anchor = '</xbrli:entity>' if container == "segment" else '</xbrli:context>'
+    context = context.replace(anchor, member + anchor)
+    xml = xml.replace('</ix:resources>', context + '</ix:resources>')
+    xml = xml.replace('name="dei:AmendmentFlag" contextRef="c-q"', 'name="dei:AmendmentFlag" contextRef="c-dim"')
+    with pytest.raises(adapter.EvidenceRejected, match="^filing_context_mismatch$"):
+        parse(xml, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("attributes,reason", [
+    (' xsi:nil="true"', "unsupported_identity_attributes"),
+    (' xsi:nil="1"', "unsupported_identity_attributes"),
+    (' continuedAt="continuation"', "unsupported_identity_attributes"),
+    (' target=""', "unsupported_inline_target"),
+    (' target="other"', "unsupported_inline_target"),
+])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_nil_continued_or_targeted_markup(attributes, reason, parser_version):
+    xml = amendment_xml("false", "ixt:fixed-false", attributes)
+    xml = xml.replace('<html ', '<html xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ', 1)
+    xml = xml.replace('</body>', '<ix:continuation id="continuation">false</ix:continuation></body>')
+    with pytest.raises(adapter.EvidenceRejected, match=f"^{reason}$"):
+        parse(xml, parser_version=parser_version)
+
+
+@pytest.mark.parametrize("wrapper", ["span", "ix:continuation", "ix:nonNumeric"])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_fixed_false_rejects_nested_identity_markup(wrapper, parser_version):
+    xml = amendment_xml("false", "ixt:fixed-false")
+    start = xml.index('<ix:nonNumeric id="dei-amend"')
+    end = xml.index('</ix:nonNumeric>', start) + len('</ix:nonNumeric>')
+    fact = xml[start:end]
+    if wrapper == "span":
+        changed = fact.replace('>false</ix:nonNumeric>', '><span>false</span></ix:nonNumeric>')
+        reason = "unresolved_filing_identity"
+    else:
+        attrs = ' id="wrapper" name="us-gaap:DisclosureTextBlock" contextRef="c-q"' if wrapper == "ix:nonNumeric" else ' id="wrapper"'
+        changed = f'<{wrapper}{attrs}>{fact}</{wrapper}>'
+        reason = "unsupported_inline_ancestry"
+    with pytest.raises(adapter.EvidenceRejected, match=f"^{reason}$"):
+        parse(xml[:start] + changed + xml[end:], parser_version=parser_version)
+
+
+@pytest.mark.parametrize("format_name,value", [(None, "false"), ("ixt:fixed-false", "false"),
+    ("ixt:fixed-false", "true"), ("ixt:fixed-false", "")])
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_amended_form_rejects_false_amendment_even_with_true_visible_text(format_name, value, parser_version):
+    xml = amendment_xml(value, format_name).replace('>10-Q</ix:nonNumeric>', '>10-Q/A</ix:nonNumeric>')
+    reason = "unsupported_identity_transform" if format_name is not None and parser_version == adapter.PARSER_VERSION else "filing_identity_mismatch"
+    with pytest.raises(adapter.EvidenceRejected, match=f"^{reason}$"):
+        parse(xml, parser_version=parser_version, form="10-Q/A", accession="0000000001-25-000002")
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +253,7 @@ def offline(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", lambda *a, **k: pytest.fail("Network access forbidden"))
 
 
-def scenario(tmp_path, xml=XML):
+def scenario(tmp_path, xml=XML, *, parser_version=adapter.PARSER_VERSION):
     root = tmp_path / "trusted-store"
     directory = root / CIK / ACCESSION
     directory.mkdir(parents=True)
@@ -85,7 +271,7 @@ def scenario(tmp_path, xml=XML):
     receipt_path = directory / pin.receipt_filename
     receipt_path.write_bytes(receipt_bytes)
     pin = replace(pin, receipt_sha256=sha(receipt_bytes))
-    parsed = adapter._parse_artifact(pin, data)
+    parsed = adapter._parse_artifact(pin, data, parser_version=parser_version)
     a, b = parsed.statement_ranges[0]
     reviews = tuple(adapter.ObservationReview(o.identity, pin.filename, o.fact_id, o.context_id,
         0, sha(parsed.document_text[a:b].encode()),
@@ -96,7 +282,7 @@ def scenario(tmp_path, xml=XML):
         filename=pin.filename, chunk_count=1, content_digest="c" * 64, configuration="parser-v1", data_version=1)
     snapshot = adapter.snapshot_digest(state, [publication])
     ref = auth.ApprovalRef("denominator:net_margin", "synthetic-only", 1)
-    policy = adapter.EvidencePolicy(ref, "pending", snapshot, (pin,), reviews)
+    policy = adapter.EvidencePolicy(ref, "pending", snapshot, (pin,), reviews, parser_version=parser_version)
     evidence = tuple(auth.SourceEvidence(o.identity, pin.filename, parsed.document_text,
         adapter._statement_location(policy, r), a, b, o.context_id, (), r.economic_scope)
         for o, r in zip(parsed.observations, reviews))
@@ -166,9 +352,9 @@ def assert_parser_rejected_by_loader(monkeypatch, s, reason):
     failures = []
     parse_artifact = adapter._parse_artifact
 
-    def checked_parse(*args):
+    def checked_parse(*args, **kwargs):
         try:
-            return parse_artifact(*args)
+            return parse_artifact(*args, **kwargs)
         except adapter.EvidenceRejected as error:
             failures.append(str(error))
             raise
@@ -419,8 +605,9 @@ def test_dimensioned_fact_cannot_be_consolidated_evidence(tmp_path):
         verify(s)
 
 
-def test_verified_policy_feeds_existing_evaluator(tmp_path, monkeypatch):
-    s = scenario(tmp_path)
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_verified_policy_feeds_existing_evaluator(tmp_path, monkeypatch, parser_version):
+    s = scenario(tmp_path, parser_version=parser_version)
     assert verify(s) == s.evidence
     install_test_policy(monkeypatch, s)
     proofs = adapter.load_production_evidence(s.session, CIK, s.facts)
@@ -430,11 +617,124 @@ def test_verified_policy_feeds_existing_evaluator(tmp_path, monkeypatch):
     assert result.metrics["net_margin"].scope_authorization.permission == "denominator:net_margin"
 
 
+def test_fixed_false_verifies_synthetic_policy_without_activating_production(tmp_path):
+    s = scenario(tmp_path, amendment_xml("true", "ixt:fixed-false"), parser_version=adapter.PARSER_V3_VERSION)
+    assert verify(s) == s.evidence
+    assert adapter.PRODUCTION_EVIDENCE_POLICIES == ()
+
+
+def test_untransformed_evidence_preserves_observations_but_binds_each_profile(tmp_path):
+    assert adapter.PARSER_VERSION == "sec-inline-v2"
+    assert adapter.PARSER_V3_VERSION == "sec-inline-v3"
+    assert adapter.SUPPORTED_PARSER_VERSIONS == frozenset(PARSER_VERSIONS)
+    assert parse(XML) == parse(XML, parser_version=adapter.PARSER_V3_VERSION)
+    v2 = scenario(tmp_path / "v2")
+    v3 = scenario(tmp_path / "v3", parser_version=adapter.PARSER_V3_VERSION)
+    default_policy = adapter.EvidencePolicy(v2.policy.ref, v2.policy.approval_sha256,
+        v2.policy.snapshot_sha256, v2.policy.artifacts, v2.policy.observations)
+    assert default_policy == v2.policy
+    for s in (v2, v3):
+        assert verify(s) == s.evidence
+    assert v2.raw == v3.raw
+    # Isolate the parser field: receipt/store differences are not the proof.
+    changed = replace(v2.policy, parser_version=adapter.PARSER_V3_VERSION)
+    assert adapter._policy_digest(v2.policy) != adapter._policy_digest(changed)
+    for evidence, review in zip(v2.evidence, v2.policy.observations):
+        other = replace(evidence, statement_location=adapter._statement_location(changed, review))
+        assert evidence.fingerprint() != other.fingerprint()
+
+
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_changing_only_policy_version_cannot_reuse_authorization_bindings(tmp_path, parser_version):
+    s = scenario(tmp_path, parser_version=parser_version)
+    assert verify(s) == s.evidence
+    other = adapter.PARSER_V3_VERSION if parser_version == adapter.PARSER_VERSION else adapter.PARSER_VERSION
+    changed = replace(s.policy, parser_version=other)
+    assert adapter._policy_digest(changed) != adapter._policy_digest(s.policy)
+    # Common untransformed bytes parse in both profiles; the exact binding fails.
+    with pytest.raises(adapter.EvidenceRejected, match="^missing_or_changed_context_evidence$"):
+        verify(s, policy=changed)
+
+
+@pytest.mark.parametrize("parser_version", ["sec-inline-v1", "sec-inline-v4", "SEC-inline-v2", "", None, True, 3, [], {}])
+def test_unknown_parser_versions_reject_before_parsing_or_evidence_io(monkeypatch, parser_version):
+    def forbidden(*args, **kwargs):
+        pytest.fail("Unknown parser version must fail before evidence I/O or parsing")
+
+    monkeypatch.setattr(adapter, "_read", forbidden)
+    monkeypatch.setattr(adapter, "_xml_tree", forbidden)
+    monkeypatch.setattr(Path, "iterdir", forbidden)
+    policy = adapter.EvidencePolicy(auth.ApprovalRef("denominator:net_margin", "synthetic-only", 1),
+        "", "", (), (), parser_version=parser_version)
+    with pytest.raises(adapter.EvidenceRejected, match="^unsupported_parser_version$"):
+        adapter._parse_artifact(None, b"", parser_version=parser_version)
+    with pytest.raises(adapter.EvidenceRejected, match="^unsupported_parser_version$"):
+        adapter._verify_policy(policy, object(), (), Path("unused"), "", [])
+
+
+def test_loader_unknown_policy_version_abstains_before_artifact_reads(tmp_path, monkeypatch):
+    s = scenario(tmp_path)
+    s.policy = replace(s.policy, parser_version="sec-inline-v4")
+    install_test_policy(monkeypatch, s)
+    monkeypatch.setattr(adapter, "_read", lambda *a: pytest.fail("Unknown version must not read artifacts"))
+    assert adapter.load_production_evidence(s.session, CIK, s.facts) == ()
+
+
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_loader_discards_prior_proofs_when_later_policy_version_is_unknown(tmp_path, monkeypatch, parser_version):
+    s = scenario(tmp_path, parser_version=parser_version)
+    other = withdrawn_period_record(s, auth.ApprovalRef("denominator:net_margin", "other-period", 1))
+    bad = replace(s.policy, ref=other.ref, approval_sha256=adapter.approval_digest(other),
+                  parser_version="sec-inline-v4")
+    install_test_policy(monkeypatch, s)
+    monkeypatch.setattr(auth, "DENOMINATOR_AUTHORIZATIONS", (s.record, other))
+    monkeypatch.setattr(adapter, "PRODUCTION_EVIDENCE_POLICIES", (s.policy, bad))
+    verified, failures = [], []
+    verify_policy = adapter._verify_policy
+
+    def checked_verify(*args, **kwargs):
+        try:
+            result = verify_policy(*args, **kwargs)
+        except adapter.EvidenceRejected as error:
+            failures.append(str(error))
+            raise
+        verified.append(result)
+        return result
+
+    monkeypatch.setattr(adapter, "_verify_policy", checked_verify)
+    assert adapter.load_production_evidence(s.session, CIK, s.facts) == ()
+    assert verified == [s.evidence]
+    assert failures == ["unsupported_parser_version"]
+
+
+def test_loader_never_retries_v2_fixed_false_under_v3(tmp_path, monkeypatch):
+    s = scenario(tmp_path, amendment_xml("true", "ixt:fixed-false"), parser_version=adapter.PARSER_V3_VERSION)
+    assert verify(s) == s.evidence
+    s.policy = replace(s.policy, parser_version=adapter.PARSER_VERSION)
+    install_test_policy(monkeypatch, s)
+    attempted, failures = [], []
+    parse_artifact = adapter._parse_artifact
+
+    def checked_parse(*args, **kwargs):
+        attempted.append(kwargs["parser_version"])
+        try:
+            return parse_artifact(*args, **kwargs)
+        except adapter.EvidenceRejected as error:
+            failures.append(str(error))
+            raise
+
+    monkeypatch.setattr(adapter, "_parse_artifact", checked_parse)
+    assert adapter.load_production_evidence(s.session, CIK, s.facts) == ()
+    assert attempted == [adapter.PARSER_VERSION]
+    assert failures == ["unsupported_identity_transform"]
+
+
 @pytest.mark.parametrize("field,value", [("snapshot_sha256", "0" * 64), ("approval_sha256", "0" * 64),
     ("parser_version", "other"), ("ref", auth.ApprovalRef("denominator:net_margin", "synthetic-only", 2)),
     ("observations", ())])
-def test_changed_or_missing_policy_fails(tmp_path, field, value):
-    s = scenario(tmp_path)
+@pytest.mark.parametrize("parser_version", PARSER_VERSIONS)
+def test_changed_or_missing_policy_fails(tmp_path, field, value, parser_version):
+    s = scenario(tmp_path, parser_version=parser_version)
     with pytest.raises(adapter.EvidenceRejected):
         verify(s, policy=replace(s.policy, **{field: value}))
 

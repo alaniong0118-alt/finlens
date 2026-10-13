@@ -41,13 +41,51 @@ allowlist supports simple monetary nonFraction observations, USD, exact Decimal
 sign/scale and the 2020 `num-dot-decimal` transform. The filing's DEI identity is
 checked; its English month-name date transform is explicitly supported. Unknown
 transforms, nil, fractions, numeric continuations, tuple/target attributes and nested
-numeric markup abstain. Parser revision `sec-inline-v2` preflights the entire original
+numeric markup abstain. Both `sec-inline-v2` and `sec-inline-v3` preflight the entire original
 before candidate construction: unsupported Inline namespaces (including 2008),
 unknown Inline constructs and tuples reject the document rather than disappear
 from its inventory. Filing-identity facts accept only id/name/contextRef/format;
 nil and extra attributes are rejected. Explicit target-instance attributes,
 including empty targets, and targeted resources are unsupported. Contexts and units
 must be inside the default header/resources structure.
+
+The supported transformation subset uses the exact namespace
+`http://www.xbrl.org/inlineXBRL/transformation/2020-02-12`:
+
+- Monetary observations: `num-dot-decimal` (existing numeric subset).
+- `dei:DocumentPeriodEndDate`: `date-monthname-day-year-en` (existing date subset).
+- Explicit `sec-inline-v3`, `dei:AmendmentFlag` only: `fixed-false`, whose expanded QName is
+  `{http://www.xbrl.org/inlineXBRL/transformation/2020-02-12}fixed-false`.
+
+The normative source for `fixed-false` is XBRL International's
+[Inline XBRL Transformation Registry, Recommendation 12 February 2020, section 4.91](https://www.xbrl.org/Specification/inlineXBRL-transformationRegistry/REC-2020-02-12/inlineXBRL-transformationRegistry-REC-2020-02-12.html).
+Its input is **any `xs:string`** and its output is boolean **false**. Empty text,
+checkbox glyphs, `true` and arbitrary other strings all produce false; visible
+text need not equal `false`. The adapter represents that result as canonical
+`"false"` for its existing filing-identity comparison. Resolution uses the fact's
+in-scope expanded QName, regardless of prefix spelling. Unknown/lookalike registry
+URIs, unresolved/rebound prefixes, malformed QNames and every other unsupported
+transform remain rejected. This does not extend transformations to other DEI
+concepts or relax markup, context, duplicate, conflict, form or provenance checks.
+An amended form such as `10-Q/A` still requires a true flag and therefore rejects
+`fixed-false`, even when its visible text is `true`. Untransformed amendment flags
+retain the existing canonical `true`/`false` subset; `0`/`1` remain unsupported.
+
+`PARSER_VERSION` remains `sec-inline-v2`, the compatibility default for both direct
+parsing and newly constructed policies. V2 preserves its original semantics and
+rejects every amendment-flag transformation, including `fixed-false`. V3 must be
+explicitly selected: direct private parsing accepts a keyword-only parser revision,
+and policy verification dispatches solely from the trusted policy's pinned
+`parser_version`. Exactly v2 and v3 are supported; unknown or non-string revisions
+reject before parsing or artifact access. Failure never retries under another
+revision. No request parameter, environment toggle or financial permission is added.
+
+Existing AAPL v2 policy literals, evidence fingerprints and authorization bindings
+are preserved without migration or repinning. The policy digest still includes the
+exact parser revision, so changing only v2 to v3 (or v3 to v2) cannot reuse the old
+authorization's evidence bindings, even for bytes accepted by both parsers. A future
+v3 authorization requires separately reviewed v3-bound fingerprints. Future shared
+parser changes must preserve v2 semantics or receive a distinct reviewed revision.
 
 Filing identity requires default body or header/hidden ancestry. Monetary facts
 may additionally occur in recognized narrative TextBlock/continuation containers;

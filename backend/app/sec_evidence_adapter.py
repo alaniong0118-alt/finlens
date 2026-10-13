@@ -31,7 +31,10 @@ XBRLDI = "http://xbrl.org/2006/xbrldi"
 XHTML = "http://www.w3.org/1999/xhtml"
 ISO = "http://www.xbrl.org/2003/iso4217"
 IXT = "http://www.xbrl.org/inlineXBRL/transformation/2020-02-12"
+# Compatibility default; new capabilities require an explicitly versioned policy.
 PARSER_VERSION = "sec-inline-v2"
+PARSER_V3_VERSION = "sec-inline-v3"
+SUPPORTED_PARSER_VERSIONS = frozenset({PARSER_VERSION, PARSER_V3_VERSION})
 MAX_ARTIFACT_BYTES = 20_000_000
 
 
@@ -370,8 +373,10 @@ def _validate_inline_structure(root, scopes, dei_namespace):
                 _require(default or narrative, "unsupported_inline_ancestry")
 
 
-def _parse_artifact(pin, data):
+def _parse_artifact(pin, data, *, parser_version=PARSER_VERSION):
     """Private verifier; expected identities never supply the parsed amounts."""
+    _require(type(parser_version) is str and parser_version in SUPPORTED_PARSER_VERSIONS,
+             "unsupported_parser_version")
     _require(type(pin.byte_length) is int and 0 < pin.byte_length <= MAX_ARTIFACT_BYTES
              and len(data) == pin.byte_length and _sha(data) == pin.sha256, "artifact_changed")
     _require(b"<!DOCTYPE" not in data.upper() and b"<!ENTITY" not in data.upper(), "unsafe_xml")
@@ -425,6 +430,12 @@ def _parse_artifact(pin, data):
                     value = str(date(int(match[3]), months[match[1]], int(match[2])))
                 else:
                     value = str(date.fromisoformat(value))
+            elif (parser_version == PARSER_V3_VERSION and concept == "AmendmentFlag"
+                  and element.get("format") is not None):
+                _require(_qname(element.get("format"), namespaces) == (IXT, "fixed-false"),
+                         "unsupported_identity_transform")
+                # Registry 2020-02-12 section 4.91: any xs:string maps to false.
+                value = "false"
             else:
                 _require(element.get("format") is None, "unsupported_identity_transform")
             _require(concept not in dei, "ambiguous_filing_identity")
@@ -453,7 +464,9 @@ def _parse_artifact(pin, data):
 
 
 def _verify_policy(policy, record, raw, root, snapshot, publications):
-    _require(policy.parser_version == PARSER_VERSION and policy.ref == record.ref
+    _require(type(policy.parser_version) is str and policy.parser_version in SUPPORTED_PARSER_VERSIONS,
+             "unsupported_parser_version")
+    _require(policy.ref == record.ref
              and policy.approval_sha256 == approval_digest(record), "approval_policy_changed")
     _require(policy.snapshot_sha256 == snapshot, "data_snapshot_changed")
     _require(raw and set(raw) == {b.identity for b in record.candidates}, "candidate_manifest_changed")
@@ -488,7 +501,8 @@ def _verify_policy(policy, record, raw, root, snapshot, publications):
         artifact_path = _store_path(root, pin.cik, pin.accession, pin.filename)
         receipt_path = _store_path(root, pin.cik, pin.accession, pin.receipt_filename)
         _validate_receipt(pin, _read(receipt_path, 65536), artifact_path)
-        parsed = _parse_artifact(pin, _read(artifact_path, MAX_ARTIFACT_BYTES))
+        parsed = _parse_artifact(pin, _read(artifact_path, MAX_ARTIFACT_BYTES),
+                                 parser_version=policy.parser_version)
         documents[(pin.accession, pin.filename)] = parsed
         parsed_raw.update(o.identity for o in parsed.observations if o.dimensions == ()
                           and o.identity.concept in names and o.identity.kind == kind and o.identity.end == end)
