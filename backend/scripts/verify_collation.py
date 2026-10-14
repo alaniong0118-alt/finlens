@@ -3,6 +3,8 @@
 Run from backend: python -B -m scripts.verify_collation --help
 All checks raise explicit exceptions; Python assertions are deliberately absent.
 """
+
+from app.release_policy import development_only
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -87,6 +89,7 @@ def check_optimization():
     require(sys.flags.optimize == 0, "Python optimization is prohibited for this safety gate")
 
 
+@development_only
 def command(args):
     result = subprocess.run(args, capture_output=True, text=True, timeout=30)
     require(result.returncode == 0, "Read-only Docker probe failed; inspect locally")
@@ -302,6 +305,7 @@ def maintenance_sql(report, operation):
     return "\n".join([*sql, "COMMIT;", ""])
 
 
+@development_only
 def audit(database, phase, baseline=None, quiescent=False):
     check_optimization()
     require(database == "finlens" or bool(re.fullmatch(r"finlens_collationcheck_[0-9_]+", database)),
@@ -366,6 +370,7 @@ def audit(database, phase, baseline=None, quiescent=False):
         target.dispose()
 
 
+@development_only
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", default="finlens")

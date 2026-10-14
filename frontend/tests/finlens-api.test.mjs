@@ -7,6 +7,7 @@ import {
   firstReadyCompany,
   getAnswer,
   getCompanies,
+  getCapabilities,
   getFilingSources,
   getCompanyContext,
   getResearchAnswer,
@@ -15,6 +16,31 @@ import {
   filingReadiness,
   versionedController,
 } from "../lib/finlens-api.ts";
+
+test('DEP-01A1 accepts effective backend capabilities for each profile', async ctx => {
+  for (const [profile, enabled] of [['development', true], ['development', false], ['sec_readonly', false]]) {
+    const payload = { research_mode: true, ai_analysis_configured: enabled, ai_analysis_enabled: enabled, server_profile: profile };
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(payload)));
+    assert.deepEqual(await getCapabilities(), payload);
+  }
+});
+
+test('DEP-01A1 unverified and inconsistent capability payloads fail closed', async ctx => {
+  const valid = { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: true, server_profile: 'development' };
+  for (const payload of [null, {}, { research_mode: true, ai_analysis_configured: true },
+    { ...valid, ai_analysis_enabled: 'true' }, { ...valid, ai_analysis_enabled: 1 },
+    { ...valid, ai_analysis_configured: 'true' }, { ...valid, research_mode: 'true' },
+    { ...valid, server_profile: 'unknown' }, { ...valid, server_profile: 'sec_readonly' },
+    { ...valid, ai_analysis_configured: false }]) {
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(payload)));
+    await assert.rejects(getCapabilities(), error => error.code === 'INVALID_RESPONSE');
+  }
+});
+
+test('DEP-01A1 capability transport failure cannot enable AI', async ctx => {
+  ctx.mock.method(globalThis, 'fetch', async () => { throw new Error('offline'); });
+  await assert.rejects(getCapabilities(), error => error.code === 'NETWORK_ERROR');
+});
 
 test('FD-01 filing readiness requires exact booleans and preserves the complete input', () => {
   const flags = [true, false, undefined, null, 'true', 'false', 1, 0, {}, []];

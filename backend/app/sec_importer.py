@@ -1,4 +1,6 @@
 """Insert-only Company Facts ingestion; selection belongs to the metrics layer."""
+
+from app.release_policy import development_only
 from datetime import date
 from decimal import Decimal, InvalidOperation
 import re
@@ -95,6 +97,7 @@ def build_metric_data(facts, canonical_metric, source_fact_names, unit):
     return combined
 
 
+@development_only
 def merge_company_facts(session, company_cik, facts, *, dry_run=False, metrics=None, publish=True):
     """Flush missing observations only. Caller owns the transaction/commit.
 
@@ -147,12 +150,14 @@ def merge_company_facts(session, company_cik, facts, *, dry_run=False, metrics=N
                                    for metric in (metrics if metrics is not None else METRIC_SOURCES)}}
 
 
+@development_only
 def import_metric(company_cik, facts, metric_name):
     """Compatibility entry point: count newly inserted facts, never replace."""
     with SessionLocal() as session, session.begin():
         return merge_company_facts(session, company_cik, facts, metrics=[metric_name])["facts_inserted"]
 
 
+@development_only
 def import_company(company_cik):
     """One atomic merge for all supported metrics of a stored company."""
     cik = company_cik.zfill(10)
@@ -163,6 +168,7 @@ def import_company(company_cik):
             return merge_company_facts(session, cik, facts)["inserted_by_metric"]
 
 
+@development_only
 def import_all_companies():
     """Legacy invocation delegates to the supported safe sync command."""
     from scripts.sync_financial_facts import main

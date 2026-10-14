@@ -1,4 +1,6 @@
 """Explicit operator refresh; never scheduled/enabled at application startup."""
+
+from app.release_policy import development_only
 import argparse
 import json
 from pathlib import Path
@@ -8,6 +10,7 @@ from app.config import BACKEND_ROOT
 from app.refresh_contracts import RefreshRequest
 
 
+@development_only
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group(required=True)

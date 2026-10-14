@@ -1,4 +1,6 @@
 """Sequential, company-atomic structured SEC synchronization."""
+
+from app.release_policy import development_only
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
@@ -53,6 +55,7 @@ def failure_details(exc):
     return {"error": "company_sync_failed", "http_status": None}
 
 
+@development_only
 @financial_reader
 def sync_catalog(session_factory, tickers=None, *, dry_run=False, on_result=None, on_progress=None):
     from app.refresh_service import coordinator
@@ -60,6 +63,7 @@ def sync_catalog(session_factory, tickers=None, *, dry_run=False, on_result=None
         return _sync_catalog(session_factory, tickers, dry_run=dry_run, on_result=on_result, on_progress=on_progress)
 
 
+@development_only
 def _sync_catalog(session_factory, tickers=None, *, dry_run=False, on_result=None, on_progress=None):
     """Reports are diagnostic; fresh source + stored identities determine work.
 

@@ -1,3 +1,4 @@
+from app.release_policy import development_only
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.sec_parser import (
 )
 
 
+@development_only
 def ingest_filing_chunks(
     session: Session,
     company: Company,
@@ -27,6 +29,7 @@ def ingest_filing_chunks(
         return _ingest_filing_chunks(session, company, accession_number, metadata=metadata, preserve_existing=preserve_existing)
 
 
+@development_only
 def _ingest_filing_chunks(session, company, accession_number, *, metadata=None, preserve_existing=True):
     if not preserve_existing:
         raise ValueError("Replacing persisted filing evidence is not supported.")

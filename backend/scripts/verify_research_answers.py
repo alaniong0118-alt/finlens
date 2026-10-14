@@ -3,6 +3,8 @@
 Run against the new guarded local backend. Writes a separate milestone report,
 never replaces historical financial/research verification artifacts.
 """
+
+from app.release_policy import development_only
 import argparse
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -37,6 +39,7 @@ CASES = [
 ]
 
 
+@development_only
 def run(api_url):
     assert urlparse(api_url).hostname in {"127.0.0.1", "localhost"}
     with engine.connect() as connection, httpx.Client(base_url=api_url, timeout=120) as client:

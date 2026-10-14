@@ -5,6 +5,8 @@ No environment variable enables it. No permission is registered on import. Even
 with the gate enabled, a trusted operator must explicitly acknowledge the exact
 reviewed reference. That acknowledgement is not authentication or SEC provenance.
 """
+
+from app.release_policy import development_only
 from threading import Lock
 
 
@@ -18,6 +20,7 @@ def _require_launcher():
     return require_validation_owner()
 
 
+@development_only
 def activate_aapl_net_margin(*, operator_authorized=False, reviewed_ref=None):
     """Install the reviewed pair in this process only after fresh verification.
 

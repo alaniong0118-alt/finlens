@@ -1,4 +1,6 @@
 """Run from backend: python -m scripts.index_catalog [--ticker MSFT] [--dry-run]."""
+
+from app.release_policy import development_only
 import argparse
 import json
 from pathlib import Path
@@ -7,6 +9,7 @@ import sys
 from app.config import BACKEND_ROOT
 
 
+@development_only
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticker", action="append", help="Only this stored ticker; repeat for a subset.")

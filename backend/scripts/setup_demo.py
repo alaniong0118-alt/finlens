@@ -1,4 +1,6 @@
 """Prepare one public SEC demo filing. Run from backend: python -m scripts.setup_demo."""
+
+from app.release_policy import development_only
 from copy import deepcopy
 from datetime import date
 import json
@@ -83,6 +85,7 @@ def validate_chunks(chunks, *, require_embeddings=False) -> None:
                 raise DemoSetupError("An existing demo embedding is invalid; inspect it before replacement.") from exc
 
 
+@development_only
 def ensure_filing_metadata(session) -> bool:
     """Insert only this accession's real facts; never use the replacing importer."""
     from app.models import FinancialFact
@@ -114,6 +117,7 @@ def ensure_filing_metadata(session) -> bool:
     return True
 
 
+@development_only
 def setup_demo(session=None) -> dict:
     if session is None:
         from app.database import SessionLocal
@@ -126,6 +130,7 @@ def setup_demo(session=None) -> dict:
         return _setup_demo(session)
 
 
+@development_only
 def _setup_demo(session) -> dict:
 
     from app.models import Company, FinancialFact
@@ -179,6 +184,7 @@ def _setup_demo(session) -> dict:
     }
 
 
+@development_only
 def main() -> int:
     if not os.getenv("DATABASE_URL", "").strip():
         print("DATABASE_URL is required. Set it in backend/.env.", file=sys.stderr)

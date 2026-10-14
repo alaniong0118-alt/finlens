@@ -1,4 +1,6 @@
 """Read-only local HTTP/source acceptance; never acquires SEC/provider data."""
+
+from app.release_policy import development_only
 import argparse
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -47,6 +49,7 @@ CASES = [
 ]
 
 
+@development_only
 def run(api_url):
     assert urlparse(api_url).hostname in {"localhost", "127.0.0.1"}
     with engine.connect() as connection, httpx.Client(base_url=api_url, timeout=120) as client:

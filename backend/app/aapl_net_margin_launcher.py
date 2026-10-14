@@ -3,6 +3,8 @@
 The launcher cannot configure or enable authorization. Deployment ACL/integrity
 and maintenance verification are uncommissioned and reject real launches.
 """
+
+from app.release_policy import development_only
 import os
 
 from app import activation_lifecycle as lifecycle
@@ -123,11 +125,13 @@ def _server_environment():
         raise lifecycle.LaunchRejected("conflicting_server_environment")
 
 
+@development_only
 def _load_application():
     from app.main import app
     return app
 
 
+@development_only
 def _run_server(application):
     from uvicorn import Config, Server
     configuration = Config(application, host="127.0.0.1", port=8000, workers=1,
@@ -143,6 +147,7 @@ def _run_server(application):
         raise lifecycle.LaunchRejected("server_did_not_start")
 
 
+@development_only
 def launch(profile_path):
     """Explicit process-local entry, no caller identity/options/trust injections."""
     controller = None
@@ -178,6 +183,7 @@ def launch(profile_path):
         raise
 
 
+@development_only
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Disabled reviewed AAPL operator launcher")

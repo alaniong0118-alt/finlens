@@ -56,9 +56,10 @@ export default function Home() {
   }, [loadCatalog]);
   useEffect(() => {
     const controller = new AbortController();
+    setConfigured(false);
     getCapabilities(controller.signal).then((data) => {
-      if (!controller.signal.aborted) setConfigured(data.ai_analysis_configured);
-    }).catch(() => { /* Unknown capability keeps optional AI disabled; research remains usable. */ });
+      if (!controller.signal.aborted) setConfigured(data.ai_analysis_enabled === true);
+    }).catch(() => { if (!controller.signal.aborted) setConfigured(false); });
     return () => controller.abort();
   }, []);
   const company = companies.find((item) => item.ticker === ticker);

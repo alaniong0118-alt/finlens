@@ -1,3 +1,4 @@
+from app.release_policy import development_only
 import json
 import os
 import re
@@ -66,6 +67,7 @@ class CitationValidationError(MalformedModelOutputError):
     pass
 
 
+@development_only
 @lru_cache(maxsize=1)
 def _get_openai_client():
     key = os.getenv("OPENAI_API_KEY", "").strip()
@@ -132,6 +134,7 @@ def _insufficient_evidence(question: str, model: str, citations=None) -> dict[st
     }
 
 
+@development_only
 def answer_filing_question(
     question: str, context: str, citations: list[dict[str, Any]],
     *, client: Any | None = None,

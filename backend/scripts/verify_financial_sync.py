@@ -1,4 +1,6 @@
 """Read-only Item 7 preservation, normalization and optional live HTTP audit."""
+
+from app.release_policy import development_only
 import argparse
 from collections import Counter
 import hashlib
@@ -25,6 +27,7 @@ BASELINE = BACKEND_ROOT / "reports/structured_financial_baseline.json"
 REPRESENTATIVES = ("AAPL", "MSFT", "JPM", "JNJ", "XOM", "COST", "CAT", "F")
 
 
+@development_only
 def verify(api_url=None):
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     result = {"report_type": "financial_sync_verification", "verified_at": datetime.now(timezone.utc).isoformat(),
@@ -121,6 +124,7 @@ def verify(api_url=None):
     return result
 
 
+@development_only
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url")

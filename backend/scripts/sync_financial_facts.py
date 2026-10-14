@@ -1,4 +1,6 @@
 """Sync official SEC facts: python -m scripts.sync_financial_facts [--ticker JNJ] [--dry-run]."""
+
+from app.release_policy import development_only
 import argparse
 import json
 import os
@@ -17,6 +19,7 @@ def report_path(path):
     return resolved
 
 
+@development_only
 def write_report(path, report):
     """Atomic checkpoint after each company; temporary file contains no secrets."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -30,6 +33,7 @@ def write_report(path, report):
         temporary.unlink(missing_ok=True)
 
 
+@development_only
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticker", action="append", help="Stored ticker; repeat for a subset.")

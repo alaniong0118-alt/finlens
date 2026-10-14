@@ -48,7 +48,7 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
     return () => { currentScope.invalidate(); controller.current?.abort(); };
   }, []);
   async function analyze() {
-    if (version === null || !configured || result.evidence_status !== "sufficient" || loading) return;
+    if (version === null || configured !== true || result.evidence_status !== "sufficient" || loading) return;
     controller.current?.abort(); controller.current = versionedController(version, changed);
     const id = scope.current.start();
     setLoading(true); setMessage(null); setAnswer(null);
@@ -60,10 +60,10 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
     } finally { if (scope.current.current(id)) setLoading(false); }
   }
   return <section className="ai-panel" aria-labelledby="ai-title">
-    <div className="section-heading"><div><p className="eyebrow">Optional enhancement</p><h3 id="ai-title">AI Analysis</h3></div><span className="badge neutral">{configured ? "Configured · availability may vary" : "Not configured"}</span></div>
+    <div className="section-heading"><div><p className="eyebrow">Optional enhancement</p><h3 id="ai-title">AI Analysis</h3></div><span className="badge neutral">{configured === true ? "Enabled · availability may vary" : "Unavailable"}</span></div>
     <p className="muted small">Generate a grounded explanation from the filing evidence. Research Mode works independently.</p>
-    {!configured && <p className="notice">AI analysis is not configured. Financial data and SEC evidence remain available.</p>}
-    <button type="button" className="secondary-button" onClick={analyze} disabled={version === null || !configured || loading || result.evidence_status !== "sufficient"}>{loading ? "Preparing optional analysis…" : "Generate AI analysis"}</button>
+    {configured !== true && <p className="notice">AI analysis is unavailable in this server configuration. Financial data and SEC evidence remain available.</p>}
+    <button type="button" className="secondary-button" onClick={analyze} disabled={version === null || configured !== true || loading || result.evidence_status !== "sufficient"}>{loading ? "Preparing optional analysis…" : "Generate AI analysis"}</button>
     <div aria-live="polite" aria-busy={loading}>
       {message && <p className="notice">{message}</p>}
       {answer?.evidence_status === "insufficient" && <p className="notice">Insufficient evidence for a generated answer. The retrieved passages and any direct financial answer remain available.</p>}

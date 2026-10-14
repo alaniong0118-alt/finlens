@@ -76,6 +76,16 @@ if (-not (Test-Path $PythonExe)) {
     throw "Backend virtual environment Python not found: $PythonExe"
 }
 
+# This launcher may start infrastructure and development servers. Resolve the
+# backend dotenv/profile before any of that work; it is not a release launcher.
+Push-Location $BackendDir
+try {
+    & $PythonExe -c "from app.release_policy import require_development; require_development()"
+    if ($LASTEXITCODE -ne 0) { throw "Development launcher blocked by server profile configuration." }
+} finally {
+    Pop-Location
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker CLI was not found. Start Docker Desktop first."
 }

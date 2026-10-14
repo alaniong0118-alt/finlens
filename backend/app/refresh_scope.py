@@ -3,6 +3,7 @@
 This is an operator safety boundary, not permission for arbitrary Python callers
 or unmanaged SQL writers. The coordinator owns admission throughout the handoff.
 """
+from app.release_policy import development_only
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
@@ -95,6 +96,7 @@ def validate_inventory(session, filings):
             "canary_target_has_unpublished_chunks")
 
 
+@development_only
 def pin_sources(factory, catalog, facts_loader, inventory_loader, observations, reject_conflicts):
     """Read-only preflight before recovery/attempt/state/publication writes."""
     require(catalog.get("AAPL") == CIK, "canary_catalog_cik_mismatch")

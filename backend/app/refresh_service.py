@@ -3,6 +3,8 @@
 No work runs at import/startup. Live acquisition is only invoked by an explicit
 operator command. Injected sources make all tests fully offline.
 """
+
+from app.release_policy import development_only
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -40,6 +42,7 @@ class RefreshBusy(RuntimeError):
 class RefreshAdmission:
     connection: object = None
 
+    @development_only
     def __call__(self):
         connection = self.connection
         if connection is not None:
@@ -54,6 +57,7 @@ class RefreshAdmission:
                 raise RefreshBusy("refresh_lock_lost") from None
 
 
+@development_only
 @contextmanager
 def publication_session(factory, owned):
     """Publication and admission share one physical PostgreSQL connection.
@@ -77,6 +81,7 @@ def publication_session(factory, owned):
             raise
 
 
+@development_only
 def reconcile_publication(factory, cik, attempt_id):
     """Read durable outcome on a fresh connection after an ambiguous commit.
 
@@ -100,6 +105,7 @@ def reconcile_publication(factory, cik, attempt_id):
     return None  # Publication ended without its atomic successful ledger update.
 
 
+@development_only
 @contextmanager
 def coordinator(factory):
     """Single SEC worker across processes; transaction locks still guard facts."""
@@ -137,6 +143,7 @@ def coordinator(factory):
             _local_lock.release()
 
 
+@development_only
 def state_row(session, cik):
     if session.get_bind().dialect.name == "postgresql":
         session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": (1 << 40) + int(cik)})
@@ -148,6 +155,7 @@ def state_row(session, cik):
     return row
 
 
+@development_only
 def record_fact_change(session, cik, inserted, by_metric):
     """Compatibility writers publish a version but cannot certify a full check."""
     if not inserted:
@@ -161,6 +169,7 @@ def record_fact_change(session, cik, inserted, by_metric):
         details={"facts_inserted": inserted, "inserted_by_metric": by_metric, "origin": "compatibility_writer", "check_complete": False}))
 
 
+@development_only
 def register_complete_filings(session, cik=None, accession=None):
     statement = select(FilingChunk).order_by(FilingChunk.company_cik, FilingChunk.accession_number, FilingChunk.chunk_index)
     if cik:
@@ -212,6 +221,7 @@ def reject_conflicts(session, cik, candidates):
         raise FinancialSyncError("ambiguous_source_revision")
 
 
+@development_only
 def manifest(session, chunks, version, cleaned_text=None):
     validate_chunks(chunks)
     first = chunks[0]
@@ -223,6 +233,7 @@ def manifest(session, chunks, version, cleaned_text=None):
     return row
 
 
+@development_only
 def bootstrap_publications(session):
     """Explicit offline metadata bootstrap; never called by user read routes."""
     groups = {}
@@ -245,6 +256,7 @@ def bootstrap_publications(session):
     return result
 
 
+@development_only
 def stage_filing(session, cik, metadata, encoder, raw_loader, deadline=None):
     existing = stored_chunks(session, cik, metadata.accession_number)
     if existing:
@@ -279,6 +291,7 @@ def stage_filing(session, cik, metadata, encoder, raw_loader, deadline=None):
     return detached, cleaned
 
 
+@development_only
 def persist_staged(session, cik, chunks, version, cleaned):
     """Caller owns commit; the manifest and every vector publish together."""
     existing = stored_chunks(session, cik, chunks[0].accession_number)
@@ -296,6 +309,7 @@ def persist_staged(session, cik, chunks, version, cleaned):
     manifest(session, selected, version, cleaned)
 
 
+@development_only
 def refresh(factory, request: RefreshRequest, *, facts_loader=get_company_facts,
             inventory_loader=None, raw_loader=get_filing_raw_text, encoder=embed_texts, on_progress=None):
     from app.sec_client import discover_refresh_filings
@@ -395,6 +409,7 @@ def refresh(factory, request: RefreshRequest, *, facts_loader=get_company_facts,
     return report
 
 
+@development_only
 def refresh_stream(factory, ticker, cik, stream, request, run_id, owned, facts_loader, inventory_loader, raw_loader, encoder, run_deadline=None,
                    *, pinned: PinnedCanarySources | None = None, source_deadline=None):
     started, deadline, attempt_id = utcnow(), time.monotonic() + request.max_seconds, str(uuid4())

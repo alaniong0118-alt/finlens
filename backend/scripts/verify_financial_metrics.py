@@ -1,4 +1,6 @@
 """Read-only 35-company audit. Run after initial baseline audit; never imports SEC data."""
+
+from app.release_policy import development_only
 import argparse
 from collections import Counter
 from decimal import Decimal
@@ -110,6 +112,7 @@ def verify_http_history(payload, expected, rows):
             assert getattr(point, field) == getattr(reference, field)
 
 
+@development_only
 def verify(api_url=None):
     recorded = json.loads(REPORT.read_text(encoding="utf-8"))
     coverage, representatives, history_checks = [], [], []

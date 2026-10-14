@@ -201,7 +201,12 @@ export function describeApiError(error: unknown): string {
   return error.message;
 }
 
-export type Capabilities = { research_mode: boolean; ai_analysis_configured: boolean };
+export type Capabilities = {
+  research_mode: boolean;
+  ai_analysis_configured: boolean;
+  ai_analysis_enabled: boolean;
+  server_profile: "development" | "sec_readonly";
+};
 export type FreshnessStream = {
   status: "unknown" | "pending" | "current" | "stale" | "failed";
   last_checked_at: string | null; last_successful_sync_at: string | null;
@@ -292,8 +297,17 @@ export function getResearchAnswer(ticker: string, question: string, signal?: Abo
   });
 }
 
-export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
-  return requestJson("/capabilities", { signal });
+export async function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
+  const data = await requestJson<Capabilities>("/capabilities", { signal });
+  if (typeof data !== "object" || data === null
+      || typeof data.research_mode !== "boolean"
+      || typeof data.ai_analysis_configured !== "boolean"
+      || typeof data.ai_analysis_enabled !== "boolean"
+      || !["development", "sec_readonly"].includes(data.server_profile)
+      || (data.ai_analysis_enabled && (!data.ai_analysis_configured || data.server_profile !== "development"))) {
+    throw new FinLensApiError("Server capabilities could not be verified.", 502, "INVALID_RESPONSE");
+  }
+  return data;
 }
 export function getFinancialSummary(ticker: string, period: PeriodKind, signal?: AbortSignal, requirePublishedVersion = false): Promise<FinancialSummary> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/summary?period=${period}`, { signal }, requirePublishedVersion);

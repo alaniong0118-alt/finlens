@@ -1,3 +1,4 @@
+from app.release_policy import development_only
 import os
 import re
 import time
@@ -18,6 +19,7 @@ _last_request = 0.0
 MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
 
+@development_only
 def _sec_get(url: str) -> httpx.Response:
     """Sequential fair-access requests; retry transient failures at most twice."""
     global _last_request

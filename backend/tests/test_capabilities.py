@@ -20,6 +20,7 @@ def test_capabilities_are_safe_configuration_metadata(monkeypatch, key, configur
     monkeypatch.setattr("app.answer_service._get_openai_client", forbidden)
     response = TestClient(main.app).get("/capabilities")
     assert response.status_code == 200
-    assert response.json() == {"research_mode": True, "ai_analysis_configured": configured}
+    assert response.json() == {"research_mode": True, "ai_analysis_configured": configured,
+                               "ai_analysis_enabled": configured, "server_profile": "development"}
     if key and key.strip():
         assert key not in response.text

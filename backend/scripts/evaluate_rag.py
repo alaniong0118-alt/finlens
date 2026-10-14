@@ -1,4 +1,6 @@
 """Read-only API/retrieval acceptance; real provider calls require --real-answers."""
+
+from app.release_policy import development_only
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -94,6 +96,7 @@ def source_lineage(citations, context, rows):
     return checks
 
 
+@development_only
 def evaluate_query(client, company, filing, query, real_answers, key_configured, calls):
     base = f"/companies/{company['ticker']}/filings/{filing['accession_number']}"
     response = client.get(f"{base}/context", params={"q": query, "limit": 5})
@@ -165,6 +168,7 @@ def evaluate_query(client, company, filing, query, real_answers, key_configured,
     return entry
 
 
+@development_only
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--real-answers", action="store_true", help="Allow real, billable OpenAI requests.")

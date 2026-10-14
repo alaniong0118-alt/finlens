@@ -1,4 +1,6 @@
 """Read-only Item 5 checks against running HTTP API and a recorded DB baseline."""
+
+from app.release_policy import development_only
 import argparse
 import hashlib
 import json
@@ -37,6 +39,7 @@ def original_hashes(session, ids):
     return result
 
 
+@development_only
 def verify(report, api_url, require_all):
     with SessionLocal() as session:
         after = counts(session)
@@ -129,6 +132,7 @@ def verify(report, api_url, require_all):
             "aapl_ready": True, "openai_calls": 0, "coverage": coverage, "representative_checks": checks}
 
 
+@development_only
 def main_cli():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url", default="http://127.0.0.1:8000")

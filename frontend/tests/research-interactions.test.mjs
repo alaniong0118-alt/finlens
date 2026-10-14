@@ -286,7 +286,8 @@ test('mounted company-wide search cannot turn financial answer values into numer
   assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
 });
 
-async function mount(ctx, configured = false, catalog = companies, { initialVersion = 0, strict = false, catalogStatus = 200 } = {}) {
+async function mount(ctx, configured = false, catalog = companies, { initialVersion = 0, strict = false, catalogStatus = 200,
+  capabilityPayload = { research_mode: true, ai_analysis_configured: configured, ai_analysis_enabled: configured, server_profile: 'development' }, capabilityStatus = 200 } = {}) {
   const requests = [];
   // Intentionally ignore AbortSignal when resolving: cancellation can race with
   // response delivery. This exercises rendered-state protection, not the mock.
@@ -356,7 +357,7 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
     if (!pendingAnswer) await release(request(companyPath(ticker, 'research-answer')), { ticker, question: query, matched: false, status: 'not_matched' });
     return request(companyPath(ticker, `filings/${filing(ticker).accession_number}/context`));
   }
-  await release(request('/capabilities'), { research_mode: true, ai_analysis_configured: configured });
+  await release(request('/capabilities'), capabilityPayload, capabilityStatus);
   await release(request('/companies'), catalogStatus === 200 ? catalog : { detail: 'Catalog temporarily unavailable' }, catalogStatus);
   if (catalogStatus === 200 && initialVersion !== null) await release(request(companyPath(catalog[0].ticker, 'freshness')), freshnessFixture(catalog[0].ticker, initialVersion));
   return { host, requests, request, release, deliverBeforeCommit, change, click, select, snapshot, trends, evidence, completeCompany, search };
@@ -429,9 +430,30 @@ test('mounted no-key success renders summary, history, provenance and SEC eviden
   await app.release(await app.search('AAPL'), context('AAPL'));
   assert.match(app.evidence().join(''), /AAPL test evidence/);
   assert.equal(app.host.querySelector('.evidence-card a').href, filing('AAPL').sec_url);
-  assert.match(app.host.querySelector('.ai-panel').textContent, /Not configured/);
+  assert.match(app.host.querySelector('.ai-panel').textContent, /Unavailable/);
   assert.equal([...app.host.querySelectorAll('button')].find(button => button.textContent === 'Generate AI analysis').disabled, true);
   assert.equal(app.requests.filter(request => request.path.endsWith('/answer')).length, 0);
+});
+
+for (const [name, capabilityPayload, capabilityStatus = 200] of [
+  ['SEC-only effective denial', { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' }],
+  ['key presence alone', { research_mode: true, ai_analysis_configured: true }],
+  ['malformed capability', { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: 'true', server_profile: 'development' }],
+  ['inconsistent release enablement', { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: true, server_profile: 'sec_readonly' }],
+  ['capability failure', { detail: 'synthetic failure' }, 503],
+]) test(`DEP-01A1 mounted ${name} keeps AI disabled and deterministic research usable`, async ctx => {
+  const app = await mount(ctx, true, companies, { capabilityPayload, capabilityStatus });
+  await app.completeCompany('AAPL', '1000000000');
+  const query = "How much revenue did Apple report?";
+  const pending = await app.search('AAPL', query, true);
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  await app.release(pending, context('AAPL', query));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
+  assert.equal(app.evidence().length, 1);
+  const button = [...app.host.querySelectorAll('button')].find(item => item.textContent === 'Generate AI analysis');
+  assert.equal(button.disabled, true);
+  await act(async () => button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.equal(app.requests.filter(item => item.path.endsWith('/answer')).length, 0);
 });
 
 test('mounted snapshot period change rejects a late response without relying on remounting', async ctx => {

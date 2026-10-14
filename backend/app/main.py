@@ -1,5 +1,8 @@
 import os
 
+from app.config import server_profile
+from app.release_policy import READONLY_ROUTES, ReleaseAdmissionMiddleware
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +59,8 @@ class DatabaseHealthResponse(BaseModel):
 class CapabilityResponse(BaseModel):
     research_mode: bool
     ai_analysis_configured: bool
+    ai_analysis_enabled: bool
+    server_profile: str
 
 
 class FilingAnswerRequest(BaseModel):
@@ -121,7 +126,9 @@ def capabilities() -> CapabilityResponse:
     """Configuration only; does not probe a provider or disclose credentials."""
     return CapabilityResponse(
         research_mode=True,
-        ai_analysis_configured=bool(os.getenv("OPENAI_API_KEY", "").strip()),
+        ai_analysis_configured=server_profile().generation_allowed and bool(os.getenv("OPENAI_API_KEY", "").strip()),
+        ai_analysis_enabled=server_profile().generation_allowed and bool(os.getenv("OPENAI_API_KEY", "").strip()),
+        server_profile=server_profile().name,
     )
 
 
@@ -778,3 +785,12 @@ def answer_company_filing_question(
             headers={"X-FinLens-Error-Code": "UPSTREAM_FAILURE"},
         ) from exc
     return {**metadata, **answer}
+
+
+# Freeze admission only after all maintained routes have been registered.
+app.add_middleware(
+    ReleaseAdmissionMiddleware, router=app.router,
+    admitted_routes=tuple(route for route in app.router.routes
+                          if any((method, getattr(route, "path", None)) in READONLY_ROUTES
+                                 for method in getattr(route, "methods", ()))),
+)

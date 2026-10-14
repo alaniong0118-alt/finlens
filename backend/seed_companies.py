@@ -1,3 +1,4 @@
+from app.release_policy import development_only
 from contextlib import nullcontext
 
 from sqlalchemy import select
@@ -229,6 +230,7 @@ COMPANIES = [
 ]
 
 
+@development_only
 def seed_companies(session: Session | None = None, *, quiet: bool = False) -> None:
     """Insert missing catalog rows; preserve existing rows and reject identity conflicts."""
     with (nullcontext(session) if session is not None else SessionLocal()) as session:

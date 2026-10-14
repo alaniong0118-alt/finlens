@@ -1,4 +1,6 @@
 """Resumable filing indexing, with no Company Facts import or LLM dependency."""
+
+from app.release_policy import development_only
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -49,6 +51,7 @@ def filing_record(metadata, chunks, action):
             "status": action}
 
 
+@development_only
 def index_company(session, company, *, dry_run=False):
     stage = "validation"
     metadata = None
@@ -161,6 +164,7 @@ def index_company(session, company, *, dry_run=False):
         return reported(result)
 
 
+@development_only
 def index_catalog(session: Session, tickers=None, *, dry_run=False, on_result=None):
     from sqlalchemy.orm import sessionmaker
     from app.refresh_service import coordinator
@@ -168,6 +172,7 @@ def index_catalog(session: Session, tickers=None, *, dry_run=False, on_result=No
         return _index_catalog(session, tickers, dry_run=dry_run, on_result=on_result)
 
 
+@development_only
 def _index_catalog(session: Session, tickers=None, *, dry_run=False, on_result=None):
     # Immutable scalar identities survive rollback/commit without ORM reloads
     # outside the company-level exception boundary.
