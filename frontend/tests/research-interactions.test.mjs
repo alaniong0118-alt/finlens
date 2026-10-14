@@ -358,7 +358,7 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
     return request(companyPath(ticker, `filings/${filing(ticker).accession_number}/context`));
   }
   await release(request('/capabilities'), capabilityPayload, capabilityStatus);
-  await release(request('/companies'), catalogStatus === 200 ? catalog : { detail: 'Catalog temporarily unavailable' }, catalogStatus);
+  if (catalogStatus !== null) await release(request('/companies'), catalogStatus === 200 ? catalog : { detail: 'Catalog temporarily unavailable' }, catalogStatus);
   if (catalogStatus === 200 && initialVersion !== null) await release(request(companyPath(catalog[0].ticker, 'freshness')), freshnessFixture(catalog[0].ticker, initialVersion));
   return { host, requests, request, release, deliverBeforeCommit, change, click, select, snapshot, trends, evidence, completeCompany, search };
 }
@@ -867,7 +867,9 @@ test('mounted concurrent 409 responses coalesce reconciliation and never retry t
   assert.equal(app.requests.filter(r => !r.released && r.path.endsWith('/freshness')).length, 1);
   assert.equal(dependentRequests(app).length, 3, 'No unpinned or obsolete immediate retry');
   await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 2));
-  assert.ok(old.every(r => r.init.signal.aborted));
+  // The first 409 settled before cancellation; its transport listener was removed.
+  assert.equal(old[0].init.signal.aborted, false);
+  assert.ok(old.slice(1).every(r => r.init.signal.aborted));
   assert.equal(dependentRequests(app).length, 6);
   assert.ok(dependentRequests(app).slice(3).every(r => r.init.headers['X-FinLens-Data-Version'] === '2'));
   await app.completeCompany('AAPL', '2000000000');
@@ -1890,7 +1892,9 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2
     assert.ok(obsolete.every(r => !r.init.signal.aborted), 'Both response callbacks ran before React cancellation');
   });
   assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, freshnessCount, 'Obsolete mismatch must not start reconciliation');
-  assert.ok(obsolete.every(r => r.init.signal.aborted));
+  // Settled transports detach from caller cancellation; pending siblings abort.
+  assert.equal(oldSnapshot.init.signal.aborted, false);
+  assert.ok(obsolete.filter(r => r !== oldSnapshot).every(r => r.init.signal.aborted));
   const current = dependentRequests(app).slice(obsolete.length);
   assert.equal(current.length, 3);
   assert.ok(current.every(r => r.init.headers['X-FinLens-Data-Version'] === String(version + 1)));
@@ -1929,7 +1933,8 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2
     assert.ok(current.every(r => !r.init.signal.aborted), 'All mismatches arrive before cancellation commits');
     assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, freshnessCount + 1);
   });
-  assert.ok(current.every(r => r.init.signal.aborted));
+  // All three transports settled inside act before React cancelled the caller scopes.
+  assert.ok(current.every(r => r.released && !r.init.signal.aborted));
   assert.match(app.host.textContent, /Published data changed.*Research waits/);
   await app.change(app.host.querySelector('textarea'), 'latest revenue');
   await act(async () => app.host.querySelector('.search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
@@ -2027,4 +2032,174 @@ test('UX-01A both eligible evidence scopes retain filing exploration guidance', 
     assert.doesNotMatch(panel.textContent, /Explore financial questions/);
   }
   assert.equal(app.requests.length, count);
+});
+
+// DEP-01A2 Increment 1: only synthetic fetch + mocked deadline timers.
+function researchDeadlineClock(ctx) {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] });
+  return async () => { await act(async () => ctx.mock.timers.tick(30_000)); };
+}
+
+function submitTwice(app) {
+  return act(async () => {
+    for (let i = 0; i < 2; i++) app.host.querySelector('.search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+}
+
+test('DEP-01A2 catalog timeout releases pending guard and allows one explicit retry without late replacement', async ctx => {
+  const expire = researchDeadlineClock(ctx);
+  const app = await mount(ctx, false, companies, { catalogStatus: null, initialVersion: null });
+  const old = app.request('/companies'), count = app.requests.length;
+  await expire();
+  assert.match(app.host.textContent, /Could not load the company list/);
+  assert.equal(old.init.signal.aborted, true);
+  assert.equal(app.requests.length, count, 'No automatic retry');
+  await retryTwice(app, 'Retry companies');
+  assert.equal(app.requests.length, count + 1);
+  const retry = app.request('/companies');
+  await app.release(old, [{ ...companies[1], name: 'Late catalog must not render' }]);
+  assert.doesNotMatch(app.host.textContent, /Late catalog must not render/);
+  assert.equal(app.host.querySelector('#company').value, '');
+  await app.release(retry, companies);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  await app.completeCompany('AAPL', '1000000000');
+  assert.match(app.snapshot().textContent, /\$1B/);
+  assert.equal(app.requests.filter(r => r.path === '/capabilities').length, 1);
+});
+
+test('DEP-01A2 freshness timeout stays closed until manual retry verifies its own version', async ctx => {
+  const expire = researchDeadlineClock(ctx);
+  const app = await mount(ctx, false, companies, { initialVersion: null });
+  const old = app.request(companyPath('AAPL', 'freshness')), count = app.requests.length;
+  await expire();
+  assert.match(app.host.textContent, /Could not verify this company’s data version/);
+  assert.equal(app.requests.length, count);
+  await retryTwice(app, 'Retry data check');
+  await focusCheck(); await focusCheck();
+  assert.equal(app.requests.length, count + 1, 'Pending recovery coalesces repeated focus/retry');
+  const retry = app.request(companyPath('AAPL', 'freshness'));
+  await app.release(old, freshnessFixture('AAPL', 9));
+  assert.equal(dependentRequests(app).length, 0);
+  await app.release(retry, freshnessFixture('AAPL', 0));
+  assert.equal(dependentRequests(app).length, 3);
+  assert.ok(dependentRequests(app).every(r => r.init.headers['X-FinLens-Data-Version'] === '0'));
+});
+
+test('DEP-01A2 stalled snapshot body times out, preserves siblings and recovers with one pinned manual retry', async ctx => {
+  const expire = researchDeadlineClock(ctx), app = await mount(ctx);
+  const old = app.request(companyPath('AAPL', 'financials/summary'));
+  let finishBody;
+  const response = new Response(null, { headers: { 'X-FinLens-Data-Version': '9' } });
+  response.json = () => new Promise(resolve => { finishBody = resolve; });
+  await act(async () => { old.released = true; old.resolve(response); });
+  assert.equal(typeof finishBody, 'function');
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '900000000'));
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  const count = app.requests.length;
+  await expire();
+  assert.match(app.snapshot().textContent, /took too long/);
+  assert.match(app.trends().textContent, /\$900M/);
+  assert.equal(app.requests.length, count);
+  await retryTwice(app, 'Retry snapshot');
+  assert.equal(app.requests.length, count + 1);
+  const retry = app.request(companyPath('AAPL', 'financials/summary'));
+  assert.equal(retry.init.headers['X-FinLens-Data-Version'], '0');
+  await act(async () => finishBody(summary('AAPL', '99000000000')));
+  assert.equal(app.requests.length, count + 1, 'Late version mismatch cannot reconcile publication');
+  assert.doesNotMatch(app.snapshot().textContent, /\$99B/);
+  await app.release(retry, summary('AAPL', '2000000000'));
+  assert.match(app.snapshot().textContent, /\$2B/);
+  assert.match(app.trends().textContent, /\$900M/);
+});
+
+test('DEP-01A2 timed-out snapshot cache evicts and permits recovery through period reselection', async ctx => {
+  const expire = researchDeadlineClock(ctx), app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'sources')), []);
+  await expire();
+  assert.match(app.snapshot().textContent, /took too long/);
+  await app.change(app.select('Snapshot period'), 'annual');
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), summary('AAPL', '4000000000', 'annual'));
+  const count = app.requests.length;
+  await app.change(app.select('Snapshot period'), 'quarter');
+  assert.equal(app.requests.length, count + 1, 'Failed cache cannot retain the timeout');
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'quarter' }), summary('AAPL', '2000000000'));
+  assert.match(app.snapshot().textContent, /\$2B/);
+  await app.change(app.select('Snapshot period'), 'annual');
+  assert.equal(app.requests.length, count + 1, 'Successful cache is reused');
+  assert.match(app.snapshot().textContent, /\$4B/);
+});
+
+for (const profile of ['development', 'sec_readonly']) test(`DEP-01A2 source timeout and manual recovery preserve independent direct answer in ${profile}`, async ctx => {
+  const expire = researchDeadlineClock(ctx);
+  const app = await mount(ctx, false, companies, { capabilityPayload: { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: false, server_profile: profile } });
+  const old = app.request(companyPath('AAPL', 'sources'));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+  const query = 'latest revenue';
+  await app.change(app.host.querySelector('textarea'), query); await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  const answer = app.host.querySelector('.direct-answer'), count = app.requests.length;
+  await expire();
+  assert.match(app.host.querySelector('.filing-panel').textContent, /took too long/);
+  assert.equal(app.host.querySelector('.direct-answer'), answer);
+  await retryTwice(app, 'Retry filing list');
+  assert.equal(app.requests.length, count + 1);
+  await app.release(old, {}, 409, 9);
+  assert.equal(app.requests.length, count + 1, 'Late discovery cannot invalidate the current pin');
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  assert.equal(app.host.querySelector('.direct-answer'), answer);
+  assert.equal(app.host.querySelector('textarea').value, query);
+  assert.equal(app.requests.filter(r => /\/context$|\/answer$/.test(r.path)).length, 0);
+});
+
+for (const retrievalScope of ['filing', 'company']) for (const failed of ['direct', 'evidence']) {
+  test(`DEP-01A2 ${retrievalScope} ${failed} timeout preserves independent successful branch and resets submit guard`, async ctx => {
+    const expire = researchDeadlineClock(ctx), app = await mount(ctx);
+    await app.completeCompany('AAPL', '1000000000');
+    await app.change(app.select('Evidence search scope'), retrievalScope);
+    const query = 'latest revenue';
+    await app.change(app.host.querySelector('textarea'), query);
+    const count = app.requests.length;
+    await submitTwice(app);
+    assert.equal(app.requests.length, count + 2, 'Pending guards admit one request per branch');
+    const direct = app.request(companyPath('AAPL', 'research-answer'));
+    const evidencePath = companyPath('AAPL', retrievalScope === 'company' ? 'context' : `filings/${filing('AAPL').accession_number}/context`);
+    const evidence = app.request(evidencePath);
+    const payload = retrievalScope === 'company' ? companyContext('AAPL', query) : context('AAPL', query);
+    if (failed === 'direct') await app.release(evidence, payload);
+    else await app.release(direct, directAnswer('AAPL', query));
+    await expire();
+    assert.match(app.host.textContent, /took too long/);
+    if (failed === 'direct') { assert.equal(app.evidence().length, 1); assert.ok(!app.host.querySelector('.direct-answer')); }
+    else { assert.ok(app.host.querySelector('.direct-answer')); assert.deepEqual(app.evidence(), []); }
+    assert.equal(app.requests.length, count + 2, 'No automatic replay');
+    await submitTwice(app);
+    assert.equal(app.requests.length, count + 4, 'Timeout releases guard for exactly one explicit resubmission');
+    const old = failed === 'direct' ? direct : evidence;
+    await app.release(old, {}, 409, 9);
+    assert.equal(app.requests.length, count + 4, 'Late old branch cannot invalidate or unlock replacement');
+    await submitTwice(app);
+    assert.equal(app.requests.length, count + 4, 'Replacement still owns the pending guards');
+    await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+    await app.release(app.request(evidencePath), payload);
+    assert.ok(app.host.querySelector('.direct-answer')); assert.equal(app.evidence().length, 1);
+  });
+}
+
+test('DEP-01A2 expired old publication cannot invalidate a newer verified version', async ctx => {
+  const expire = researchDeadlineClock(ctx), app = await mount(ctx, false, companies, { initialVersion: 1 });
+  const old = dependentRequests(app);
+  await expire();
+  assert.ok(old.every(r => r.init.signal.aborted));
+  await focusCheck();
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 2));
+  await app.completeCompany('AAPL', '2000000000');
+  const count = app.requests.length;
+  for (const request of old) await app.release(request, {}, 409, 3);
+  assert.equal(app.requests.length, count);
+  assert.match(app.snapshot().textContent, /\$2B/);
+  assert.match(app.host.querySelector('[aria-label="Data freshness"]').textContent, /version 2/);
+  await app.change(app.host.querySelector('textarea'), 'latest revenue'); await app.click('Research question');
+  assert.equal(app.request(companyPath('AAPL', 'research-answer')).init.headers['X-FinLens-Data-Version'], '2');
 });

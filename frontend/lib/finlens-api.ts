@@ -88,52 +88,114 @@ export class FinLensApiError extends Error {
   }
 }
 
-async function requestJson<T>(path: string, init?: RequestInit, requirePublishedVersion = false): Promise<T> {
-  const scope = init?.signal ? versionScopes.get(init.signal) : undefined;
-  let response: Response;
-  try {
-    response = await fetch(`${API_PREFIX}${path}`, {
-      cache: "no-store",
-      ...init,
-      headers: { ...init?.headers, ...(scope ? { "X-FinLens-Data-Version": String(scope.version) } : {}) },
-    });
-  } catch {
-    if (init?.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
-    throw new FinLensApiError(
-      "Cannot reach the FinLens backend. Check that it is running.",
-      0,
-      "NETWORK_ERROR",
-    );
-  }
+const RESEARCH_REQUEST_DEADLINE_MS = 30_000;
 
-  const payload: unknown = await response.json().catch(() => null);
-  const returnedVersion = response.headers.get("X-FinLens-Data-Version");
-  if (scope && !init?.signal?.aborted && (response.headers.get("X-FinLens-Error-Code") === "DATA_VERSION_CHANGED"
-      || (returnedVersion !== null && returnedVersion !== String(scope.version)))) {
-    scope.changed();
-    throw new FinLensApiError("Published data changed. Refreshing this research scope.", 409, "DATA_VERSION_CHANGED");
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+  requirePublishedVersion = false,
+  researchDeadline = true,
+  validate?: (payload: T) => void,
+): Promise<T> {
+  // Publication ownership belongs to the caller, never the transport controller.
+  const callerSignal = init?.signal;
+  const scope = callerSignal ? versionScopes.get(callerSignal) : undefined;
+  const transport = new AbortController();
+  const expiresAt = researchDeadline ? performance.now() + RESEARCH_REQUEST_DEADLINE_MS : null;
+  let terminalCause: Error | undefined;
+  let rejectCancellation!: (error: Error) => void;
+  const cancellation = new Promise<never>((_, reject) => { rejectCancellation = reject; });
+  const cancel = (error: Error) => {
+    if (terminalCause) return;
+    terminalCause = error;
+    rejectCancellation(error);
+    transport.abort();
+  };
+  const timeout = () => cancel(new FinLensApiError(
+    "FinLens took too long to respond. Please try again.", 0, "REQUEST_TIMEOUT",
+  ));
+  const callerCancelled = () => cancel(new DOMException("Request cancelled", "AbortError"));
+  const checkCancellation = () => {
+    // Timers may be delayed while JavaScript is busy validating a response.
+    if (!terminalCause && expiresAt !== null && performance.now() >= expiresAt) timeout();
+    if (terminalCause) throw terminalCause;
+  };
+  const timer = researchDeadline ? setTimeout(timeout, RESEARCH_REQUEST_DEADLINE_MS) : undefined;
+  callerSignal?.addEventListener("abort", callerCancelled, { once: true });
+  if (callerSignal?.aborted) callerCancelled();
+
+  const readResponse = async (): Promise<T> => {
+    checkCancellation();
+    let response: Response;
+    try {
+      response = await fetch(`${API_PREFIX}${path}`, {
+        cache: "no-store",
+        ...init,
+        signal: transport.signal,
+        headers: { ...init?.headers, ...(scope ? { "X-FinLens-Data-Version": String(scope.version) } : {}) },
+      });
+    } catch {
+      checkCancellation();
+      throw new FinLensApiError(
+        "Cannot reach the FinLens backend. Check that it is running.", 0, "NETWORK_ERROR",
+      );
+    }
+    checkCancellation();
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      checkCancellation();
+      if (!(error instanceof SyntaxError)) {
+        throw new FinLensApiError("FinLens could not read the response body. Please try again.", 0, "BODY_READ_ERROR");
+      }
+      payload = null;
+    }
+    checkCancellation();
+    const returnedVersion = response.headers.get("X-FinLens-Data-Version");
+    const errorCode = response.headers.get("X-FinLens-Error-Code");
+    checkCancellation();
+    if (scope && (errorCode === "DATA_VERSION_CHANGED"
+        || (returnedVersion !== null && returnedVersion !== String(scope.version)))) {
+      scope.changed();
+      throw new FinLensApiError("Published data changed. Refreshing this research scope.", 409, "DATA_VERSION_CHANGED");
+    }
+    if (!response.ok) {
+      const detail =
+        payload && typeof payload === "object" && "detail" in payload
+          ? (payload as { detail: unknown }).detail
+          : null;
+      const message = typeof detail === "string"
+        ? detail
+        : `FinLens returned HTTP ${response.status}.`;
+      throw new FinLensApiError(message, response.status, errorCode);
+    }
+    if (requirePublishedVersion && (!scope || returnedVersion === null)) {
+      throw new FinLensApiError("Published response version could not be verified.", 502, "INVALID_RESPONSE");
+    }
+    if (payload === null) {
+      throw new FinLensApiError("FinLens returned an empty response.", 502, "INVALID_RESPONSE");
+    }
+    checkCancellation();
+    return payload as T;
+  };
+
+  try {
+    // Abort is best effort. This race settles even if fetch or json ignores it.
+    const result = await Promise.race([cancellation, readResponse()]);
+    checkCancellation();
+    // Endpoint validation shares this deadline, caller listener and error checkpoint.
+    validate?.(result);
+    checkCancellation();
+    return result;
+  } catch (error) {
+    checkCancellation();
+    throw error;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", callerCancelled);
   }
-  if (!response.ok) {
-    const detail =
-      payload && typeof payload === "object" && "detail" in payload
-        ? (payload as { detail: unknown }).detail
-        : null;
-    const message = typeof detail === "string"
-      ? detail
-      : `FinLens returned HTTP ${response.status}.`;
-    throw new FinLensApiError(
-      message,
-      response.status,
-      response.headers.get("X-FinLens-Error-Code"),
-    );
-  }
-  if (requirePublishedVersion && (!scope || returnedVersion === null)) {
-    throw new FinLensApiError("Published response version could not be verified.", 502, "INVALID_RESPONSE");
-  }
-  if (payload === null) {
-    throw new FinLensApiError("FinLens returned an empty response.", 502, "INVALID_RESPONSE");
-  }
-  return payload as T;
 }
 
 export function getCompanies(signal?: AbortSignal): Promise<Company[]> {
@@ -162,6 +224,8 @@ export function getAnswer(
       body: JSON.stringify({ question, limit }),
       signal,
     },
+    false,
+    false, // AI generation retains its existing server/provider timeout policy.
   );
 }
 
@@ -297,17 +361,17 @@ export function getResearchAnswer(ticker: string, question: string, signal?: Abo
   });
 }
 
-export async function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
-  const data = await requestJson<Capabilities>("/capabilities", { signal });
-  if (typeof data !== "object" || data === null
-      || typeof data.research_mode !== "boolean"
-      || typeof data.ai_analysis_configured !== "boolean"
-      || typeof data.ai_analysis_enabled !== "boolean"
-      || !["development", "sec_readonly"].includes(data.server_profile)
-      || (data.ai_analysis_enabled && (!data.ai_analysis_configured || data.server_profile !== "development"))) {
-    throw new FinLensApiError("Server capabilities could not be verified.", 502, "INVALID_RESPONSE");
-  }
-  return data;
+export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
+  return requestJson<Capabilities>("/capabilities", { signal }, false, true, data => {
+    if (typeof data !== "object" || data === null
+        || typeof data.research_mode !== "boolean"
+        || typeof data.ai_analysis_configured !== "boolean"
+        || typeof data.ai_analysis_enabled !== "boolean"
+        || !["development", "sec_readonly"].includes(data.server_profile)
+        || (data.ai_analysis_enabled && (!data.ai_analysis_configured || data.server_profile !== "development"))) {
+      throw new FinLensApiError("Server capabilities could not be verified.", 502, "INVALID_RESPONSE");
+    }
+  });
 }
 export function getFinancialSummary(ticker: string, period: PeriodKind, signal?: AbortSignal, requirePublishedVersion = false): Promise<FinancialSummary> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/summary?period=${period}`, { signal }, requirePublishedVersion);
@@ -324,17 +388,17 @@ export function getFilingContext(ticker: string, accession: string, query: strin
   return requestJson(`/companies/${encodeURIComponent(ticker)}/filings/${encodeURIComponent(accession)}/context?${params}`, { signal });
 }
 
-export async function getCompanyContext(ticker: string, cik: string, query: string, signal: AbortSignal): Promise<CompanyContext> {
+export function getCompanyContext(ticker: string, cik: string, query: string, signal: AbortSignal): Promise<CompanyContext> {
   const params = new URLSearchParams({ q: query, limit: "5" });
-  const result = await requestJson<CompanyContext>(`/companies/${encodeURIComponent(ticker)}/context?${params}`, { signal }, true);
   const scope = versionScopes.get(signal);
-  if (result.ticker !== ticker || result.company_cik !== cik || result.retrieval_scope !== "company"
-      || result.query !== query || result.data_version !== scope?.version
-      || "accession_number" in result || !Number.isSafeInteger(result.evidence_version)
-      || result.evidence_version < 0 || result.evidence_version > result.data_version
-      || !Array.isArray(result.searched_accessions)
-      || result.citations.some(c => c.company_cik !== cik || !result.searched_accessions.includes(c.accession_number))) {
-    throw new FinLensApiError("Evidence does not match this company and publication version.", 409, "EVIDENCE_SCOPE_MISMATCH");
-  }
-  return result;
+  return requestJson<CompanyContext>(`/companies/${encodeURIComponent(ticker)}/context?${params}`, { signal }, true, true, result => {
+    if (result.ticker !== ticker || result.company_cik !== cik || result.retrieval_scope !== "company"
+        || result.query !== query || result.data_version !== scope?.version
+        || "accession_number" in result || !Number.isSafeInteger(result.evidence_version)
+        || result.evidence_version < 0 || result.evidence_version > result.data_version
+        || !Array.isArray(result.searched_accessions)
+        || result.citations.some(c => c.company_cik !== cik || !result.searched_accessions.includes(c.accession_number))) {
+      throw new FinLensApiError("Evidence does not match this company and publication version.", 409, "EVIDENCE_SCOPE_MISMATCH");
+    }
+  });
 }
