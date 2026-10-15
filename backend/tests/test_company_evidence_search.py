@@ -39,7 +39,7 @@ def store(monkeypatch):
                                              evidence_version=1, evidence={}),
                          CompanyRefreshState(company_cik=OTHER, data_version=0, facts_version=0,
                                              evidence_version=0, evidence={})])
-    monkeypatch.setattr(main, "SessionLocal", factory)
+    monkeypatch.setattr(main, "HttpSessionLocal", factory)
     encoder = Mock(return_value=[VECTOR])
     monkeypatch.setattr("app.filing_search_service.embed_texts", encoder)
     monkeypatch.setattr("app.sec_client._sec_get", Mock(side_effect=AssertionError("SEC forbidden")))

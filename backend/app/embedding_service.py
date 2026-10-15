@@ -2,6 +2,7 @@ from app.release_policy import development_only
 from functools import lru_cache
 from array import array
 import math
+from json import JSONDecodeError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +12,18 @@ from app.config import server_profile
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMENSION = 384
+
+
+class EncoderDependencyError(RuntimeError):
+    """Missing dependencies/cache, unreadable artifacts or incompatible model.
+
+    Programming errors (including generic ValueError) are intentionally outside
+    this boundary. Public HTTP handling never returns underlying diagnostics.
+    """
+
+
+def _encoder_unavailable():
+    return EncoderDependencyError("The query encoder dependency is unavailable.")
 
 
 def validate_embedding(vector) -> None:
@@ -30,6 +43,13 @@ def validate_embedding(vector) -> None:
 @lru_cache(maxsize=1)
 def _get_model():
     """Load the encoder once, on first use, to keep API startup lightweight."""
+    try:
+        return _load_model()
+    except (ImportError, OSError, JSONDecodeError) as exc:
+        raise _encoder_unavailable() from exc
+
+
+def _load_model():
     if server_profile().name == "sec_readonly":
         # Resolve a local snapshot without a hub request. Passing the local path
         # and local_files_only also constrains nested tokenizer/model loaders.
@@ -37,19 +57,14 @@ def _get_model():
         from huggingface_hub import try_to_load_from_cache
         cached = try_to_load_from_cache(MODEL_NAME, "modules.json")
         if not isinstance(cached, str) or not Path(cached).is_file():
-            raise RuntimeError("The query encoder is unavailable in the local cache.")
-        try:
-            from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer(str(Path(cached).parent), local_files_only=True)
-        except Exception:
-            raise RuntimeError("The query encoder is unavailable in the local cache.") from None
+            raise _encoder_unavailable()
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(str(Path(cached).parent), local_files_only=True)
     else:
         from sentence_transformers import SentenceTransformer
         model = SentenceTransformer(MODEL_NAME)
     if model.get_sentence_embedding_dimension() != EMBEDDING_DIMENSION:
-        raise RuntimeError(
-            f"{MODEL_NAME} must produce {EMBEDDING_DIMENSION}-dimensional vectors."
-        )
+        raise _encoder_unavailable()
     return model
 
 

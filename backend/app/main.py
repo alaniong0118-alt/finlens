@@ -6,13 +6,18 @@ from app.release_policy import READONLY_ROUTES, ReleaseAdmissionMiddleware
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from app.sec_client import (
     build_filing_url,
     build_filing_raw_url,
 )
-from app.database import engine, SessionLocal
+from app.database import HttpSessionLocal, database_failure
+from app.embedding_service import EncoderDependencyError
 from app.financial_analysis import (
     get_financial_history,
     get_financial_snapshot,
@@ -75,11 +80,28 @@ class VersionedRoute(APIRoute):
         async def handle(request):
             ticker = request.path_params.get("ticker")
             scope = {"ticker": ticker.upper() if ticker else None,
-                     "expected": request.headers.get("X-FinLens-Data-Version"), "version": 0}
+                     "expected": request.headers.get("X-FinLens-Data-Version"), "version": None}
             token = request_scope.set(scope)
             try:
-                response = await original(request)
-                if ticker:
+                try:
+                    response = await original(request)
+                except StarletteHTTPException as exc:
+                    response = JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                                            headers=exc.headers)
+                except RequestValidationError as exc:
+                    response = await request_validation_exception_handler(request, exc)
+                except Exception as exc:
+                    failure = database_failure(exc)
+                    if isinstance(exc, EncoderDependencyError):
+                        failure = (503, "RETRIEVAL_UNAVAILABLE",
+                                   "Filing evidence search is unavailable. Try again later.")
+                    if failure:
+                        status, code, message = failure
+                        response = JSONResponse({"detail": message}, status_code=status,
+                                                headers={"X-FinLens-Error-Code": code})
+                    else:
+                        response = JSONResponse({"detail": "Internal server error."}, status_code=500)
+                if ticker and scope["version"] is not None:
                     response.headers["X-FinLens-Data-Version"] = str(scope["version"])
                 response.headers["Cache-Control"] = "no-store"
                 return response
@@ -137,8 +159,8 @@ def capabilities() -> CapabilityResponse:
     response_model=DatabaseHealthResponse,
 )
 def database_health() -> DatabaseHealthResponse:
-    with engine.connect() as connection:
-        connection.execute(text("SELECT 1"))
+    with read_session(HttpSessionLocal) as session:
+        session.execute(text("SELECT 1"))
 
     return DatabaseHealthResponse(
         status="ok",
@@ -151,7 +173,7 @@ def database_health() -> DatabaseHealthResponse:
     response_model=list[CompanyResponse],
 )
 def get_companies() -> list[CompanyResponse]:
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         if schema_ready(session.connection()):
             indexed_filings = select(FilingPublication.company_cik.label("company_cik"),
                 func.count().label("indexed_filing_count")).group_by(FilingPublication.company_cik).subquery()
@@ -194,7 +216,7 @@ def get_companies() -> list[CompanyResponse]:
 
 @app.post("/companies/{ticker}/research-answer", response_model=ResearchAnswer)
 def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         try:
             return answer_research_question(session, ticker, request.question)
         except UnknownCompany:
@@ -203,7 +225,7 @@ def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
 
 @app.get("/companies/{ticker}/financials/summary", response_model=NormalizedFinancialSummary)
 def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         try:
             return load_financial_metrics(session, ticker).summary(period)
         except UnknownCompany:
@@ -212,7 +234,7 @@ def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
 
 @app.get("/companies/{ticker}/financials/annual", response_model=AnnualFinancialComparison)
 def annual_financial_comparison(ticker: str, fiscal_year: int | None = Query(default=None, ge=1900, le=2099)):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         try:
             model = load_financial_metrics(session, ticker)
             if model.company.ticker != ticker.upper():
@@ -225,7 +247,7 @@ def annual_financial_comparison(ticker: str, fiscal_year: int | None = Query(def
 @app.get("/companies/{ticker}/financials/metrics/{metric}", response_model=NormalizedMetricHistory)
 def normalized_metric_history(ticker: str, metric: str, period: PeriodKind = "quarter",
                               limit: int = Query(default=40, ge=1, le=200)):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         try:
             return load_financial_metrics(session, ticker).history(metric, period, limit)
         except UnknownCompany:
@@ -243,7 +265,7 @@ def get_financial_summary_by_ticker(
 ) -> FinancialSummaryResponse:
     ticker = ticker.upper()
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -313,7 +335,7 @@ def get_financial_snapshot_by_ticker(
 ) -> FinancialSnapshotResponse:
     ticker = ticker.upper()
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -343,7 +365,7 @@ def get_financial_history_by_ticker(
 ) -> FinancialHistoryResponse:
     ticker = ticker.upper()
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -399,7 +421,7 @@ def get_company_sources(
 ) -> list[FinancialSourceResponse]:
     ticker = ticker.upper()
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -512,7 +534,7 @@ def get_company_sources(
         return sorted(sources, key=lambda source: (str(source.filed or ""), source.accession_number), reverse=True)
 @app.get("/companies/{ticker}/freshness", response_model=Freshness)
 def company_freshness(ticker: str):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         return freshness(session, ticker)
 
 
@@ -532,7 +554,7 @@ def stored_filing(session, ticker, accession):
 
 @app.get("/companies/{ticker}/filings/{accession_number}/text")
 def get_company_filing_text(ticker: str, accession_number: str):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company, chunks, result = stored_filing(session, ticker, accession_number)
         publication = session.get(FilingPublication, (company.cik, accession_number)) if schema_ready(session.connection()) else None
         if publication is None or publication.cleaned_text is None:
@@ -543,7 +565,7 @@ def get_company_filing_text(ticker: str, accession_number: str):
 
 @app.get("/companies/{ticker}/filings/{accession_number}/chunks")
 def get_company_filing_chunks(ticker: str, accession_number: str):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         _, chunks, result = stored_filing(session, ticker, accession_number)
         return {**result, "chunk_count": len(chunks), "chunks": [
             {"chunk_id": c.chunk_id, "text": c.text, "start_char": c.start_char, "end_char": c.end_char,
@@ -563,7 +585,7 @@ def search_company_filing(
 ):
     ticker = ticker.upper()
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(
                 Company.ticker == ticker
@@ -630,7 +652,7 @@ def semantic_search_company_filing(
             detail="limit must be between 1 and 50",
         )
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(Company.ticker == ticker)
         )
@@ -674,7 +696,7 @@ def semantic_search_company_filing(
 @app.get("/companies/{ticker}/context")
 def get_company_context(ticker: str, q: str = Query(min_length=1, max_length=2000),
                         limit: int = Query(default=5, ge=1, le=50)):
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
         if company is None:
             raise HTTPException(404, detail="Unknown company")
@@ -698,7 +720,7 @@ def get_company_filing_context(
             detail="limit must be between 1 and 50",
         )
 
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(Company.ticker == ticker)
         )
@@ -734,7 +756,7 @@ def answer_company_filing_question(
     request: FilingAnswerRequest,
 ):
     ticker = ticker.upper()
-    with read_session(SessionLocal) as session:
+    with read_session(HttpSessionLocal) as session:
         company = session.scalar(
             select(Company).where(Company.ticker == ticker)
         )

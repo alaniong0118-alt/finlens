@@ -18,7 +18,7 @@ from app.models import Company, FilingChunk, FinancialFact
 def session(monkeypatch):
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(main, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(main, "HttpSessionLocal", sessionmaker(bind=engine))
     with Session(engine) as session:
         session.add_all([
             Company(ticker="AAPL", name="Apple", cik="0000320193", exchange="NASDAQ"),

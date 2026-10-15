@@ -15,7 +15,7 @@ def test_capabilities_are_safe_configuration_metadata(monkeypatch, key, configur
     def forbidden(*args, **kwargs):
         raise AssertionError("Capabilities must not access the database or AI provider")
 
-    monkeypatch.setattr(main, "SessionLocal", forbidden)
+    monkeypatch.setattr(main, "HttpSessionLocal", forbidden)
     monkeypatch.setattr(main, "answer_filing_question", forbidden)
     monkeypatch.setattr("app.answer_service._get_openai_client", forbidden)
     response = TestClient(main.app).get("/capabilities")

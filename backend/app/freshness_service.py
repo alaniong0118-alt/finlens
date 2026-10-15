@@ -41,13 +41,15 @@ def freshness(session, ticker):
     company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
     if company is None:
         raise HTTPException(404, detail="Unknown company")
-    if not schema_ready(session.connection()):
-        return Freshness(ticker=company.ticker, migration_required=True)
-    row = session.get(CompanyRefreshState, company.cik)
-    result = Freshness(ticker=company.ticker)
-    if row:
-        result.data_version, result.facts_version, result.evidence_version = row.data_version, row.facts_version, row.evidence_version
-        result.facts, result.evidence = stream_state(row.facts), stream_state(row.evidence)
+    row = session.get(CompanyRefreshState, company.cik) if schema_ready(session.connection()) else None
+    if row is None:
+        # The frontend consumes the body pin. Missing metadata must never use
+        # Freshness's numeric defaults, even when no version header is attached.
+        raise HTTPException(503, detail="Publication freshness is unavailable. Try again later.",
+                            headers={"X-FinLens-Error-Code": "FRESHNESS_UNAVAILABLE"})
+    result = Freshness(ticker=company.ticker, data_version=row.data_version,
+                       facts_version=row.facts_version, evidence_version=row.evidence_version)
+    result.facts, result.evidence = stream_state(row.facts), stream_state(row.evidence)
     result.status = next((status for status in ("failed", "pending", "stale", "unknown", "current")
                           if status in {result.facts.status, result.evidence.status}), "unknown")
     latest = session.scalar(select(FilingPublication).where(FilingPublication.company_cik == company.cik)
@@ -59,17 +61,55 @@ def freshness(session, ticker):
 
 @contextmanager
 def read_session(factory):
-    with factory() as session:
+    session = factory()
+    connection = None
+    try:
         if session.get_bind().dialect.name == "postgresql":
+            connection = session.connection()
             session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
         scope = request_scope.get()
-        if scope and scope.get("ticker") and schema_ready(session.connection()):
-            version = session.scalar(select(CompanyRefreshState.data_version).join(
-                Company, Company.cik == CompanyRefreshState.company_cik).where(Company.ticker == scope["ticker"])) or 0
+        if scope and scope.get("ticker"):
+            version = None
+            if schema_ready(session.connection()):
+                version = session.scalar(select(CompanyRefreshState.data_version).join(
+                    Company, Company.cik == CompanyRefreshState.company_cik).where(Company.ticker == scope["ticker"]))
+            if version is not None and (type(version) is not int or version < 0):
+                raise ValueError("Invalid publication version metadata.")
+            # Zero is a verified publication. Missing metadata is unverified,
+            # not an invented version-zero publication.
             scope["version"] = version
-            if scope.get("expected") is not None and scope["expected"] != str(version):
+            if scope.get("expected") is not None and (version is None or scope["expected"] != str(version)):
                 raise HTTPException(409, detail="Published data changed. Refresh the research scope.", headers={"X-FinLens-Error-Code": "DATA_VERSION_CHANGED"})
         yield session
+    except BaseException:
+        # Cleanup must not replace a primary query/programming/research error.
+        # A failed close cannot return a suspect connection to another request.
+        try:
+            session.close()
+        except BaseException:
+            _invalidate_read_session(session, connection)
+        raise
+    else:
+        try:
+            session.close()
+        except BaseException:
+            _invalidate_read_session(session, connection)
+            raise
+
+
+def _invalidate_read_session(session, connection):
+    # Session.close may detach its transaction before a rollback failure, so
+    # keep the already acquired connection and invalidate it directly as well.
+    if connection is not None:
+        try:
+            connection.invalidate()
+        except BaseException:
+            pass
+    try:
+        session.invalidate()
+    except BaseException:
+        # Preserve the original failure after discarding the physical connection.
+        pass
 
 
 def stored_chunks(session, cik, accession):

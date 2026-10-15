@@ -244,7 +244,7 @@ def api(monkeypatch):
     session.__exit__ = Mock(return_value=False)
     session.get_bind.return_value.dialect.name = "postgresql"
     session.scalar.return_value = 7
-    monkeypatch.setattr(main, "SessionLocal", lambda: session)
+    monkeypatch.setattr(main, "HttpSessionLocal", lambda: session)
     monkeypatch.setattr(freshness_service, "schema_ready", lambda _: True)
     model = view(fact())
     loader = Mock(return_value=model)

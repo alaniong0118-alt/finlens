@@ -19,6 +19,21 @@ load_backend_env()
 
 
 @dataclass(frozen=True)
+class HttpDatabaseBounds:
+    connect_timeout: int
+    pool_timeout: int
+    statement_timeout_ms: int
+    lock_timeout_ms: int
+    pool_size: int = 5
+    max_overflow: int = 0
+
+    @property
+    def startup_options(self) -> str:
+        return (f"-c statement_timeout={self.statement_timeout_ms} "
+                f"-c lock_timeout={self.lock_timeout_ms}")
+
+
+@dataclass(frozen=True)
 class ServerProfile:
     name: Literal["development", "sec_readonly"]
 
@@ -29,6 +44,12 @@ class ServerProfile:
     @property
     def generation_allowed(self) -> bool:
         return self.name == "development"
+
+    @property
+    def http_database_bounds(self) -> HttpDatabaseBounds:
+        if self.name == "development":
+            return HttpDatabaseBounds(5, 5, 30000, 5000, max_overflow=5)
+        return HttpDatabaseBounds(3, 2, 10000, 2000)
 
 
 # Resolve exactly once after dotenv, before importers initialize engines/models.

@@ -35,7 +35,7 @@ def add_chunks(session, cik, accession, count, *, embedded):
 def test_company_availability_and_single_query(monkeypatch):
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(main, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(main, "HttpSessionLocal", sessionmaker(bind=engine))
 
     with Session(engine) as session:
         session.add_all([
@@ -83,7 +83,7 @@ def test_company_availability_and_single_query(monkeypatch):
 def test_one_accession_with_37_embedded_chunks_counts_once(monkeypatch):
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(main, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(main, "HttpSessionLocal", sessionmaker(bind=engine))
     with Session(engine) as session:
         session.add(Company(ticker="AAPL", name="Apple Inc.", cik="0000320193", exchange="NASDAQ"))
         add_chunks(session, "0000320193", "accession-a", 37, embedded=True)

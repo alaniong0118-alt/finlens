@@ -42,8 +42,8 @@ def isolated(monkeypatch):
         monkeypatch.setattr(socket.socket, "connect", guarded_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", bomb)
     monkeypatch.setattr(socket, "create_connection", bomb)
-    monkeypatch.setattr(main.engine, "connect", bomb)
-    monkeypatch.setattr(main, "SessionLocal", bomb)
+    monkeypatch.setattr("app.database.engine.connect", bomb)
+    monkeypatch.setattr(main, "HttpSessionLocal", bomb)
     monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile("sec_readonly"))
 
 

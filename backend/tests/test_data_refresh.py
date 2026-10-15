@@ -50,7 +50,7 @@ def factory(monkeypatch):
     with factory() as s, s.begin():
         s.add_all([Company(ticker="AAPL", cik=CIK, name="Apple Inc.", exchange="NASDAQ"),
                    Company(ticker="JPM", cik="0000019617", name="JPMorgan Chase & Co", exchange="NYSE")])
-    monkeypatch.setattr(main, "SessionLocal", factory)
+    monkeypatch.setattr(main, "HttpSessionLocal", factory)
     monkeypatch.setattr(sec_client, "_sec_get", Mock(side_effect=AssertionError("Forbidden SEC")))
     monkeypatch.setattr("app.answer_service._get_openai_client", Mock(side_effect=AssertionError("Forbidden OpenAI")))
     yield factory
@@ -258,7 +258,13 @@ def test_no_interactive_network_and_unpublished_accession_gate(factory):
         assert response.status_code == 409
     response = client.post(f'/companies/AAPL/filings/{ACC}/answer', json={"question": "revenue"})
     assert response.status_code == 409
-    assert client.get('/companies/AAPL/freshness').json()["status"] == "unknown"
+    response = client.get('/companies/AAPL/freshness')
+    assert response.status_code == 503
+    assert response.headers["X-FinLens-Error-Code"] == "FRESHNESS_UNAVAILABLE"
+    assert response.json() == {"detail": "Publication freshness is unavailable. Try again later."}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "X-FinLens-Data-Version" not in response.headers
+    assert "data_version" not in response.json()
     assert client.post('/companies/AAPL/refresh').status_code == 404
 
 
@@ -479,9 +485,13 @@ def test_unmigrated_read_only_api_keeps_valid_evidence_and_unknown_freshness(fac
         client = TestClient(main.app)
         assert client.get('/companies').json()[0]["indexed_filing_count"] == 1
         assert client.get(f'/companies/AAPL/filings/{ACC}/chunks').status_code == 200
-        state = client.get('/companies/AAPL/freshness').json()
-        assert state["migration_required"] and state["status"] == "unknown"
-        assert state["facts"]["last_checked_at"] is None
+        response = client.get('/companies/AAPL/freshness')
+        assert response.status_code == 503
+        assert response.headers["X-FinLens-Error-Code"] == "FRESHNESS_UNAVAILABLE"
+        assert response.json() == {"detail": "Publication freshness is unavailable. Try again later."}
+        assert response.headers["Cache-Control"] == "no-store"
+        assert "X-FinLens-Data-Version" not in response.headers
+        assert "data_version" not in response.json()
         assert client.get('/companies/AAPL/sources').json()[0]["has_filing_chunks"]
         assert not writes
     finally:

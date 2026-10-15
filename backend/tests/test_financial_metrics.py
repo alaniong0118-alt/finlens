@@ -20,7 +20,7 @@ from app.models import Company, FinancialFact
 def db(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(main, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(main, "HttpSessionLocal", sessionmaker(bind=engine))
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setattr("app.answer_service._get_openai_client", Mock(side_effect=AssertionError("Forbidden AI")))
     monkeypatch.setattr("app.sec_client._sec_get", Mock(side_effect=AssertionError("Forbidden SEC download")))

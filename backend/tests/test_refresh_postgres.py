@@ -61,7 +61,7 @@ def pg_factory(isolated_database, monkeypatch):
     factory = sessionmaker(bind=isolated_database, autoflush=False, autocommit=False)
     with factory() as session, session.begin():
         session.add(Company(cik=CIK, ticker="AAPL", name="Apple Inc.", exchange="NASDAQ"))
-    monkeypatch.setattr(main, "SessionLocal", factory)
+    monkeypatch.setattr(main, "HttpSessionLocal", factory)
     monkeypatch.setattr("app.sec_client._sec_get", lambda *a: pytest.fail("Forbidden live SEC"))
     monkeypatch.setattr("app.answer_service._get_openai_client", lambda: pytest.fail("Forbidden OpenAI"))
     return factory

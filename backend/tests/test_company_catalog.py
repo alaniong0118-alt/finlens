@@ -28,7 +28,7 @@ EXPECTED_TICKERS = set(LEGACY_CIKS) | ADDED_TICKERS
 def session(monkeypatch):
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(main, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(main, "HttpSessionLocal", sessionmaker(bind=engine))
     with Session(engine) as session:
         yield session
     engine.dispose()
