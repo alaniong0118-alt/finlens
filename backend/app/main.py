@@ -1,4 +1,5 @@
 import os
+from typing import Annotated
 
 from app.config import server_profile
 from app.release_policy import READONLY_ROUTES, ReleaseAdmissionMiddleware
@@ -10,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, Field
 from sqlalchemy import func, select, text
 from app.sec_client import (
     build_filing_url,
@@ -39,7 +40,11 @@ from app.models import Company, FinancialFact, FilingChunk
 from app.financial_metrics_service import load_financial_metrics, UnknownCompany, UnknownMetric
 from app.financial_metric_schemas import AnnualFinancialComparison, NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
 from app.research_answer_service import ResearchAnswer, ResearchAnswerRequest, answer_research_question
-from app.freshness_service import freshness, read_session, request_scope, require_published, schema_ready, stored_chunks, validate_chunks
+from app.freshness_service import (
+    freshness, read_session, request_scope, require_published, schema_ready,
+    research_chunks, stored_research_text, validate_chunks, validate_research_input,
+    inconsistent_evidence,
+)
 from app.refresh_contracts import Freshness
 from app.models import FilingPublication
 from app.schemas import (
@@ -69,9 +74,20 @@ class CapabilityResponse(BaseModel):
 
 
 class FilingAnswerRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
     question: str = Field(min_length=1, max_length=2000)
-    limit: int = Field(default=5, ge=1, le=50)
+    limit: int = Field(default=5, ge=1, le=50, strict=True)
+
+
+def _http_result_count(value):
+    # Query parameters arrive as strings. Reject decimal/exponent spellings
+    # before Pydantic's permissive integer coercion (e.g. "1.0").
+    if isinstance(value, str) and (not value.isascii() or not value.isdecimal()):
+        raise ValueError("limit must be an integer between 1 and 50")
+    return value
+
+
+ResearchQuery = Annotated[str, Query(min_length=1, max_length=2000)]
+ResearchLimit = Annotated[int, BeforeValidator(_http_result_count), Query(ge=1, le=50)]
 
 
 class VersionedRoute(APIRoute):
@@ -182,7 +198,7 @@ def get_companies() -> list[CompanyResponse]:
             # two bulk reads validate completeness, never any-vector readiness.
             companies = list(session.scalars(select(Company).order_by(Company.ticker)))
             groups, counts = {}, {}
-            for chunk in session.scalars(select(FilingChunk).order_by(FilingChunk.company_cik, FilingChunk.accession_number, FilingChunk.chunk_index)):
+            for chunk in research_chunks(session):
                 groups.setdefault((chunk.company_cik, chunk.accession_number), []).append(chunk)
             for (cik, accession), chunks in groups.items():
                 try:
@@ -216,6 +232,7 @@ def get_companies() -> list[CompanyResponse]:
 
 @app.post("/companies/{ticker}/research-answer", response_model=ResearchAnswer)
 def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
+    validate_research_input(request.question)
     with read_session(HttpSessionLocal) as session:
         try:
             return answer_research_question(session, ticker, request.question)
@@ -452,7 +469,7 @@ def get_company_sources(
                 FilingPublication.filed).where(FilingPublication.company_cik == company.cik)).all()
         else:
             groups, indexed_metadata = {}, []
-            for chunk in session.scalars(select(FilingChunk).where(FilingChunk.company_cik == company.cik).order_by(FilingChunk.accession_number, FilingChunk.chunk_index)):
+            for chunk in research_chunks(session, FilingChunk.company_cik == company.cik):
                 groups.setdefault(chunk.accession_number, []).append(chunk)
             for accession, chunks in groups.items():
                 try:
@@ -543,7 +560,10 @@ def stored_filing(session, ticker, accession):
     if company is None:
         raise HTTPException(404, detail="Unknown company")
     require_published(session, company.cik, accession)
-    chunks = stored_chunks(session, company.cik, accession)
+    chunks = research_chunks(session, FilingChunk.company_cik == company.cik,
+                             FilingChunk.accession_number == accession)
+    if not chunks:
+        raise inconsistent_evidence()
     first = chunks[0]
     return company, chunks, {
         "ticker": company.ticker, "company_name": company.name, "company_cik": company.cik,
@@ -556,10 +576,8 @@ def stored_filing(session, ticker, accession):
 def get_company_filing_text(ticker: str, accession_number: str):
     with read_session(HttpSessionLocal) as session:
         company, chunks, result = stored_filing(session, ticker, accession_number)
-        publication = session.get(FilingPublication, (company.cik, accession_number)) if schema_ready(session.connection()) else None
-        if publication is None or publication.cleaned_text is None:
-            raise HTTPException(409, detail="Exact full text is not stored. Published evidence chunks remain available.", headers={"X-FinLens-Error-Code": "STORED_TEXT_UNAVAILABLE"})
-        return {**result, "text": publication.cleaned_text, "text_length": len(publication.cleaned_text),
+        body = stored_research_text(session, company.cik, accession_number)
+        return {**result, "text": body, "text_length": len(body),
                 "raw_url": build_filing_raw_url(company.cik, accession_number)}
 
 
@@ -580,9 +598,10 @@ def get_company_filing_chunks(ticker: str, accession_number: str):
 def search_company_filing(
     ticker: str,
     accession_number: str,
-    q: str,
-    limit: int = 5,
+    q: ResearchQuery,
+    limit: ResearchLimit = 5,
 ):
+    validate_research_input(q, limit)
     ticker = ticker.upper()
 
     with read_session(HttpSessionLocal) as session:
@@ -642,15 +661,11 @@ def search_company_filing(
 def semantic_search_company_filing(
     ticker: str,
     accession_number: str,
-    q: str,
-    limit: int = 5,
+    q: ResearchQuery,
+    limit: ResearchLimit = 5,
 ):
+    validate_research_input(q, limit)
     ticker = ticker.upper()
-    if limit <= 0 or limit > 50:
-        raise HTTPException(
-            status_code=400,
-            detail="limit must be between 1 and 50",
-        )
 
     with read_session(HttpSessionLocal) as session:
         company = session.scalar(
@@ -694,8 +709,8 @@ def semantic_search_company_filing(
 
 
 @app.get("/companies/{ticker}/context")
-def get_company_context(ticker: str, q: str = Query(min_length=1, max_length=2000),
-                        limit: int = Query(default=5, ge=1, le=50)):
+def get_company_context(ticker: str, q: ResearchQuery, limit: ResearchLimit = 5):
+    validate_research_input(q, limit)
     with read_session(HttpSessionLocal) as session:
         company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
         if company is None:
@@ -710,15 +725,11 @@ def get_company_context(ticker: str, q: str = Query(min_length=1, max_length=200
 def get_company_filing_context(
     ticker: str,
     accession_number: str,
-    q: str,
-    limit: int = 5,
+    q: ResearchQuery,
+    limit: ResearchLimit = 5,
 ):
+    validate_research_input(q, limit)
     ticker = ticker.upper()
-    if limit <= 0 or limit > 50:
-        raise HTTPException(
-            status_code=400,
-            detail="limit must be between 1 and 50",
-        )
 
     with read_session(HttpSessionLocal) as session:
         company = session.scalar(
@@ -755,6 +766,7 @@ def answer_company_filing_question(
     accession_number: str,
     request: FilingAnswerRequest,
 ):
+    validate_research_input(request.question, request.limit)
     ticker = ticker.upper()
     with read_session(HttpSessionLocal) as session:
         company = session.scalar(

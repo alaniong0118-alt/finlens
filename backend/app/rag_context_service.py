@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.filing_search_service import hybrid_search_filing_chunks, hybrid_search_company_chunks
 from app.evidence_policy import evidence_reason
-from app.freshness_service import published_company_chunks, valid_document_filename
+from app.freshness_service import (
+    published_company_chunks, valid_document_filename,
+    validate_research_input, validate_research_chunks,
+)
 
 MAX_COMPANY_CONTEXT_CHARS = 24000
 
@@ -18,8 +21,7 @@ def build_filing_context(
     limit: int = 5,
 ) -> dict[str, Any]:
     """Build bounded, citation-aware context from one filing's stored chunks."""
-    if not 1 <= limit <= 50:
-        raise ValueError("limit must be between 1 and 50.")
+    validate_research_input(query, limit)
 
     ranked_chunks = hybrid_search_filing_chunks(
         session,
@@ -32,8 +34,7 @@ def build_filing_context(
 
 
 def build_company_context(session, company_cik, query, limit=5):
-    if not 1 <= limit <= 50:
-        raise ValueError("limit must be between 1 and 50")
+    validate_research_input(query, limit)
     chunks, metadata = published_company_chunks(session, company_cik)
     ranked = hybrid_search_company_chunks(chunks, query)
     return {**_build_context(ranked, query, limit, company_wide=True), **metadata,
@@ -41,6 +42,8 @@ def build_company_context(session, company_cik, query, limit=5):
 
 
 def _build_context(ranked_chunks, query, limit, *, company_wide=False):
+    validate_research_input(query, limit)
+    validate_research_chunks([result.chunk for result in ranked_chunks])
 
     citations: list[dict[str, Any]] = []
     source_blocks: list[str] = []
@@ -105,7 +108,7 @@ def _build_context(ranked_chunks, query, limit, *, company_wide=False):
             f"{indented_text}\n"
             f"[END SOURCE {citation_id}]"
         )
-        if company_wide and len("\n\n".join([*source_blocks, source_block])) > MAX_COMPANY_CONTEXT_CHARS:
+        if len("\n\n".join([*source_blocks, source_block])) > MAX_COMPANY_CONTEXT_CHARS:
             break
         citations.append(citation)
         source_blocks.append(source_block)

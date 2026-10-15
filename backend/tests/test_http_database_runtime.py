@@ -305,6 +305,16 @@ class ProductionFreshnessSession(FakeSession):
         self.events.append("metadata")
         return self.metadata
 
+    def execute(self, stmt):
+        if getattr(stmt, "is_select", False):
+            assert stmt.column_descriptions[0]["entity"] is FilingPublication
+            compiled = stmt.compile(dialect=postgresql.dialect())
+            assert compiled.params["company_cik_1"] == self.company.cik
+            assert "cleaned_text" not in str(compiled)
+            self.events.append("latest")
+            return SimpleNamespace(first=lambda: None)
+        return super().execute(stmt)
+
 
 def install_production_freshness(monkeypatch, session, schema=True):
     monkeypatch.setattr(main, "HttpSessionLocal", lambda: session)

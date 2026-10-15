@@ -68,7 +68,7 @@ def add_filing(factory, accession=A, cik=CIK, *, texts=None, published=True, ver
 def search(query="revenue", limit=5, version=2, ticker="AAPL"):
     with TestClient(main.app) as client:
         return client.get(f"/companies/{ticker}/context", params={"q": query, "limit": limit},
-                          headers={"X-FinLens-Data-Version": str(version)})
+                          headers={"X-FinLens-Data-Version": str(version)} if version is not None else {})
 
 
 def test_complete_company_api_lineage_embedding_once_and_read_only(store):
@@ -124,7 +124,13 @@ def test_partial_changed_or_ineligible_publications_excluded(store, damage):
         if damage not in {"missing_chunk", "digest"}:
             publication.content_digest = chunk_digest(list(session.scalars(select(FilingChunk)
                 .where(FilingChunk.accession_number == A).order_by(FilingChunk.chunk_index))))
-    data = search().json()
+    response = search()
+    if damage == "oversized_text":
+        assert response.status_code == 409
+        assert response.headers["X-FinLens-Error-Code"] == "SEARCH_SCOPE_TOO_LARGE"
+        encoder.assert_not_called()
+        return
+    data = response.json()
     assert data["searched_accessions"] == [B] and data["excluded_publication_count"] == 1
     assert all(c["accession_number"] == B for c in data["citations"])
     encoder.assert_called_once()
@@ -159,8 +165,9 @@ def test_stale_or_unverifiable_publication_rejected_before_embedding(store, monk
     if kind == "missing_schema": monkeypatch.setattr(freshness_service, "schema_ready", lambda _b: False)
     response = search(version=1 if kind == "header" else 0 if kind == "missing_state" else 2)
     assert response.status_code == 409
-    assert response.headers["X-FinLens-Error-Code"] == (
-        "DATA_VERSION_CHANGED" if kind in {"header", "future_publication"} else "EVIDENCE_PENDING")
+    # Increment 2 pin verification precedes company retrieval even when the
+    # supplied pin cannot be verified because state/schema metadata is missing.
+    assert response.headers["X-FinLens-Error-Code"] == "DATA_VERSION_CHANGED"
     encoder.assert_not_called()
 
 
@@ -227,7 +234,8 @@ def test_invalid_request_is_bounded(store, query, limit):
 
 def test_unknown_company_and_selected_filing_backward_compatibility(store, monkeypatch):
     factory, encoder = store
-    assert search(ticker="UNKNOWN", version=0).status_code == 404
+    assert search(ticker="UNKNOWN", version=None).status_code == 404
+    assert search(ticker="UNKNOWN", version=0).status_code == 409
     add_filing(factory)
     from app.filing_search_service import HybridSearchResult
     with factory() as session:
@@ -354,7 +362,7 @@ def test_older_and_zero_evidence_survive_facts_only_version_advance(store, publi
 
 
 @pytest.mark.parametrize("size", [3001, 1_000_008])
-def test_oversized_text_never_orm_materialized_and_entire_publication_excluded(store, size):
+def test_oversized_text_never_orm_materialized_and_entire_scope_rejected(store, size):
     factory, encoder = store
     add_filing(factory, A, texts=["Revenue bounded companion.", "Revenue " + "x" * (size - 8)])
     add_filing(factory, B)
@@ -370,30 +378,33 @@ def test_oversized_text_never_orm_materialized_and_entire_publication_excluded(s
     finally:
         event.remove(FilingChunk, "load", record_load)
         event.remove(factory.kw["bind"], "before_cursor_execute", record_sql)
-    assert response.status_code == 200
-    assert response.json()["searched_accessions"] == [B]
-    assert response.json()["excluded_publication_count"] == 1
-    assert loaded and all(accession == B and length <= 3000 for accession, length in loaded)
+    assert response.status_code == 409
+    assert response.headers["X-FinLens-Error-Code"] == "SEARCH_SCOPE_TOO_LARGE"
+    assert loaded == []
     chunk_queries = [sql for sql in statements if "from filing_chunks" in sql.lower()]
-    assert len(chunk_queries) == 2
+    assert len(chunk_queries) == 1
     projected = chunk_queries[0].lower().split("\nfrom ")[0]
     assert "length(filing_chunks.text) as text_length" in projected
     assert "filing_chunks.embedding" not in projected
-    # Exactly ID/accession/SQL length; no bare Text selection or ORM entity.
+    # Full identity/index metadata and SQL length; no bare Text or vectors.
     assert projected.count("filing_chunks.text") == 1
-    assert projected.count(",") == 2 and "limit" in chunk_queries[0].lower()
-    assert "length(filing_chunks.text) <=" in chunk_queries[1].lower()
-    encoder.assert_called_once_with(["revenue"])
+    assert "filing_chunks.chunk_index" in projected and "limit" in chunk_queries[0].lower()
+    encoder.assert_not_called()
 
 
 def test_exact_character_boundary_accepted_and_one_over_rejected(store):
     factory, encoder = store
     exact = "Revenue " + "é" * 2992  # 3,000 characters, more than 3,000 UTF-8 bytes.
     add_filing(factory, A, texts=[exact])
-    add_filing(factory, B, texts=[exact + "x"])
     response = search()
     assert response.status_code == 200
     assert response.json()["searched_accessions"] == [A]
-    assert response.json()["excluded_publication_count"] == 1
+    assert response.json()["excluded_publication_count"] == 0
     assert frontend_evidence(response)["passages"][0]["text"] == exact
     encoder.assert_called_once_with(["revenue"])
+    encoder.reset_mock()
+    add_filing(factory, B, texts=[exact + "x"])
+    rejected = search()
+    assert rejected.status_code == 409
+    assert rejected.headers["X-FinLens-Error-Code"] == "SEARCH_SCOPE_TOO_LARGE"
+    encoder.assert_not_called()

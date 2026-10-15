@@ -2,11 +2,14 @@ from dataclasses import dataclass
 import math
 import re
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import FilingChunk
 from app.embedding_service import embed_texts, validate_embedding
+from app.freshness_service import (
+    admitted_research_chunks, research_chunk_inventory, research_chunks,
+    validate_research_chunks, validate_research_input,
+)
 
 
 # Query-only stop words keep natural questions from diluting term coverage.
@@ -75,8 +78,8 @@ def rank_hybrid_chunks(
     *, company_wide: bool = False,
 ) -> list[HybridSearchResult]:
     """Rank, then deduplicate; exact phrases outrank purely semantic matches."""
-    if not 1 <= limit <= 50:
-        raise ValueError("limit must be between 1 and 50")
+    validate_research_input(query, limit)
+    validate_research_chunks([chunk for chunk, _ in candidates])
     ranked = []
     for chunk, similarity in candidates:
         lexical = lexical_score(chunk.text, query)
@@ -107,8 +110,8 @@ def rank_hybrid_chunks(
 
 def hybrid_search_company_chunks(chunks, query, limit=50):
     """Rank already verified bounded publications, embedding the query once."""
-    if not 1 <= limit <= 50:
-        raise ValueError("limit must be between 1 and 50")
+    validate_research_input(query, limit)
+    validate_research_chunks(chunks)
     if not chunks or not (set(re.findall(r"\w+", query.casefold())) - QUERY_STOP_WORDS):
         return []
     vector = embed_texts([query.strip()])[0]
@@ -126,18 +129,17 @@ def hybrid_search_filing_chunks(
     session: Session, company_cik: str, accession_number: str,
     query: str, limit: int = 5,
 ) -> list[HybridSearchResult]:
-    if not 1 <= limit <= 50:
-        raise ValueError("limit must be between 1 and 50")
+    validate_research_input(query, limit)
+    predicates = (FilingChunk.company_cik == company_cik,
+                  FilingChunk.accession_number == accession_number)
+    inventory = research_chunk_inventory(session, *predicates)
     if not (set(re.findall(r"\w+", query.casefold())) - QUERY_STOP_WORDS):
         return []
     vector = embed_texts([query.strip()])[0]
     distance = FilingChunk.embedding.cosine_distance(vector)
     # Read the scoped filing, not just the semantic top-k: a strong lexical hit
     # must remain a candidate even with a weak or missing embedding.
-    rows = session.execute(select(FilingChunk, distance).where(
-        FilingChunk.company_cik == company_cik,
-        FilingChunk.accession_number == accession_number,
-    )).all()
+    rows = admitted_research_chunks(session, inventory, *predicates, distance=distance)
     candidates = [
         (chunk, 0.0 if value is None else 1.0 - float(value))
         for chunk, value in rows
@@ -155,15 +157,8 @@ def search_filing_chunks(
     """
     Search filing chunks using simple keyword matching.
     """
+    validate_research_input(query, limit)
     query = query.strip()
-
-    if not query:
-        return []
-
-    if limit <= 0:
-        raise ValueError(
-            "limit must be greater than zero."
-        )
 
     search_terms = [
         term.strip().lower()
@@ -174,17 +169,8 @@ def search_filing_chunks(
     if not search_terms:
         return []
 
-    stmt = (
-    select(FilingChunk)
-    .where(
-        FilingChunk.company_cik == company_cik,
-        FilingChunk.accession_number == accession_number,
-    )
-    )
-
-    chunks = list(
-        session.scalars(stmt).all()
-    )
+    chunks = research_chunks(session, FilingChunk.company_cik == company_cik,
+                             FilingChunk.accession_number == accession_number)
 
     scored = []
 
@@ -222,25 +208,16 @@ def search_filing_chunks_semantic(
     limit: int = 5,
 ) -> list[tuple[FilingChunk, float]]:
     """Rank chunks in one filing by pgvector cosine similarity."""
+    validate_research_input(query, limit)
     query = query.strip()
-    if not query:
-        return []
-    if limit <= 0:
-        raise ValueError("limit must be greater than zero.")
+    predicates = (FilingChunk.company_cik == company_cik,
+                  FilingChunk.accession_number == accession_number)
+    inventory = research_chunk_inventory(session, *predicates)
 
     query_embedding = embed_texts([query])[0]
     distance = FilingChunk.embedding.cosine_distance(query_embedding)
-    stmt = (
-        select(FilingChunk, distance.label("distance"))
-        .where(
-            FilingChunk.company_cik == company_cik,
-            FilingChunk.accession_number == accession_number,
-            FilingChunk.embedding.is_not(None),
-        )
-        .order_by(distance)
-        .limit(limit)
-    )
+    rows = admitted_research_chunks(session, inventory, *predicates, distance=distance)
     return [
         (chunk, max(0.0, 1.0 - float(chunk_distance)))
-        for chunk, chunk_distance in session.execute(stmt).all()
-    ]
+        for chunk, chunk_distance in rows if chunk.embedding is not None
+    ][:limit]

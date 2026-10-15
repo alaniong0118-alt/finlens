@@ -52,8 +52,10 @@ def freshness(session, ticker):
     result.facts, result.evidence = stream_state(row.facts), stream_state(row.evidence)
     result.status = next((status for status in ("failed", "pending", "stale", "unknown", "current")
                           if status in {result.facts.status, result.evidence.status}), "unknown")
-    latest = session.scalar(select(FilingPublication).where(FilingPublication.company_cik == company.cik)
+    latest = session.execute(select(FilingPublication.accession_number, FilingPublication.form,
+                                   FilingPublication.filed).where(FilingPublication.company_cik == company.cik)
                             .order_by(FilingPublication.filed.desc(), FilingPublication.accession_number.desc()).limit(1))
+    latest = latest.first()
     if latest:
         result.latest_indexed_filing = FilingIdentity(accession_number=latest.accession_number, form=latest.form, filed=latest.filed)
     return result
@@ -117,6 +119,104 @@ def stored_chunks(session, cik, accession):
         FilingChunk.accession_number == accession).order_by(FilingChunk.chunk_index)))
 
 
+MAX_COMPANY_FILINGS = 20
+MAX_COMPANY_CHUNKS = 4000
+MAX_COMPANY_CHUNK_CHARS = 3000
+MAX_STORED_TEXT_CHARS = 12000000
+CHUNK_IDENTITY_FIELDS = (
+    "id", "company_cik", "accession_number", "chunk_index", "chunk_id",
+    "form", "filed", "filename", "start_char", "end_char", "sec_url",
+)
+
+
+def validate_research_input(query, limit=5):
+    """Validate decoded input before normalization, sessions or retrieval work."""
+    if not isinstance(query, str) or not 1 <= len(query) <= 2000 or not query.strip():
+        raise HTTPException(422, "query must contain 1–2000 characters and non-whitespace text")
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise HTTPException(422, "limit must be an integer between 1 and 50")
+
+
+def scope_too_large():
+    return HTTPException(409, "Research scope exceeds its resource limit. Use a smaller scope.",
+                         headers={"X-FinLens-Error-Code": "SEARCH_SCOPE_TOO_LARGE"})
+
+
+def inconsistent_evidence():
+    return HTTPException(409, "Stored evidence changed or is incomplete. Refresh the research scope.",
+                         headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
+
+
+def validate_research_chunks(chunks):
+    """Also protect directly callable ranking helpers with already loaded bodies."""
+    if len(chunks) > MAX_COMPANY_CHUNKS or any(
+            c.text is None or len(c.text) > MAX_COMPANY_CHUNK_CHARS for c in chunks):
+        raise scope_too_large()
+
+
+def research_chunk_inventory(session, *predicates):
+    # Never select text or vectors in admission; the sentinel covers ALL scoped
+    # chunks, including missing embeddings and passages that would rank last.
+    inventory = list(session.execute(select(
+        *(getattr(FilingChunk, field) for field in CHUNK_IDENTITY_FIELDS),
+        func.length(FilingChunk.text).label("text_length"),
+    ).where(*predicates).order_by(
+        FilingChunk.company_cik, FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id,
+    ).limit(MAX_COMPANY_CHUNKS + 1)))
+    if len(inventory) > MAX_COMPANY_CHUNKS or any(
+            r.text_length is None or r.text_length > MAX_COMPANY_CHUNK_CHARS for r in inventory):
+        raise scope_too_large()
+    if len({r.id for r in inventory}) != len(inventory):
+        raise inconsistent_evidence()
+    return inventory
+
+
+def admitted_research_chunks(session, inventory, *predicates, distance=None):
+    if not inventory:
+        return []
+    # Keep the original scope as well as IDs and a length guard. Full admission
+    # must match the body read before callers may rank, filter vectors or top-k.
+    stmt = select(FilingChunk) if distance is None else select(FilingChunk, distance)
+    stmt = stmt.where(*predicates, FilingChunk.id.in_([r.id for r in inventory]),
+                      func.length(FilingChunk.text) <= MAX_COMPANY_CHUNK_CHARS)
+    stmt = stmt.order_by(FilingChunk.company_cik, FilingChunk.accession_number,
+                        FilingChunk.chunk_index, FilingChunk.id) if distance is None else stmt.order_by(distance)
+    stmt = stmt.limit(MAX_COMPANY_CHUNKS + 1).execution_options(populate_existing=True)
+    rows = list(session.scalars(stmt)) if distance is None else list(session.execute(stmt))
+    chunks = rows if distance is None else [row[0] for row in rows]
+    expected = {row.id: row for row in inventory}
+    if len(chunks) != len(inventory) or len({c.id for c in chunks}) != len(chunks):
+        raise inconsistent_evidence()
+    for chunk in chunks:
+        admitted = expected.get(chunk.id)
+        if (admitted is None or chunk.text is None or len(chunk.text) != admitted.text_length
+                or any(getattr(chunk, f) != getattr(admitted, f) for f in CHUNK_IDENTITY_FIELDS)):
+            raise inconsistent_evidence()
+    return rows
+
+
+def research_chunks(session, *predicates):
+    return admitted_research_chunks(session, research_chunk_inventory(session, *predicates), *predicates)
+
+
+def stored_research_text(session, cik, accession):
+    unavailable = HTTPException(409, "Exact full text is not stored. Published evidence chunks remain available.",
+                                headers={"X-FinLens-Error-Code": "STORED_TEXT_UNAVAILABLE"})
+    if not schema_ready(session.connection()):
+        raise unavailable
+    predicates = (FilingPublication.company_cik == cik, FilingPublication.accession_number == accession)
+    size = session.scalar(select(func.length(FilingPublication.cleaned_text)).where(*predicates))
+    if size is None:
+        raise unavailable
+    if size > MAX_STORED_TEXT_CHARS:
+        raise scope_too_large()
+    body = session.scalar(select(FilingPublication.cleaned_text).where(
+        *predicates, func.length(FilingPublication.cleaned_text) <= MAX_STORED_TEXT_CHARS))
+    if body is None or len(body) != size:
+        raise inconsistent_evidence()
+    return body
+
+
 def validate_chunks(chunks):
     from app.embedding_service import validate_embedding
     from app.sec_client import build_filing_url
@@ -141,22 +241,19 @@ def chunk_digest(chunks):
 
 def require_published(session, cik, accession):
     if schema_ready(session.connection()):
-        if session.get(FilingPublication, (cik, accession)) is not None:
+        if session.scalar(select(FilingPublication.accession_number).where(
+                FilingPublication.company_cik == cik, FilingPublication.accession_number == accession)) is not None:
             return
     else:
         # Unmigrated read-only deployment: validate existing complete evidence,
         # report freshness unknown. No operational metadata writes on reads.
         try:
-            validate_chunks(stored_chunks(session, cik, accession))
+            validate_chunks(research_chunks(session, FilingChunk.company_cik == cik,
+                                            FilingChunk.accession_number == accession))
             return
         except ValueError:
             pass
     raise HTTPException(409, detail="This filing is not completely published for research.", headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
-
-
-MAX_COMPANY_FILINGS = 20
-MAX_COMPANY_CHUNKS = 4000
-MAX_COMPANY_CHUNK_CHARS = 3000
 
 
 def valid_document_filename(filename):
@@ -197,27 +294,11 @@ def published_company_chunks(session, cik):
         raise HTTPException(409, "Published data changed. Refresh the research scope.",
                             headers={"X-FinLens-Error-Code": "DATA_VERSION_CHANGED"})
     valid_publications = [p for p in publications if valid_document_filename(p.filename)]
-    inventory = list(session.execute(select(
-        FilingChunk.id, FilingChunk.accession_number, func.length(FilingChunk.text).label("text_length"),
-    ).where(
+    predicates = (
         FilingChunk.company_cik == cik,
         FilingChunk.accession_number.in_([p.accession_number for p in valid_publications]),
-    ).order_by(FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id)
-        .limit(MAX_COMPANY_CHUNKS + 1))) if valid_publications else []
-    if len(inventory) > MAX_COMPANY_CHUNKS:
-        raise HTTPException(409, "Company-wide search exceeds its chunk limit. Use selected-filing search.",
-                            headers={"X-FinLens-Error-Code": "SEARCH_SCOPE_TOO_LARGE"})
-    oversized = {row.accession_number for row in inventory
-                 if row.text_length is None or row.text_length > MAX_COMPANY_CHUNK_CHARS}
-    ids = [row.id for row in inventory if row.accession_number not in oversized]
-    # Text is selected only after the bounded length projection rejects entire
-    # oversized publications. The SQL predicate also prevents a widened body from
-    # materializing on non-PostgreSQL callers without repeatable-read isolation.
-    rows = list(session.scalars(select(FilingChunk).where(
-        FilingChunk.company_cik == cik, FilingChunk.id.in_(ids),
-        func.length(FilingChunk.text) <= MAX_COMPANY_CHUNK_CHARS,
-    ).order_by(FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id)
-        .limit(MAX_COMPANY_CHUNKS + 1))) if ids else []
+    )
+    rows = research_chunks(session, *predicates) if valid_publications else []
     groups = {}
     for chunk in rows:
         groups.setdefault(chunk.accession_number, []).append(chunk)

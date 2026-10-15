@@ -94,8 +94,13 @@ class HybridTests(unittest.TestCase):
         self.assertLess(lexical_score("Net sales decreased.", "revenue growth"), .8)
 
     def test_hybrid_query_scopes_company_and_filing_in_sql(self):
+        from app.freshness_service import CHUNK_IDENTITY_FIELDS
         session = Mock()
-        session.execute.return_value.all.return_value = [(chunk(), None)]
+        stored = chunk(accession="filing-2")
+        stored.company_cik = "cik-1"
+        admitted = SimpleNamespace(**{f: getattr(stored, f) for f in CHUNK_IDENTITY_FIELDS},
+                                   text_length=len(stored.text))
+        session.execute.side_effect = [[admitted], [(stored, None)]]
         with patch("app.filing_search_service.embed_texts", return_value=[[0.0]*384]):
             results = hybrid_search_filing_chunks(session, "cik-1", "filing-2", "gross margin")
         stmt = session.execute.call_args.args[0]
@@ -258,7 +263,7 @@ class AnswerTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             path = Path(directory) / ".env"
             path.write_text("OPENAI_MODEL=from-env-file\nOPENAI_REASONING_EFFORT=high\n")
-            with patch.dict(os.environ, {"OPENAI_MODEL": "from-process"}):
+            with patch.dict(os.environ, {"OPENAI_MODEL": "from-process", "PYTHON_DOTENV_DISABLED": "0"}):
                 os.environ.pop("OPENAI_REASONING_EFFORT", None)
                 load_backend_env(path)
                 self.assertEqual(openai_model(), "from-process")
