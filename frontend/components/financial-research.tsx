@@ -126,11 +126,15 @@ function MetricHistoryPanel({ company }: { company: Company }) {
   const [data, setData] = useState<MetricHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const historyPending = useRef<object | null>(null);
   const presentation = METRIC_CATALOG.find(item => item.id === metric)!;
   useEffect(() => {
     setLoading(true); setData(null); setError(null);
     if (version === null) return;
     const controller = versionedController(version, changed);
+    const attempt = {};
+    historyPending.current = attempt;
     getMetricHistory(company.ticker, metric, period, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       if (result.ticker !== company.ticker || result.company_cik !== company.cik || result.metric !== metric || result.requested_period !== period) {
@@ -138,9 +142,23 @@ function MetricHistoryPanel({ company }: { company: Company }) {
       }
       if (!controller.signal.aborted) { setData(result); setLoadedVersion(version); }
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [company.ticker, company.cik, metric, period, version, changed]);
+      .finally(() => {
+        if (historyPending.current !== attempt) return;
+        historyPending.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => {
+      controller.abort();
+      if (historyPending.current === attempt) historyPending.current = null;
+    };
+  }, [company.ticker, company.cik, metric, period, version, changed, historyAttempt]);
+  function retryHistory() {
+    if (version === null || historyPending.current || !error) return;
+    // Reserve the next attempt before React commits its effect.
+    historyPending.current = {};
+    setLoading(true);
+    setHistoryAttempt(attempt => attempt + 1);
+  }
   // Changing controls clears the previous series synchronously, before the next effect.
   return <section className="panel" aria-labelledby="history-title">
     <div className="section-heading"><div><p className="eyebrow">Historical research</p><h2 id="history-title">Reported financial trends</h2></div><span className="badge">No AI required</span></div>
@@ -160,7 +178,8 @@ function MetricHistoryPanel({ company }: { company: Company }) {
     <p className="small muted metric-description">{presentation.description} {presentation.periods[0] === "instant" ? "Balance-sheet observations are values as of a date." : "Choose the reporting interval; annual and YTD values are not substituted for direct quarters."} History availability is checked separately from the snapshot.</p>
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading selected history…"}</p>}
-      {error && <p role="alert" className="error-state">{error}</p>}
+      {error && <><p role="alert" className="error-state">{error}</p>
+        <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retryHistory}>Retry history</button></>}
       {data && !loading && loadedVersion === version && <HistoryView data={data} />}
     </div>
   </section>;

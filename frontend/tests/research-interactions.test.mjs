@@ -2203,3 +2203,146 @@ test('DEP-01A2 expired old publication cannot invalidate a newer verified versio
   await app.change(app.host.querySelector('textarea'), 'latest revenue'); await app.click('Research question');
   assert.equal(app.request(companyPath('AAPL', 'research-answer')).init.headers['X-FinLens-Data-Version'], '2');
 });
+
+// UX-01B: history-only manual recovery through the real panel and shared transport.
+for (const strict of [false, true]) for (const version of [0, 2]) {
+  for (const failure of ['network', 'http', 'timeout', 'body-timeout']) {
+    test(`UX-01B ${failure} manual retry retains selection and pin ${version}${strict ? ' in StrictMode' : ''}`, async ctx => {
+      const expire = researchDeadlineClock(ctx), ticker = strict ? 'JPM' : 'AAPL';
+      const app = await mount(ctx, false, companies.filter(company => company.ticker === ticker), { initialVersion: version, strict });
+      await app.completeCompany(ticker, '1000000000');
+      const snapshot = app.snapshot().querySelector('.metric-grid'), editor = app.host.querySelector('textarea');
+      const path = companyPath(ticker, 'financials/metrics/net_income');
+      await app.change(app.select('Metric'), 'net_income');
+      await app.change(app.select('History period'), 'annual');
+      const failed = app.request(path, { period: 'annual' });
+      let finishBody;
+      if (failure === 'network') await act(async () => { failed.released = true; failed.reject(new TypeError('Synthetic offline')); });
+      if (failure === 'http') await app.release(failed, { detail: 'Synthetic history outage' }, 503);
+      if (failure === 'body-timeout') {
+        const response = new Response(null, { headers: { 'X-FinLens-Data-Version': String(version + 1) } });
+        response.json = () => new Promise(resolve => { finishBody = resolve; });
+        await act(async () => { failed.released = true; failed.resolve(response); });
+        assert.equal(typeof finishBody, 'function');
+      }
+      const count = app.requests.length;
+      if (failure.includes('timeout')) {
+        await expire();
+        assert.equal(failed.init.signal.aborted, true);
+        assert.match(app.trends().textContent, /took too long/);
+      }
+      assert.ok(app.trends().querySelector('[role="alert"]'));
+      assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+      assert.ok(!app.trends().querySelector('tbody'));
+      assert.equal(app.requests.length, count, 'Failure does not automatically retry');
+      await retryTwice(app, 'Retry history');
+      assert.equal(app.requests.length, count + 1, 'Rapid clicks admit exactly one history request');
+      const retry = app.request(path, { period: 'annual' });
+      assert.equal(retry.init.headers['X-FinLens-Data-Version'], String(version));
+      assert.equal(retry.params.get('limit'), '12');
+      assert.equal(app.host.querySelector('#company').value, ticker);
+      assert.equal(app.select('Metric').value, 'net_income');
+      assert.equal(app.select('History period').value, 'annual');
+      assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'true');
+      assert.ok(!app.trends().querySelector('[role="alert"]'));
+      if (failure === 'timeout') await app.release(failed, {}, 409, version + 1);
+      if (finishBody) await act(async () => finishBody(history(ticker, '99000000000', 'net_income')));
+      assert.equal(app.requests.length, count + 1, 'Expired responses cannot reconcile or replay');
+      assert.equal(retry.init.signal.aborted, false);
+      assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'true');
+      // A second failure must release this attempt's guard for another explicit retry.
+      await app.release(retry, { detail: 'Synthetic retry outage' }, 503);
+      assert.equal(app.requests.length, count + 1, 'A failed retry is not replayed automatically');
+      await retryTwice(app, 'Retry history');
+      assert.equal(app.requests.length, count + 2);
+      const recovered = { ...history(ticker, '300000000', 'net_income'), requested_period: 'annual',
+        history: [point(ticker, '300000000', 'net_income', 'annual')] };
+      await app.release(app.request(path, { period: 'annual' }), recovered);
+      assert.match(app.trends().querySelector('table').textContent, /Net income.*\$300M/);
+      assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+      assert.ok(!app.trends().querySelector('[role="alert"]'));
+      assert.ok(![...app.trends().querySelectorAll('button')].some(button => button.textContent === 'Retry history'));
+      assert.equal(app.snapshot().querySelector('.metric-grid'), snapshot);
+      assert.equal(app.host.querySelector('textarea'), editor);
+      assert.ok(app.requests.slice(count).every(request => request.path === path), 'No snapshot, freshness or sibling refetch');
+    });
+  }
+}
+
+for (const strict of [false, true]) for (const selection of ['metric', 'period', 'company']) {
+  test(`UX-01B ${selection} change during retry isolates cancellation and the replacement guard${strict ? ' in StrictMode' : ''}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const oldPath = companyPath('AAPL', 'financials/metrics/revenue');
+    await app.release(app.request(oldPath), { detail: 'Synthetic outage' }, 503);
+    await retryTwice(app, 'Retry history');
+    const oldRetry = app.request(oldPath);
+    let ticker = 'AAPL', metric = 'revenue', period = 'quarter';
+    if (selection === 'metric') { metric = 'net_income'; await app.change(app.select('Metric'), metric); }
+    if (selection === 'period') { period = 'annual'; await app.change(app.select('History period'), period); }
+    if (selection === 'company') {
+      ticker = 'JPM';
+      await app.change(app.host.querySelector('#company'), ticker);
+      await app.release(app.request(companyPath(ticker, 'freshness')), freshnessFixture(ticker, 0));
+    }
+    const path = companyPath(ticker, `financials/metrics/${metric}`);
+    const replacement = app.request(path, { period });
+    assert.equal(oldRetry.init.signal.aborted, true);
+    const count = app.requests.length;
+    await app.release(oldRetry, {}, 409, 9);
+    assert.equal(app.requests.length, count, 'Cancelled retry cannot invalidate the replacement pin');
+    assert.equal(replacement.init.signal.aborted, false);
+    assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'true');
+    assert.ok(!app.trends().querySelector('[role="alert"]'));
+    assert.ok(!app.trends().querySelector('tbody'));
+    await app.release(replacement, { detail: 'Synthetic replacement outage' }, 503);
+    await retryTwice(app, 'Retry history');
+    assert.equal(app.requests.length, count + 1, 'Only the replacement releases its pending guard');
+    const retry = app.request(path, { period });
+    assert.equal(retry.init.headers['X-FinLens-Data-Version'], '0');
+    await app.release(retry, { ...history(ticker, '2000000000', metric), requested_period: period,
+      history: [point(ticker, '2000000000', metric, period)] });
+    assert.match(app.trends().querySelector('table').textContent, /\$2B/);
+    assert.equal(app.select('Metric').value, metric);
+    assert.equal(app.select('History period').value, period);
+  });
+}
+
+for (const strict of [false, true]) test(`UX-01B retry publication mismatch waits for existing freshness reconciliation${strict ? ' in StrictMode' : ''}`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict });
+  await app.completeCompany('AAPL', '1000000000');
+  await app.change(app.select('Metric'), 'net_income');
+  const path = companyPath('AAPL', 'financials/metrics/net_income');
+  await app.release(app.request(path), { detail: 'Synthetic outage' }, 503);
+  await retryTwice(app, 'Retry history');
+  const count = dependentRequests(app).length;
+  await app.release(app.request(path), {}, 409, 1);
+  assert.match(app.trends().textContent, /Waiting for publication version/);
+  assert.ok([...app.trends().querySelectorAll('button')].every(button => button.disabled));
+  assert.equal(dependentRequests(app).length, count, 'No immediate retry using the rejected pin');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  assert.equal(dependentRequests(app).length, count, 'Rejected version zero remains closed');
+  await retryTwice(app, 'Retry data check');
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.equal(dependentRequests(app).length, count + 3, 'Existing reconciliation reloads each dependent once');
+  const recovered = app.request(path);
+  assert.equal(recovered.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(recovered, history('AAPL', '300000000', 'net_income'));
+  assert.match(app.trends().querySelector('table').textContent, /Net income.*\$300M/);
+  assert.equal(app.select('Metric').value, 'net_income');
+});
+
+for (const status of ['unavailable', 'not_applicable']) for (const afterRetry of [false, true]) {
+  test(`UX-01B successful ${status} history has no retry${afterRetry ? ' after recovery' : ''}`, async ctx => {
+    const app = await mount(ctx), path = companyPath('AAPL', 'financials/metrics/revenue');
+    if (afterRetry) {
+      await app.release(app.request(path), { detail: 'Synthetic outage' }, 503);
+      await retryTwice(app, 'Retry history');
+    }
+    const reason = 'Synthetic successful history availability reason.';
+    await app.release(app.request(path), { ...history('AAPL', null), history: [], status, reason });
+    assert.ok(app.trends().textContent.includes(reason));
+    assert.ok(!app.trends().querySelector('[role="alert"]'));
+    assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+    assert.ok(![...app.trends().querySelectorAll('button')].some(button => button.textContent === 'Retry history'));
+  });
+}
