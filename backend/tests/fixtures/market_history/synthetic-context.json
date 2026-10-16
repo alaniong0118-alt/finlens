@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "input_kind": "synthetic",
+  "adjustment_basis": "raw",
+  "request": {
+    "symbol": "FICT",
+    "security": {"security_id": "synthetic-security", "company_id": 1, "issuer_cik": "0000000001", "share_class": "fictional common"},
+    "listing": {"listing_id": "synthetic-listing", "security_id": "synthetic-security", "mic": "XNYS", "currency": "USD", "calendar_id": "synthetic-calendar", "first_session": "2026-01-05", "last_session": null, "continuity": "unresolved"},
+    "mappings": [{"provider": "tiingo", "product": "eod", "symbol": "FICT", "ticker": "FICT", "security_id": "synthetic-security", "listing_id": "synthetic-listing", "mic": "XNYS", "effective_from": "2026-01-05", "effective_to": null, "identity_resolved": true, "identity_evidence": "Fictional declaration only; no authenticated identity evidence"}],
+    "calendar": {
+      "calendar_id": "synthetic-calendar", "version": "fictional-v1", "timezone": "America/New_York", "close_convention": "regular_session_close",
+      "covered_start": "2026-01-05", "covered_end": "2026-01-06",
+      "sessions": [{"session_date": "2026-01-05", "close_at": "2026-01-05T16:00:00-05:00"}, {"session_date": "2026-01-06", "close_at": "2026-01-06T16:00:00-05:00"}]
+    },
+    "source": {"provider": "tiingo", "product": "eod", "source_id": "fictional-handwritten-response", "response_sha256": "bc9d0af20c28aead8f51e191c718b56b332420c2ab82a12da4530ba51e22f442", "retrieved_at": "2026-01-09T22:00:00Z", "available_at": null},
+    "coverage_start": "2026-01-05", "coverage_end": "2026-01-06",
+    "publication_id": "synthetic-publication-0", "market_data_version": 0, "published_at": "2026-01-09T23:00:00Z",
+    "format": {"split_factor_direction": "new_shares_per_old_share", "declaration_reference": "fictional-format-declaration-v1", "dividend_share_basis": "unverified"}
+  }
+}
