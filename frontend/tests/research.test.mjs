@@ -202,7 +202,7 @@ test('company parser binds JSON metadata and preserves only the stored indented 
 });
 test('optional AI unavailable rendering leaves evidence as a separate result',()=>{
  const html=renderToStaticMarkup(React.createElement(filing.AIAnalysis,{result:context,configured:false}));
- assert.match(html,/not configured/);assert.match(html,/disabled/);assert.doesNotMatch(html,/OPENAI_API_KEY|429/);
+ assert.match(html,/AI analysis is unavailable in this server configuration\./);assert.match(html,/<button\b[^>]*\bdisabled=""[^>]*>Generate AI analysis<\/button>/);assert.doesNotMatch(html,/OPENAI_API_KEY|429/);
  assert.match(AI_UNAVAILABLE,/SEC evidence.*still available/);
  assert.equal(evidencePassages(context)[0].text,'Actual fixture excerpt <script> is untrusted text.');
 });
@@ -236,9 +236,24 @@ test('theme parsing/system resolution/persistence remain safe when storage is bl
  assert.equal(persistTheme('light',{setItem:()=>{throw Error('blocked');}}),'light');
 });
 test('Research Mode uses bounded GET requests and carries cancellation, with no answer call',async ctx=>{
- const calls=[];ctx.mock.method(globalThis,'fetch',async(url,init)=>{calls.push({url,init});return new Response(JSON.stringify({}),{headers:{'Content-Type':'application/json'}});});
+ const capabilities={research_mode:true,ai_analysis_configured:false,ai_analysis_enabled:false,server_profile:'development'};
+ const calls=[];ctx.mock.method(globalThis,'fetch',async(url,init)=>{calls.push({url,init});return new Response(JSON.stringify(url.endsWith('/capabilities')?capabilities:{}),{headers:{'Content-Type':'application/json'}});});
  const signal=new AbortController().signal;
  await getCapabilities(signal);await getFinancialSummary('AAPL','annual',signal);await getMetricHistory('AAPL','free_cash_flow','annual',signal);await getFilingContext('AAPL','filing','revenue & growth',signal);
- assert.equal(calls.length,4);assert.ok(calls.every(call=>call.init.signal===signal&&!call.url.includes('/answer')));
+ assert.equal(calls.length,4);assert.ok(calls.every(call=>!call.url.includes('/answer')));
+ for(const call of calls){
+  assert.ok(call.init.signal instanceof AbortSignal);assert.notEqual(call.init.signal,signal);assert.equal(call.init.signal.aborted,false);
+  assert.equal(call.init.method??'GET','GET');
+ }
  assert.match(calls[1].url,/financials\/summary\?period=annual/);assert.match(calls[2].url,/limit=12/);assert.match(calls[3].url,/q=revenue\+%26\+growth&limit=5/);
+
+ // Exercise caller cancellation while fetch is pending, even if it ignores abort.
+ const caller=new AbortController();let transportSignal;
+ ctx.mock.method(globalThis,'fetch',(_url,init)=>{transportSignal=init.signal;return new Promise(()=>{});});
+ const pending=getCapabilities(caller.signal);
+ assert.ok(transportSignal instanceof AbortSignal);assert.notEqual(transportSignal,caller.signal);assert.equal(transportSignal.aborted,false);
+ const rejected=assert.rejects(pending,error=>error instanceof DOMException&&error.name==='AbortError');
+ caller.abort();
+ await rejected;
+ assert.equal(transportSignal.aborted,true);
 });
