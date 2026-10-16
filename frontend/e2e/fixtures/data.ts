@@ -6,7 +6,7 @@ export const companies: Company[] = [
   { id: 900002, ticker: 'BBB', name: 'Synthetic Beta', cik: '0000900002', exchange: 'TEST', has_indexed_filing: true, indexed_filing_count: 1 },
 ];
 export const metrics = ['revenue', 'gross_profit', 'operating_income', 'net_income', 'diluted_eps', 'revenue_growth_yoy', 'gross_margin', 'operating_margin', 'net_margin', 'cash_and_equivalents', 'total_assets', 'total_liabilities', 'operating_cash_flow', 'capital_expenditures', 'free_cash_flow'] as const;
-export const annualMetrics = ['revenue', 'revenue_growth_yoy', 'operating_margin', 'net_margin', 'operating_cash_flow', 'capital_expenditures', 'free_cash_flow'] as const;
+export const annualMetrics = ['revenue', 'revenue_growth_yoy', 'operating_margin', 'net_margin', 'operating_cash_flow', 'capital_expenditures', 'free_cash_flow', 'gross_profit', 'operating_income', 'net_income', 'gross_margin'] as const;
 export function company(ticker: string): Company {
   const result = companies.find(item => item.ticker === ticker);
   if (!result) throw new Error(`Unknown synthetic issuer ${ticker}`);

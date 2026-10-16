@@ -1,12 +1,14 @@
 """Pure synthetic financial objects and mocked read-only sessions; no database I/O."""
 from datetime import date, datetime
 from decimal import Decimal
+import socket
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy.engine import Engine
 
 from app import main, freshness_service, revenue_scope_authorizations as permissions
 from app import sec_evidence_adapter, financial_metric_registry
@@ -19,7 +21,12 @@ COMPANY = SimpleNamespace(ticker="TEST", cik="0000000001", name="Synthetic compa
 
 @pytest.fixture(autouse=True)
 def forbid_live_dependencies(monkeypatch):
-    monkeypatch.setattr("app.database.engine.connect", Mock(side_effect=AssertionError("Live database forbidden")))
+    forbidden = Mock(side_effect=AssertionError("Live database/network/model dependency forbidden"))
+    monkeypatch.setattr(Engine, "connect", forbidden)
+    monkeypatch.setattr(Engine, "raw_connection", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr("app.embedding_service._get_model", forbidden)
+    monkeypatch.setattr("app.embedding_service._load_model", forbidden)
     monkeypatch.setattr("app.sec_client._sec_get", Mock(side_effect=AssertionError("SEC request forbidden")))
     monkeypatch.setattr("app.answer_service._get_openai_client", Mock(side_effect=AssertionError("AI request forbidden")))
 
@@ -42,6 +49,120 @@ def rollover_view():
     """Shared with the frontend contract test: actual backend serialization."""
     return view(fact(value="100", start="2022-01-02", end="2022-12-31", id=1),
                 fact(value="125", start="2023-01-01", end="2024-01-06", id=2))
+
+
+def expanded_view():
+    """Actual normalized annual amounts/margin, shared with the client test."""
+    return view(fact(), fact("GrossProfit", "40", id=2),
+                fact("OperatingIncomeLoss", "0", id=3), fact("NetIncomeLoss", "-10", id=4),
+                fact("GrossProfit", "35", id=5, filed=date(2026, 1, 20)))
+
+
+def test_eleven_metric_contract_reuses_complete_existing_observations():
+    model = expanded_view()
+    before = model.summary("annual").model_dump(mode="json")
+    history = model.history("gross_profit", "annual").model_dump(mode="json")
+    response = model.annual_comparison(2025)
+    assert tuple(response.metrics) == (
+        "revenue", "revenue_growth_yoy", "operating_margin", "net_margin",
+        "operating_cash_flow", "capital_expenditures", "free_cash_flow",
+        "gross_profit", "operating_income", "net_income", "gross_margin",
+    )
+    for name, point in response.metrics.items():
+        assert point.model_dump(mode="json") == before["metrics"][name]
+    assert [response.metrics[n].value for n in ("gross_profit", "operating_income", "net_income", "gross_margin")] == [
+        Decimal("40"), Decimal("0"), Decimal("-10"), Decimal(".4")]
+    assert [s.fact_id for s in response.metrics["gross_profit"].alternatives] == [5]
+    margin = response.metrics["gross_margin"]
+    assert margin.formula == "gross_profit / revenue"
+    assert [s.fact_id for s in margin.provenance] == [2, 1]
+    assert [(i.role, i.value, i.fact_ids) for i in margin.inputs] == [
+        ("gross_profit", Decimal("40"), [2]), ("revenue", Decimal("100"), [1])]
+    assert model.summary("annual").model_dump(mode="json") == before
+    assert model.history("gross_profit", "annual").model_dump(mode="json") == history
+
+
+@pytest.mark.parametrize("concept,metric", [("GrossProfit", "gross_profit"),
+                                            ("OperatingIncomeLoss", "operating_income"),
+                                            ("NetIncomeLoss", "net_income")])
+def test_income_only_annual_year_is_discovered_without_changing_global_anchors(concept, metric):
+    model = view(fact(), fact(concept, "-3", start="2024-01-01", end="2024-12-31", id=2),
+                 fact(concept, "-3", start="2024-01-01", end="2024-12-31", id=3))
+    assert model.annual_comparison().fiscal_years == [2025, 2024]
+    response = model.annual_comparison(2024)
+    assert response.period.end == date(2024, 12, 31)
+    assert response.metrics[metric].value == Decimal("-3")
+    assert response.metrics["revenue"].value is None
+    assert [p.fiscal_year for p in model.reporting_periods("annual")] == [2025]
+    alone = view(fact(concept, "3")).annual_comparison(2025)
+    assert alone.fiscal_years == [2025] and alone.metrics[metric].value == Decimal("3")
+
+
+@pytest.mark.parametrize("concept", ["GrossProfit", "OperatingIncomeLoss", "NetIncomeLoss"])
+def test_new_income_anchor_conflict_fails_closed_for_all_eleven_metrics(concept):
+    model = view(fact(), fact(concept, "40", start="2024-10-01", end="2025-09-30", id=2))
+    before = model.summary("annual").model_dump(mode="json")
+    assert model.annual_comparison().fiscal_years == [2025]
+    response = model.annual_comparison(2025)
+    assert response.period is None and "ambiguous" in response.period_reason
+    assert len(response.metrics) == 11
+    assert all(p.status == "unavailable" and p.value is None and p.period is None for p in response.metrics.values())
+    assert model.summary("annual").model_dump(mode="json") == before
+
+
+@pytest.mark.parametrize("concept,metric", [("GrossProfit", "gross_profit"),
+                                            ("OperatingIncomeLoss", "operating_income"),
+                                            ("NetIncomeLoss", "net_income")])
+@pytest.mark.parametrize("start,end", [("2025-01-01", "2025-03-31"),
+                                       ("2025-01-01", "2025-06-30"),
+                                       ("2025-01-01", "2025-09-30")])
+def test_new_income_rows_never_substitute_quarter_or_ytd(concept, metric, start, end):
+    model = view(fact(), fact(concept, "99", start=start, end=end, id=2))
+    point = model.annual_comparison(2025).metrics[metric]
+    assert point.status == "unavailable" and point.value is None
+    assert point.provenance == []
+
+
+@pytest.mark.parametrize("extra", [{"unit": "EUR"}, {"company_cik": "0000000002"}])
+@pytest.mark.parametrize("concept,metric", [("GrossProfit", "gross_profit"),
+                                            ("OperatingIncomeLoss", "operating_income"),
+                                            ("NetIncomeLoss", "net_income")])
+def test_new_income_rows_reject_incompatible_source_identity(concept, metric, extra):
+    result = view(fact(), fact(concept, "40", id=2, **extra)).annual_comparison(2025)
+    assert result.metrics[metric].value is None
+    assert result.metrics[metric].provenance == []
+
+
+@pytest.mark.parametrize("case", ["component", "cross_accession", "zero_revenue", "negative_revenue", "missing_gross_profit", "unreviewed_cost"])
+def test_annual_gross_margin_reuses_existing_fail_closed_calculation(case):
+    revenue = fact("RevenueFromContractWithCustomerExcludingAssessedTax" if case == "component" else "Revenues",
+                   "0" if case == "zero_revenue" else "-100" if case == "negative_revenue" else "100")
+    operands = [] if case == "missing_gross_profit" else [fact(
+        "CostOfRevenue" if case == "unreviewed_cost" else "GrossProfit", "40", id=2,
+        accession_number="0000000001-26-000002" if case == "cross_accession" else revenue.accession_number)]
+    model = view(revenue, *operands)
+    point = model.annual_comparison(2025).metrics["gross_margin"]
+    assert point == model.summary("annual").metrics["gross_margin"]
+    assert point.status == "unavailable" and point.value is None and point.reason
+    assert point.provenance == point.inputs == []
+
+
+def test_banking_gross_rows_remain_not_applicable_in_annual_comparison():
+    result = view(fact("RevenuesNetOfInterestExpense"), fact("GrossProfit", "40", id=2)).annual_comparison(2025)
+    for name in ("gross_profit", "gross_margin"):
+        point = result.metrics[name]
+        assert point.status == "not_applicable" and point.value is None and point.reason
+
+
+def test_quarter_specific_gross_margin_permission_does_not_authorize_annual_pair():
+    pin = financial_metric_registry.GROSS_MARGIN_COVERAGE[0]
+    aapl = SimpleNamespace(ticker="AAPL", cik=pin.company_cik, name="Synthetic Apple")
+    identity = dict(company_cik=pin.company_cik, accession_number=pin.accession, form=pin.form, filed=pin.filed,
+                    start="2025-06-28", end="2026-06-27")
+    result = view(fact(pin.revenue_concept, str(pin.revenue), **identity),
+                  fact(pin.gross_profit_concept, str(pin.gross_profit), id=2, **identity), company=aapl).annual_comparison(2026)
+    assert result.metrics["gross_profit"].status == "available"
+    assert result.metrics["gross_margin"].status == "unavailable"
 
 
 def test_annual_yoy_uses_dates_across_calendar_end_year_rollover():
@@ -121,11 +242,18 @@ def test_discovery_is_observed_deduplicated_and_never_latest_data():
 
 @pytest.mark.parametrize("start,end", [("2024-09-29", "2025-09-27"), ("2024-09-22", "2025-09-27")])
 def test_exact_week_calendar_dates_survive(start, end):
-    result = view(fact(start=start, end=end)).annual_comparison(2025)
+    result = view(fact(start=start, end=end), fact("GrossProfit", "40", start=start, end=end, id=2),
+                  fact("OperatingIncomeLoss", "0", start=start, end=end, id=3),
+                  fact("NetIncomeLoss", "-10", start=start, end=end, id=4)).annual_comparison(2025)
     assert result.period.start == date.fromisoformat(start)
     assert result.period.end == date.fromisoformat(end)
     assert result.period.fiscal_label_basis == "annual_period_end_year"
     assert result.metrics["revenue"].value == Decimal("100")
+    for name in ("gross_profit", "operating_income", "net_income", "gross_margin"):
+        assert result.metrics[name].period == result.period
+        assert result.metrics[name].status == "available"
+        assert all(s.period_start == result.period.start and s.period_end == result.period.end
+                   for s in result.metrics[name].provenance)
 
 
 def test_different_calendars_are_not_normalized_to_common_dates():
@@ -250,7 +378,11 @@ def api(monkeypatch):
     loader = Mock(return_value=model)
     monkeypatch.setattr(main, "load_financial_metrics", loader)
     with TestClient(main.app) as client:
-        yield client, loader, session, model
+        # Windows asyncio creates a local signalling socketpair on portal startup.
+        # Block raw connections during every application request, after startup.
+        with monkeypatch.context() as requests:
+            requests.setattr(socket.socket, "connect", Mock(side_effect=AssertionError("Network request forbidden")))
+            yield client, loader, session, model
 
 
 def test_api_exact_year_choices_version_pin_and_existing_endpoints(api):
@@ -281,6 +413,26 @@ def test_api_invalid_year_and_unknown_company(api):
     assert client.get("/companies/TEST/financials/annual?fiscal_year=2100").status_code == 422
     loader.side_effect = UnknownCompany("UNKNOWN")
     assert client.get("/companies/UNKNOWN/financials/annual").status_code == 404
+
+
+def test_expanded_api_preserves_verified_zero_and_rejects_unknown_publication(api):
+    client, loader, session, _ = api
+    model = expanded_view()
+    loader.return_value = model
+    session.scalar.return_value = 0
+    headers = {"X-FinLens-Data-Version": "0"}
+    discovery = client.get("/companies/TEST/financials/annual", headers=headers)
+    assert discovery.status_code == 200 and discovery.json()["metrics"] == {}
+    response = client.get("/companies/TEST/financials/annual?fiscal_year=2025", headers=headers)
+    assert response.status_code == 200 and response.headers["X-FinLens-Data-Version"] == "0"
+    assert response.json() == model.annual_comparison(2025).model_dump(mode="json")
+    assert response.json()["metrics"]["gross_margin"]["value"] == "0.4"
+    loader.reset_mock()
+    session.scalar.return_value = None
+    unavailable = client.get("/companies/TEST/financials/annual?fiscal_year=2025", headers=headers)
+    assert unavailable.status_code == 409
+    assert unavailable.headers["X-FinLens-Error-Code"] == "DATA_VERSION_CHANGED"
+    loader.assert_not_called()
 
 
 def test_api_rejects_inconsistent_company_identity(api):

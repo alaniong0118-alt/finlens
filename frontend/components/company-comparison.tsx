@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { describeApiError, FinLensApiError, getAnnualFinancials, getFreshness, versionedController,
   type AnnualFinancialComparison, type Company } from "@/lib/finlens-api";
 import { COMPARISON_METRICS, comparisonYears, reportingWindowsDiffer, validCompanySelection, validateAnnualResponse } from "@/lib/company-comparison";
@@ -8,6 +8,41 @@ import { MetricProvenance } from "@/components/financial-research";
 
 type CompanyScope = { company: Company; version: number | null; years: number[]; error?: string };
 type Column = CompanyScope & { result?: AnnualFinancialComparison };
+
+function revealComparisonFocus(event: FocusEvent<HTMLDivElement>) {
+  const scroller = event.currentTarget;
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !target.closest(".provenance")
+      || !target.matches(":focus-visible") || !scroller.clientWidth) return;
+  // Native focus scrolling has already run. Reveal residual outline clipping
+  // without moving focus, intercepting keys or scheduling later adjustments.
+  const style = window.getComputedStyle(target);
+  const outline = Math.max(0, parseFloat(style.outlineWidth) || 0)
+    + Math.max(0, parseFloat(style.outlineOffset) || 0);
+  const gutter = outline + 1;
+  const rect = target.getBoundingClientRect();
+  const left = scroller.getBoundingClientRect().left + scroller.clientLeft;
+  const right = left + scroller.clientWidth;
+  const delta = rect.left - gutter < left ? rect.left - gutter - left
+    : rect.right + gutter > right ? rect.right + gutter - right : 0;
+  const next = Math.max(0, Math.min(scroller.scrollWidth - scroller.clientWidth, scroller.scrollLeft + delta));
+  if (next !== scroller.scrollLeft) scroller.scrollLeft = next;
+
+  const page = document.scrollingElement;
+  if (!page) return;
+  const viewport = window.visualViewport;
+  const top = viewport?.offsetTop ?? 0;
+  const bottom = top + (viewport?.height ?? document.documentElement.clientHeight);
+  const focused = target.getBoundingClientRect();
+  const deltaY = focused.top - outline < top ? focused.top - gutter - top
+    : focused.bottom + outline > bottom ? focused.bottom + gutter - bottom : 0;
+  if (!deltaY) return;
+  // Round away from the clipped edge: integer scroll quantization must not
+  // leave fractional outline paint outside the viewport.
+  const movement = deltaY < 0 ? Math.floor(deltaY) : Math.ceil(deltaY);
+  const nextY = Math.max(0, Math.min(Math.max(0, page.scrollHeight - page.clientHeight), window.scrollY + movement));
+  if (nextY !== window.scrollY) window.scrollTo({ left: window.scrollX, top: nextY, behavior: "instant" });
+}
 
 export default function CompanyComparison({ companies }: { companies: Company[] }) {
   const [selection, setSelection] = useState<string[]>(["", ""]);
@@ -122,7 +157,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
       {results.some(r => r.period === null) && <p className="notice" role="note">A requested annual window is missing or ambiguous for at least one company. No other reporting period has been substituted.</p>}
       {bases.size > 1 && <p className="notice" role="note">Revenue economic bases differ. Cross-company equivalence has not been established.</p>}
       <p className="muted small" id="comparison-scroll-help">On narrow screens, scroll the table horizontally. Sources and exact values are available in each cell.</p>
-      <div className="table-scroll comparison-scroll" tabIndex={0} role="region" aria-label="Annual company comparison table" aria-describedby="comparison-scroll-help">
+      <div className="table-scroll comparison-scroll" tabIndex={0} role="region" aria-label="Annual company comparison table" aria-describedby="comparison-scroll-help" onFocusCapture={revealComparisonFocus}>
         <table className="comparison-table"><caption>Annual financial metrics · FY{year}. Company publications are independently versioned.</caption>
           <thead><tr><th scope="col">Metric</th>{columns.map(column => <th scope="col" key={column.company.cik}><strong>{column.company.ticker}</strong><span>{column.company.name}</span>
             <span>CIK {column.company.cik}</span>

@@ -9,6 +9,14 @@ test('comparison uses independent zero and one pins, distinct selections and ann
   await scenario.open(); await scenario.ready(); await selectPair(page);
   const table = page.getByRole('region', { name: 'Annual company comparison table', exact: true });
   await expect(table).toBeVisible();
+  await expect(table.getByRole('rowheader')).toHaveCount(11);
+  for (const label of ['Gross profit', 'Operating income', 'Net income', 'Gross margin']) {
+    await expect(table.getByRole('rowheader', { name: label, exact: true })).toBeVisible();
+  }
+  const grossProfit = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Gross profit', exact: true }) });
+  await expect(grossProfit.getByRole('cell').nth(0).locator('.metric-value')).toHaveText('$5B');
+  const grossMargin = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Gross margin', exact: true }) });
+  await expect(grossMargin.getByRole('cell').nth(0).locator('.metric-value')).toHaveText('Unavailable');
   await expect(table.getByRole('columnheader').nth(1)).toContainText('Publication 0');
   await expect(table.getByRole('columnheader').nth(2)).toContainText('Publication 1');
   const revenue = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Revenue', exact: true }) });

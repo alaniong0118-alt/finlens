@@ -120,6 +120,42 @@ No ticker exceptions or sector guesses are used. Observed `RevenuesNetOfInterest
 
 ## API
 
+### Annual company comparison (CC-02)
+
+`GET /companies/{ticker}/financials/annual` discovers observed annual fiscal
+end-years, with `period=null` and empty `metrics`. Supplying `?fiscal_year=2025`
+resolves one unique exact annual start/end window and returns eleven metrics in
+this order: Revenue, Revenue YoY, Operating Margin, Net Margin, Operating Cash
+Flow, Capital Expenditures, Free Cash Flow, Gross Profit, Operating Income,
+Net Income and Gross Margin. The four appended metrics reuse the same canonical
+observations and calculations as summary/history. Monetary outputs and their
+sources use USD; Gross Margin is a ratio whose inputs and sources use USD.
+
+Discovery unions the participating metrics' existing annual anchors. Income-only
+years are discoverable. Conflicting annual windows under one end-year label make
+the entire company window ambiguous and all eleven values unavailable, even if
+the earlier seven-metric view did not expose the conflict. No per-metric window,
+latest-value, other-year, quarter or YTD fallback is permitted. Global reporting
+anchors for other endpoints are unchanged. Exact dates, fiscal labels, 52/53-week
+Revenue YoY rules, availability reasons, Decimal precision and source/input/
+alternative provenance remain unchanged. Gross Margin retains existing denominator
+scope and same-accession requirements; banking gross rows remain not applicable.
+The reviewed quarter-specific Gross Margin permission does not authorize annual
+observations. No new financial authorization or mapping is introduced.
+
+The UI compares 2–4 issuers with actual reporting dates, economic-basis warnings
+and independent publication versions. A common FY label does not establish
+equivalent accounting periods or scopes; no cross-company arithmetic or ranking
+is performed. Verified publication zero is valid; missing metadata is not zero.
+EPS, balance-sheet instants and quarterly/YTD comparison remain outside CC-02.
+
+The endpoint and response fields are unchanged, but selected-year metric keys
+expand from seven to exactly eleven. Both old and new clients validate the exact
+metric set: deliver the matching backend/frontend together, or roll both back
+together. Mixed-version delivery is not supported. Discovery remains compatible.
+
+### Summary and history
+
 - `GET /companies/{ticker}/financials/summary?period=quarter`
 - `GET /companies/{ticker}/financials/metrics/{metric}?period=quarter&limit=40`
 

@@ -1,7 +1,8 @@
 import { FinLensApiError, type AnnualFinancialComparison, type Company, type FinancialPeriod } from "@/lib/finlens-api";
 
 export const COMPARISON_METRICS = ["revenue", "revenue_growth_yoy", "operating_margin", "net_margin",
-  "operating_cash_flow", "capital_expenditures", "free_cash_flow"] as const;
+  "operating_cash_flow", "capital_expenditures", "free_cash_flow",
+  "gross_profit", "operating_income", "net_income", "gross_margin"] as const;
 
 export function validCompanySelection(tickers: string[]): boolean {
   return tickers.length >= 2 && tickers.length <= 4 && tickers.every(Boolean) && new Set(tickers).size === tickers.length;
@@ -61,7 +62,7 @@ export function validateAnnualResponse(result: AnnualFinancialComparison, compan
   if (Object.keys(result.metrics).length !== COMPARISON_METRICS.length) reject();
   for (const name of COMPARISON_METRICS) {
     const point = result.metrics[name];
-    const expectedUnit = ["revenue_growth_yoy", "operating_margin", "net_margin"].includes(name) ? "ratio" : "USD";
+    const expectedUnit = ["revenue_growth_yoy", "operating_margin", "net_margin", "gross_margin"].includes(name) ? "ratio" : "USD";
     if (!point || point.metric !== name || point.unit !== expectedUnit
         || !["available", "unavailable", "not_applicable"].includes(point.status)
         || !sameWindow(point.period, result.period)

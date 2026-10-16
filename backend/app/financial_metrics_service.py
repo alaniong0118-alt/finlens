@@ -31,6 +31,7 @@ class UnknownMetric(ValueError):
 ANNUAL_COMPARISON_METRICS = (
     "revenue", "revenue_growth_yoy", "operating_margin", "net_margin",
     "operating_cash_flow", "capital_expenditures", "free_cash_flow",
+    "gross_profit", "operating_income", "net_income", "gross_margin",
 )
 
 
@@ -468,7 +469,7 @@ class FinancialMetrics:
         calendars. Filing-context FY annotations are not reporting-period labels.
         No latest-period or per-metric period fallback is permitted here.
         """
-        # CC-01 coverage is the union of its metrics' existing annual anchors.
+        # Comparison coverage is the union of its metrics' existing annual anchors.
         # Revenue-first reporting_periods remains unchanged for other endpoints.
         anchors = [p for name in ANNUAL_COMPARISON_METRICS
                    for p in self.metric_periods(name, "annual")]
