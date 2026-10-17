@@ -227,6 +227,13 @@ COMPANIES = [
         "cik": "0000037996",
         "exchange": "NYSE",
     },
+    # AI-COV01 catalog identity only; see docs/ai-cov01-amd-catalog.md.
+    {
+        "ticker": "AMD",
+        "name": "ADVANCED MICRO DEVICES INC",
+        "cik": "0000002488",
+        "exchange": "NASDAQ",
+    },
 ]
 
 
