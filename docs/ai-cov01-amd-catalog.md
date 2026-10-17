@@ -50,6 +50,13 @@ compatibility remain unresolved; distinct accessions must not be conflated.
 
 ## Later gates
 
+REL-01A operational update (2026-10-17): the historical Phase 3A CLI behavior
+above is superseded by earlier admission guards. Full-catalog refresh and any CLI
+bootstrap now reject before opening a database session; unselected indexing/sync
+also reject before operational work. The 35-ticker request limit is unchanged.
+See [prepared-demo operations](local-demo.md). This updates command safety only;
+it makes no new AMD identity, coverage, publication or financial claim.
+
 The operator reports Astra's Phase 2 conditional GO; Phase 3A still awaits its own
 independent diff/test review. Live seeding requires separate authorization and a
 fresh identity-conflict check. Company Facts/original-filing acquisition, immutable

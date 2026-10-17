@@ -75,6 +75,8 @@ their historical procedures remain in the [collation runbook](collation-remediat
 and external revision-4 deployment evidence. For other installations, diagnose
 collation and obtain target-specific authorization before maintenance.
 
+For routine prepared-demo startup use [local-demo.md](local-demo.md). The following cutover record is historical guidance, not authorization to rerun migration/bootstrap on the current 36-company database. All CLI bootstrap and full-catalog refresh are now rejected before operational work. Retain the existing 35-ticker limit; do not batch or raise limits to bypass this boundary.
+
 Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **Steps 1–4 are completed on development; retain them as cutover guidance for other authorized targets. Do not repeat them on the accepted database. Steps 5–6 still require separate live-canary authorization and the linked plan's gates.** Keep private database/contact settings in ignored env files. No OpenAI key is required.
 
 1. Stop source-writing jobs; record read-only counts/full-row fingerprints and take an operator-managed backup. Confirm isolated tests and independent review first.
@@ -84,7 +86,7 @@ Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **Steps 1
 ```powershell
 .venv/Scripts/python.exe -m alembic upgrade head
 .venv/Scripts/python.exe -m alembic check
-.venv/Scripts/python.exe -m scripts.refresh_data --all --bootstrap
+# Historical full-catalog bootstrap is prohibited on the 36-company demo.
 ```
 
 Bootstrap validates the complete stored inventory, retains rows/vectors and records version-zero manifests without fabricated check dates. It is idempotent, only intended before versioned publication, and must be resolved before restart if invalid accessions are reported. Fresh clones instead migrate then run the existing `scripts.setup_demo`; no legacy bootstrap is needed.
@@ -167,12 +169,12 @@ sources acquired by a later invocation.
 
 ## Scheduling: disabled
 
-`Refresh-FinLens.ps1` is an opt-in wrapper, not a registered task. It requires **both** `-EnableLiveRefresh` and `FINLENS_REFRESH_ENABLED=1` in that process. No setting is enabled by this implementation.
+`Refresh-FinLens.ps1` is an opt-in explicit-issuer wrapper, not a registered task. It requires nonempty `-Ticker` selection (at most 35), `-EnableLiveRefresh` and process-local `FINLENS_REFRESH_ENABLED=1`. It never selects the full catalog or enables scheduling. Missing selections fail before Python starts. Scheduling remains excluded from the local demo; existing saved unselected actions now fail closed.
 
 After live canary/review and explicit scheduler authorization, a Windows Task Scheduler action can invoke:
 
 ```powershell
-powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -File D:\Projects\finlens-foundation\Refresh-FinLens.ps1 -EnableLiveRefresh
+powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -File D:\Projects\finlens-foundation\Refresh-FinLens.ps1 -EnableLiveRefresh -Ticker AAPL
 ```
 
 Configure the task's account/environment intentionally (including the opt-in variable), working directory, private backend env access and local cached model. Use a disabled task initially; choose one daily trigger at 06:00 UTC (14:00 Asia/Macau), no overlapping instances, run only on the intended host and log the sanitized exit code/run UUID. Enable only after the operator authorizes it. Stop scheduling by disabling the task and removing the opt-in variable. This repository does not install a service or task or claim scheduler activation was tested.

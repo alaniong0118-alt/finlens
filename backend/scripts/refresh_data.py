@@ -28,6 +28,10 @@ def main(argv=None):
     parser.add_argument("--publication-scope", choices=("aapl-10k-2025",),
                         help="Opt-in zero-new-facts/exact-accession pre-write canary authorization gate.")
     args = parser.parse_args(argv)
+    if args.all or args.bootstrap:
+        parser.error("Full-catalog refresh and bootstrap are prohibited for the 36-company demo; use separately authorized explicit --ticker refresh only.")
+    if args.show_run is None and (not args.ticker or any(not ticker.strip() for ticker in args.ticker)):
+        parser.error("Explicit nonblank --ticker selections are required; blank entries cannot be discarded.")
     if args.publication_scope and (args.all or args.bootstrap or args.show_run):
         parser.error("Publication scope requires explicit --ticker AAPL; bootstrap/show-run/all are excluded.")
     if not args.bootstrap and not args.show_run and not args.allow_network:

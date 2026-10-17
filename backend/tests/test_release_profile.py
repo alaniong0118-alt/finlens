@@ -518,7 +518,10 @@ def test_development_writer_guards_keep_injected_sessions_compatible(monkeypatch
 
 def test_development_launcher_validates_profile_before_infrastructure():
     source = (config.BACKEND_ROOT.parent / "Start-FinLens.ps1").read_text()
-    assert source.index("from app.release_policy import require_development") < source.index("Get-Command docker")
+    startup = source[source.index("function Invoke-FinLensStartup"):]
+    assert "from app.release_policy import require_development" in source
+    assert startup.index("Invoke-FinLensProfileCheck $python $backend") < startup.index("Start-FinLensService")
+    assert "docker compose" not in source
 
 
 @pytest.mark.parametrize("module", ["app.refresh_scope", "app.refresh_service"])

@@ -249,8 +249,10 @@ def test_36_company_all_selection_rejects_before_refresh_or_bootstrap(session, m
     from scripts import refresh_data, setup_demo, sync_financial_facts
 
     seed_companies(session, quiet=True)
-    monkeypatch.setattr(database, "SessionLocal", lambda: session)
-    monkeypatch.setattr(setup_demo, "check_schema", Mock())
+    session_factory = Mock(side_effect=AssertionError("CLI denial must precede DB access"))
+    schema_check = Mock(side_effect=AssertionError("CLI denial must precede schema access"))
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(setup_demo, "check_schema", schema_check)
     request_factory = Mock(wraps=RefreshRequest)
     monkeypatch.setattr(refresh_data, "RefreshRequest", request_factory)
     forbidden = []
@@ -260,12 +262,13 @@ def test_36_company_all_selection_rejects_before_refresh_or_bootstrap(session, m
         call = Mock(side_effect=AssertionError("Validation must precede operational execution"))
         monkeypatch.setattr(module, name, call)
         forbidden.append(call)
-    assert refresh_data.main(arguments) == 1
-    assert "Refresh could not start/finish" in capsys.readouterr().err
-    assert request_factory.call_count == 1
-    # CLI selection order is database-derived; require all 36 entries without
-    # truncation or duplication, not the seed's insertion order.
-    assert sorted(request_factory.call_args.kwargs["tickers"]) == sorted(row["ticker"] for row in COMPANIES)
+    with pytest.raises(SystemExit) as rejected:
+        refresh_data.main(arguments)
+    assert rejected.value.code == 2
+    assert "Full-catalog refresh and bootstrap are prohibited" in capsys.readouterr().err
+    session_factory.assert_not_called()
+    schema_check.assert_not_called()
+    request_factory.assert_not_called()
     for call in forbidden:
         call.assert_not_called()
     for model in EVIDENCE_MODELS:

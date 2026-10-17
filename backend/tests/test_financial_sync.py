@@ -283,7 +283,7 @@ def test_cli_atomic_report_options_and_exit(factory, monkeypatch, tmp_path, caps
     assert cli.main(["--ticker", "AAPL", "--report", str(destination)]) == 0
     assert cli.main(["--ticker", "MISSING", "--report", str(destination)]) == 1
     assert not list(destination.parent.glob("*.tmp"))
-    assert cli.main(["--report", str(tmp_path / ".env")]) == 1
+    assert cli.main(["--ticker", "AAPL", "--report", str(tmp_path / ".env")]) == 1
     assert not (tmp_path / ".env").exists()
     assert "unknown_or_empty_ticker_selection" in capsys.readouterr().err
 
@@ -294,7 +294,7 @@ def test_existing_other_report_cannot_be_overwritten(factory, monkeypatch, tmp_p
     path = tmp_path / "reports/baseline.json"
     path.parent.mkdir()
     path.write_text('{"baseline": true}')
-    assert cli.main(["--report", str(path)]) == 1
+    assert cli.main(["--ticker", "AAPL", "--report", str(path)]) == 1
     assert path.read_text() == '{"baseline": true}'
 
 

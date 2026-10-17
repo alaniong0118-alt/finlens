@@ -23,6 +23,12 @@ Research Answers resolve clear latest-value, fiscal-year/quarter and bounded sam
 
 ## Quick Start
 
+**Existing prepared demonstration:** use the [local demo runbook](docs/local-demo.md).
+The steps below are first-time provisioning and require separate authorization on
+this machine. The catalog now has 36 identities; AMD is catalog-only. Full-catalog
+refresh/bootstrap and unselected indexing/sync are prohibited. Historical
+35-company verification records below retain their original scope.
+
 Windows PowerShell is the supported walkthrough. Install **Git, Python, Node.js/npm, and Docker Desktop** first; start Docker Desktop and wait until its engine is ready. PostgreSQL runs in Docker—no separate PostgreSQL installation is needed. First setup needs internet access for dependencies, SEC data, and the MiniLM model.
 
 ### 1. Clone and configure
@@ -243,14 +249,14 @@ See [backend setup details](backend/README.md#reproducible-demo-setup) and [Wind
 After configuring the database, schema, and SEC contact as in Quick Start, run from `backend`:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.index_catalog
+# Unselected indexing is prohibited. Explicit acquisition approval is required:
 # Discover a subset without changing the database:
 .\.venv\Scripts\python.exe -m scripts.index_catalog --ticker MSFT --ticker XOM --dry-run --report reports/discovery.json
 # Retry only an affected company:
 .\.venv\Scripts\python.exe -m scripts.index_catalog --ticker MSFT
 ```
 
-This indexes the stored catalog using official SEC submissions: latest exact 10-Q first, latest exact 10-K as fallback. Existing complete filings are skipped; existing chunks with missing embeddings are resumed without downloading again. It preserves company identities, financial facts, existing chunks and vectors. Run one indexing process at a time. No OpenAI key or call is involved; MiniLM runs locally and may need its initial model download.
+This indexes only explicitly selected stored issuers using official SEC submissions: latest exact 10-Q first, latest exact 10-K as fallback. Existing complete filings are skipped; existing chunks with missing embeddings are resumed without downloading again. It preserves company identities, financial facts, existing chunks and vectors. Run one indexing process at a time. No OpenAI key or call is involved; MiniLM runs locally and may need its initial model download.
 
 New indexed filings appear in `/companies/{ticker}/sources` even without imported metrics. Availability follows persisted embeddings automatically. Indexed coverage does not prove retrieval quality or factual support of generated answers across every company.
 
@@ -278,12 +284,12 @@ Item 6 review-fix verification: **66 focused tests**, **168 backend tests and 44
 From `backend`, with the existing database/schema and private SEC contact configured:
 
 ```powershell
-python -m scripts.sync_financial_facts
+# Unselected sync is prohibited; the selected examples require acquisition approval:
 python -m scripts.sync_financial_facts --ticker JNJ --ticker XOM --dry-run --report reports/financial_facts_discovery.json
 python -m scripts.sync_financial_facts --ticker CAT --report reports/financial_facts_retry.json
 ```
 
-The command sequentially fetches official SEC Company Facts, preserves distinct concepts/filing vintages and inserts only missing observations. Each company commits atomically; failures roll back that company and do not prevent healthy companies from completing. Rerun the failed subset or the full catalog to resume. Dry-run writes a diagnostic report, with no database changes. Report destinations must be JSON files under `backend/reports`; unrelated existing reports cannot be overwritten. Exit 1 indicates failures, absent supported source data, interruption or a global error.
+The command sequentially fetches official SEC Company Facts, preserves distinct concepts/filing vintages and inserts only missing observations. Each company commits atomically; failures roll back that company and do not prevent healthy companies from completing. Rerun only an explicitly selected, separately authorized subset to resume. Unselected sync is rejected, including dry runs. Dry-run writes a diagnostic report, with no database changes. Report destinations must be JSON files under `backend/reports`; unrelated existing reports cannot be overwritten. Exit 1 indicates failures, absent supported source data, interruption or a global error.
 
 Item 7 verified **35/35 issuers with structured facts**, **58,881 rows** including all **3,251 original rows unchanged**, and unchanged **3,175 chunks/vectors**. All 35 companies updated; a full rerun inserted zero rows with identical table hashes. Current quarterly snapshots have revenue 34/35, net income 32/35, EPS 34/35 and approved net margin 21/35; annual FCF is available for 21/35. These are period/scope-specific results, not universal metric coverage. XOM retains current CIK `0002115436` and has only 22 supported observations; no predecessor CIK is requested.
 

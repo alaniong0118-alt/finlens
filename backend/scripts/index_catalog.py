@@ -1,4 +1,4 @@
-"""Run from backend: python -m scripts.index_catalog [--ticker MSFT] [--dry-run]."""
+"""Run only with explicit authorization: python -m scripts.index_catalog --ticker MSFT [--dry-run]."""
 
 from app.release_policy import development_only
 import argparse
@@ -16,6 +16,8 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="Discover metadata without writing chunks/vectors.")
     parser.add_argument("--report", type=Path, default=BACKEND_ROOT / "reports" / "catalog_indexing.json")
     args = parser.parse_args(argv)
+    if not args.ticker or any(not ticker.strip() for ticker in args.ticker):
+        parser.error("Explicit --ticker selection is required; unselected catalog indexing is prohibited.")
     try:
         from app.database import SessionLocal
         from app.catalog_indexing_service import index_catalog

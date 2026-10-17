@@ -1,4 +1,4 @@
-"""Sync official SEC facts: python -m scripts.sync_financial_facts [--ticker JNJ] [--dry-run]."""
+"""Authorized SEC facts sync: python -m scripts.sync_financial_facts --ticker JNJ [--dry-run]."""
 
 from app.release_policy import development_only
 import argparse
@@ -40,6 +40,8 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="Fetch/compare facts without database writes.")
     parser.add_argument("--report", type=Path, default=BACKEND_ROOT / "reports/financial_facts_sync.json")
     args = parser.parse_args(argv)
+    if not args.ticker or any(not ticker.strip() for ticker in args.ticker):
+        parser.error("Explicit --ticker selection is required; unselected catalog sync is prohibited.")
     try:
         destination = report_path(args.report)
         # Validate report permissions before any source requests or database writes.
