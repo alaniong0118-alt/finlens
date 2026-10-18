@@ -48,6 +48,7 @@ READONLY_ROUTES = frozenset({
     ("GET", "/companies/{ticker}/context"),
     ("GET", "/companies/{ticker}/filings/{accession_number}/text"),
     ("GET", "/companies/{ticker}/filings/{accession_number}/chunks"),
+    ("GET", "/companies/{ticker}/filings/{accession_number}/chunks/{chunk_id}/tone"),
     ("GET", "/companies/{ticker}/filings/{accession_number}/search"),
     ("GET", "/companies/{ticker}/filings/{accession_number}/semantic-search"),
     ("GET", "/companies/{ticker}/filings/{accession_number}/context"),

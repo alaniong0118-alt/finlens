@@ -4,7 +4,7 @@ from typing import Annotated
 from app.config import server_profile
 from app.release_policy import READONLY_ROUTES, ReleaseAdmissionMiddleware
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -46,6 +46,9 @@ from app.freshness_service import (
     inconsistent_evidence,
 )
 from app.refresh_contracts import Freshness
+from app.filing_tone_service import (
+    FilingToneResponse, resolve_published_passage, score_published_passage, validate_tone_request,
+)
 from app.models import FilingPublication
 from app.schemas import (
     CompanyResponse,
@@ -570,6 +573,25 @@ def stored_filing(session, ticker, accession):
         "accession_number": accession, "form": first.form, "filed": first.filed,
         "filename": first.filename, "sec_url": first.sec_url,
     }
+
+
+@app.get("/companies/{ticker}/filings/{accession_number}/chunks/{chunk_id}/tone",
+         response_model=FilingToneResponse)
+def get_filing_chunk_tone(ticker: str, accession_number: str, chunk_id: str, request: Request):
+    """Explainable lexical tone proxy, not investment sentiment, risk or prediction.
+
+    Offsets index the returned exact passage in Unicode code points, never the
+    full filing or JavaScript UTF-16. Overlapping passages are not aggregated.
+    """
+    pins = request.headers.getlist("X-FinLens-Data-Version")
+    if len(pins) != 1 or request.query_params:
+        raise HTTPException(422, "Invalid filing tone selector or publication pin.",
+                            headers={"X-FinLens-Error-Code": "TONE_INVALID_INPUT"})
+    pin = pins[0]
+    validate_tone_request(ticker, accession_number, chunk_id, pin)
+    with read_session(HttpSessionLocal) as session:
+        passage = resolve_published_passage(session, ticker, accession_number, chunk_id, pin)
+    return score_published_passage(passage)
 
 
 @app.get("/companies/{ticker}/filings/{accession_number}/text")
