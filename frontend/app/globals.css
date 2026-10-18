@@ -90,6 +90,16 @@ select:hover,textarea:hover { border-color:var(--accent); } summary { cursor:poi
 .evidence-highlight { background:var(--accent-soft); color:var(--text); font-weight:650; text-decoration:underline; text-decoration-color:var(--accent); text-underline-offset:3px; border-radius:2px; }
 .evidence-highlight.value-match { outline:1px solid var(--accent); outline-offset:1px; }
 .evidence-toggle { margin-top:12px; }
+.passage-tone { margin-top:12px; min-width:0; }
+.passage-tone button[aria-disabled="true"] { cursor:wait; opacity:.65; }
+.passage-tone > section { margin-top:14px; border-top:1px solid var(--border); padding-top:14px; min-width:0; overflow-wrap:anywhere; }
+.passage-tone h5 { font-size:14px; margin:0 0 8px; }
+.tone-summary,.tone-source { margin:12px 0; }
+.tone-match { background:var(--accent-soft); color:var(--text); text-decoration:underline; text-underline-offset:3px; }
+.tone-negative { text-decoration-style:double; }
+.tone-negated { background:var(--surface); text-decoration-style:dotted; }
+.tone-matches { padding-left:24px; overflow-wrap:anywhere; }
+.tone-matches li { margin:8px 0; font-size:13px; }
 .direct-answer .missing-value { font-size:1.3rem; }
 .answer-text { font-size:15px; line-height:1.7; margin-bottom:10px; overflow-wrap:anywhere; }
 .evidence-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; } .evidence-heading h4 { font-size:12px; }

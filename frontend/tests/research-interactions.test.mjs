@@ -2346,3 +2346,285 @@ for (const status of ['unavailable', 'not_applicable']) for (const afterRetry of
     assert.ok(![...app.trends().querySelectorAll('button')].some(button => button.textContent === 'Retry history'));
   });
 }
+
+// SEC-NLP-01B fixtures use canonical source identities. Existing fixtures and
+// assertions above are preserved; all requests still use mount's synthetic fetch.
+const toneAccession = '0000320193-26-000020';
+function toneSecUrl(accession = toneAccession) {
+  return `https://www.sec.gov/Archives/edgar/data/320193/${accession.replaceAll('-', '')}/${accession}-index.html`;
+}
+function toneResponse(version = 0, chunk = 'chunk_0000') {
+  return { ticker: 'AAPL', company_cik: '0000320193', company_name: 'Synthetic Apple fixture', data_version: version, evidence_version: 0,
+    publication: { accession_number: toneAccession, data_version: 0, content_digest: 'a'.repeat(64) },
+    source: { chunk_id: chunk, form: '10-Q', filed: '2026-07-31', filename: 'report.htm', sec_url: toneSecUrl() },
+    scope: 'published_chunk', offsets: 'unicode_code_point', text: '  📈\r\nSTRONG no loss; weak <script>unsafe()</script> e\u0301',
+    tone: { method_version: 'sec-filing-tone-v1', lexicon_version: 'authored-finance-tone-v1', status: 'scored', reason: null,
+      score: { numerator: 0, denominator: 1 }, token_count: 8, positive_count: 1, negative_count: 1, negated_count: 1,
+      matches: [{ text: 'STRONG', term: 'strong', start: 5, end: 11, polarity: 'positive', negator_span: null },
+        { text: 'loss', term: 'loss', start: 15, end: 19, polarity: 'negative', negator_span: [12, 14] },
+        { text: 'weak', term: 'weak', start: 21, end: 25, polarity: 'negative', negator_span: null }] } };
+}
+const toneRequests = app => app.requests.filter(request => request.path.endsWith('/tone'));
+const tonePath = (chunk = 'chunk_0000') => `/companies/AAPL/filings/${toneAccession}/chunks/${chunk}/tone`;
+async function toneDeliver(app, request, value, status = 200, code = null) {
+  assert.equal(request.released, false); request.released = true;
+  await act(async () => request.resolve(new Response(JSON.stringify(value), { status, headers: {
+    'X-FinLens-Data-Version': request.init.headers['X-FinLens-Data-Version'], ...(code ? { 'X-FinLens-Error-Code': code } : {}),
+  } })));
+}
+async function mountToneEvidence(ctx, { strict = false, version = 0, scope = 'filing', passages = 1, badSource = null } = {}) {
+  const app = await mount(ctx, false, companies, { initialVersion: version, strict });
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+  const source = { ...filing('AAPL'), accession_number: toneAccession, filed: '2026-07-31', sec_url: toneSecUrl() };
+  await app.release(app.request(companyPath('AAPL', 'sources')), [source, { ...source, accession_number: '0000320193-25-000001', sec_url: toneSecUrl('0000320193-25-000001') }]);
+  if (scope === 'company') await app.change(app.select('Evidence search scope'), 'company');
+  const query = 'tone fixture research';
+  await app.change(app.host.querySelector('textarea'), query); await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  const citations = Array.from({ length: passages }, (_, index) => ({ ...context('AAPL').citations[0], accession_number: toneAccession,
+    company_cik: scope === 'company' ? '0000320193' : undefined, chunk_id: `chunk_${String(index).padStart(4, '0')}`,
+    filename: 'report.htm', filed: source.filed, sec_url: toneSecUrl(), citation_id: `source_${index + 1}`, start_char: 9000 + index * 3000, end_char: 12000 + index * 3000 }));
+  if (badSource) Object.assign(citations[0], badSource);
+  const text = 'Search serialization is separate from the exact tone response. Strong no loss; weak.';
+  const evidence = { ticker: 'AAPL', company_name: 'Synthetic Apple fixture', query, evidence_status: 'sufficient', citations,
+    context: citations.map(citation => scope === 'company' ? companySource(citation, text)
+      : `[SOURCE ${citation.citation_id}]\ntext: |-\n  ${text}\n[END SOURCE ${citation.citation_id}]`).join('\n\n'),
+    ...(scope === 'company' ? { retrieval_scope: 'company', company_cik: '0000320193', data_version: version, evidence_version: 0,
+      searched_accessions: [toneAccession], excluded_publication_count: 0 } : { accession_number: toneAccession }) };
+  await app.release(app.request(scope === 'company' ? companyPath('AAPL', 'context') : companyPath('AAPL', `filings/${toneAccession}/context`)), evidence);
+  return app;
+}
+
+for (const strict of [false, true]) for (const version of [0, 1]) for (const scope of ['filing', 'company']) {
+  test(`SEC-NLP-01B mounted ${scope} tone at pin ${version}${strict ? ' in StrictMode' : ''} is explicit, source-bound and accessible`, async ctx => {
+    const app = await mountToneEvidence(ctx, { strict, version, scope, passages: 2 });
+    assert.equal(toneRequests(app).length, 0);
+    await act(async () => app.host.querySelector('.evidence-card details summary').click());
+    assert.equal(toneRequests(app).length, 0, 'Evidence expansion must not inspect tone');
+    const controls = [...app.host.querySelectorAll('.passage-tone > button')];
+    assert.equal(new Set(controls.map(button => button.getAttribute('aria-controls'))).size, 2);
+    const trigger = controls[0]; trigger.focus();
+    assert.equal(document.activeElement, trigger);
+    await act(async () => { trigger.click(); trigger.click(); });
+    await act(async () => trigger.click());
+    assert.equal(toneRequests(app).length, 1, 'Synchronous and post-render duplicate clicks cannot cancel or duplicate');
+    const request = app.request(tonePath());
+    assert.equal(request.init.signal.aborted, false);
+    assert.deepEqual(request.init.headers, { 'X-FinLens-Data-Version': String(version) });
+    assert.equal(request.params.size, 0); assert.equal(request.init.body, undefined);
+    const panel = app.host.querySelector('.passage-tone section');
+    assert.equal(panel.hidden, false); assert.equal(panel.getAttribute('aria-busy'), 'true');
+    assert.equal(trigger.getAttribute('aria-disabled'), 'true');
+    assert.match(panel.querySelector('[role="status"]').textContent, /Inspecting/);
+    await app.release(request, toneResponse(version));
+    assert.equal(panel.getAttribute('aria-busy'), 'false');
+    assert.equal(panel.querySelector('.tone-passage').textContent, toneResponse(version).text);
+    assert.deepEqual([...panel.querySelectorAll('.tone-passage mark')].map(mark => mark.textContent), ['STRONG', 'loss', 'weak']);
+    assert.equal(panel.querySelectorAll('script').length, 0);
+    assert.match(panel.textContent, /<script>unsafe\(\)<\/script>/);
+    assert.match(panel.textContent, /Passage lexical tone proxy/);
+    assert.match(panel.textContent, /not predictive sentiment, confidence, market risk, investment advice or a whole-filing conclusion/);
+    assert.match(panel.textContent, /0\/1/); assert.match(panel.textContent, /Negated, excluded: 1/);
+    assert.match(panel.textContent, /negator \[12, 14\)/);
+    assert.match(panel.textContent, /CIK 0000320193/); assert.match(panel.textContent, /Filing publication 0/);
+    const link = panel.querySelector('a'); assert.equal(link.href, toneSecUrl()); assert.equal(link.hash, '');
+    assert.equal(link.rel, 'noopener noreferrer');
+    assert.ok(app.host.querySelector('.direct-answer'), 'Tone must preserve the independent answer');
+    await app.click('Close passage tone');
+    assert.equal(panel.hidden, true); assert.equal(document.activeElement, trigger);
+    assert.equal(toneRequests(app).length, 1);
+  });
+}
+
+for (const badSource of [{ sec_url: 'https://www.sec.gov/other' }, { company_cik: '0000019617' }, { filename: '../report.htm' }, { accession_number: '0000320193-25-000001' }]) {
+  test(`SEC-NLP-01B mounted unverified source ${JSON.stringify(badSource)} cannot request tone`, async ctx => {
+    const app = await mountToneEvidence(ctx, { badSource });
+    assert.equal(app.host.querySelector('.passage-tone button').disabled, true);
+    assert.match(app.host.querySelector('.passage-tone').textContent, /verified passage source/);
+    assert.equal(toneRequests(app).length, 0);
+  });
+}
+
+for (const strict of [false, true]) test(`SEC-NLP-01B cancel and stale callbacks cannot unlock a replacement${strict ? ' in StrictMode' : ''}`, async ctx => {
+  const app = await mountToneEvidence(ctx, { strict });
+  await app.click('Inspect passage tone'); const old = app.request(tonePath());
+  await app.click('Cancel passage tone'); assert.equal(old.init.signal.aborted, true);
+  await app.click('Inspect passage tone'); const current = app.request(tonePath());
+  const count = app.requests.length;
+  await app.release(old, {}, 409, 1);
+  assert.equal(app.requests.length, count, 'Cancelled mismatch cannot reconcile or unlock the current request');
+  assert.equal(current.init.signal.aborted, false);
+  await app.click('Inspecting passage tone…'); assert.equal(toneRequests(app).length, 2);
+  await app.release(current, toneResponse());
+  assert.match(app.host.querySelector('.tone-summary').textContent, /0\/1/);
+});
+
+for (const strict of [false, true]) test(`SEC-NLP-01B transient failures and timeout allow only explicit bounded retry${strict ? ' in StrictMode' : ''}`, async ctx => {
+  const app = await mountToneEvidence(ctx, { strict }); const expire = researchDeadlineClock(ctx);
+  try {
+  await app.click('Inspect passage tone'); const old = app.request(tonePath());
+  await expire();
+  assert.equal(old.init.signal.aborted, true);
+  assert.match(app.host.querySelector('.passage-tone [role="alert"]').textContent, /too long/);
+  assert.equal(toneRequests(app).length, 1);
+  await retryTwice(app, 'Retry passage tone'); const retry = app.request(tonePath());
+  assert.equal(toneRequests(app).length, 2);
+  await app.release(old, toneResponse());
+  assert.equal(app.host.querySelector('.tone-summary'), null);
+  assert.equal(retry.init.signal.aborted, false);
+  await toneDeliver(app, retry, { detail: 'Do not surface internal diagnostics' }, 503, 'DATABASE_BUSY');
+  assert.match(app.host.querySelector('.passage-tone [role="alert"]').textContent, /database is busy/);
+  assert.doesNotMatch(app.host.textContent, /Do not surface internal diagnostics/);
+  assert.equal(toneRequests(app).length, 2);
+  await retryTwice(app, 'Retry passage tone'); assert.equal(toneRequests(app).length, 3);
+  await app.release(app.request(tonePath()), toneResponse());
+  assert.ok(app.host.querySelector('.tone-summary'));
+  assert.ok(app.host.querySelector('.direct-answer'));
+  } finally { ctx.mock.timers.reset(); }
+});
+
+for (const [code, status, message] of [
+  ['TONE_INPUT_UNSUPPORTED', 409, /unsupported/], ['EVIDENCE_PENDING', 409, /incomplete or changed/],
+  ['SEARCH_SCOPE_TOO_LARGE', 409, /resource limit/], ['TONE_CHUNK_NOT_FOUND', 404, /no longer available/], ['TONE_INVALID_INPUT', 422, /could not be verified/],
+]) test(`SEC-NLP-01B ${code} has an explicit outcome without blind retry`, async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone');
+  await toneDeliver(app, app.request(tonePath()), { detail: 'Private fixture detail must not render' }, status, code);
+  const panel = app.host.querySelector('.passage-tone');
+  assert.match(panel.querySelector('[role="alert"]').textContent, message);
+  assert.ok(![...panel.querySelectorAll('button')].some(button => button.textContent === 'Retry passage tone'));
+  assert.equal(toneRequests(app).length, 1); assert.ok(app.host.querySelector('.direct-answer'));
+});
+
+test('SEC-NLP-01B malformed successful source fails closed without tone attribution and permits explicit recovery', async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone');
+  const bad = toneResponse(); bad.source.sec_url += '#invented-passage';
+  await app.release(app.request(tonePath()), bad);
+  const panel = app.host.querySelector('.passage-tone');
+  assert.match(panel.querySelector('[role="alert"]').textContent, /source could not be verified/);
+  assert.equal(panel.querySelector('a'), null); assert.equal(panel.querySelector('.tone-passage'), null);
+  await retryTwice(app, 'Retry passage tone'); await app.release(app.request(tonePath()), toneResponse());
+  assert.equal(panel.querySelector('a').href, toneSecUrl());
+});
+
+test('P2 token_count rejects eight-token Unicode response claiming forty before rendering attribution', async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone');
+  const value = toneResponse(); value.tone.token_count = 40;
+  await app.release(app.request(tonePath()), value);
+  const panel = app.host.querySelector('.passage-tone');
+  const alert = panel.querySelector('[role="alert"]');
+  assert.ok(alert, 'Contradictory token_count must fail before showing Tokens: 40');
+  assert.match(alert.textContent, /could not be verified/);
+  assert.equal(panel.querySelector('.tone-summary'), null);
+  assert.equal(panel.querySelector('.tone-passage'), null);
+  assert.equal(panel.querySelector('a'), null);
+  assert.doesNotMatch(panel.textContent, /Tokens: 40/);
+  assert.ok(app.host.querySelector('.direct-answer'));
+});
+
+for (const reason of ['no_tokens', 'no_lexicon_matches', 'all_matches_negated']) test(`SEC-NLP-01B ${reason} is an explained success, never balanced zero or retry`, async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone');
+  const value = toneResponse(); const negated = reason === 'all_matches_negated';
+  value.text = negated ? 'not strong' : reason === 'no_tokens' ? '...' : '2026';
+  Object.assign(value.tone, { status: 'unscorable', reason, score: null, token_count: negated ? 2 : reason === 'no_tokens' ? 0 : 1,
+    positive_count: 0, negative_count: 0, negated_count: negated ? 1 : 0,
+    matches: negated ? [{ text: 'strong', term: 'strong', start: 4, end: 10, polarity: 'positive', negator_span: [0, 3] }] : [] });
+  await app.release(app.request(tonePath()), value);
+  const panel = app.host.querySelector('.passage-tone');
+  assert.match(panel.querySelector('.tone-summary').textContent, /No score is available/);
+  assert.doesNotMatch(panel.querySelector('.tone-summary').textContent, /0\/1/);
+  assert.equal(panel.querySelector('[role="alert"]'), null);
+  assert.ok(![...panel.querySelectorAll('button')].some(button => button.textContent === 'Retry passage tone'));
+});
+
+for (const selection of ['query', 'scope', 'company', 'filing', 'version']) test(`SEC-NLP-01B ${selection} change cancels tone and rejects ignored-abort success`, async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone'); const old = app.request(tonePath());
+  if (selection === 'query') await app.change(app.host.querySelector('textarea'), 'new query');
+  if (selection === 'scope') await app.change(app.select('Evidence search scope'), 'company');
+  if (selection === 'company') await app.change(app.host.querySelector('#company'), 'JPM');
+  if (selection === 'filing') await app.change(app.select('Indexed SEC filing'), '0000320193-25-000001');
+  if (selection === 'version') { await focusCheck(); await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1)); }
+  assert.equal(old.init.signal.aborted, true);
+  await app.release(old, toneResponse());
+  assert.equal(app.host.querySelector('.tone-passage'), null); assert.equal(toneRequests(app).length, 1);
+});
+
+test('SEC-NLP-01B hiding extra evidence cancels its passage request without requesting siblings', async ctx => {
+  const app = await mountToneEvidence(ctx, { passages: 3 });
+  await app.click('Show more evidence (1)');
+  await act(async () => app.host.querySelectorAll('.passage-tone > button')[2].click());
+  const pending = app.request(tonePath('chunk_0002'));
+  await app.click('Show less evidence'); assert.equal(pending.init.signal.aborted, true);
+  await app.release(pending, toneResponse(0, 'chunk_0002'));
+  await app.click('Show more evidence (1)');
+  assert.equal(app.host.querySelector('.tone-passage'), null); assert.equal(toneRequests(app).length, 1);
+});
+
+for (const strict of [false, true]) for (const version of [0, 1]) test(`SEC-NLP-01B obsolete tone ${version} 409 cannot reject verified ${version + 1}${strict ? ' in StrictMode' : ''}`, async ctx => {
+  const app = await mountToneEvidence(ctx, { strict, version });
+  await app.click('Inspect passage tone'); const old = app.request(tonePath());
+  await focusCheck(); const check = app.request(companyPath('AAPL', 'freshness'));
+  const checks = app.requests.filter(request => request.path.endsWith('/freshness')).length;
+  await act(async () => {
+    app.deliverBeforeCommit(check, freshnessFixture('AAPL', version + 1, 1));
+    await drainResponseMicrotasks();
+    assert.ok(app.request('/companies'), 'Newer freshness is verified before React commits cancellation');
+    assert.equal(old.init.signal.aborted, false);
+    app.deliverBeforeCommit(old, {}, 409, version + 1);
+    await drainResponseMicrotasks();
+  });
+  assert.equal(app.requests.filter(request => request.path.endsWith('/freshness')).length, checks);
+  assert.equal(toneRequests(app).length, 1, 'Version advancement does not replay tone');
+  assert.equal(app.host.querySelector('.tone-passage'), null);
+  assert.match(app.host.querySelector('[aria-label="Data freshness"]').textContent, new RegExp(`version ${version + 1}`));
+});
+
+test('SEC-NLP-01B current tone 409 invalidates its pin and never automatically replays tone', async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone');
+  const checks = app.requests.filter(request => request.path.endsWith('/freshness')).length;
+  await app.release(app.request(tonePath()), {}, 409, 1);
+  assert.equal(app.requests.filter(request => request.path.endsWith('/freshness')).length, checks + 1);
+  assert.match(app.host.textContent, /Published data changed/);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+  assert.match(app.host.textContent, /Could not verify this company’s data version/);
+  assert.equal(toneRequests(app).length, 1);
+});
+
+test('SEC-NLP-01B long match lists disclose progressively without requests or text loss', async ctx => {
+  const app = await mountToneEvidence(ctx); await app.click('Inspect passage tone');
+  const value = toneResponse(); value.text = 'strong '.repeat(25);
+  Object.assign(value.tone, { token_count: 25, positive_count: 25, negative_count: 0, negated_count: 0,
+    score: { numerator: 1, denominator: 1 }, matches: Array.from({ length: 25 }, (_, index) => ({ text: 'strong', term: 'strong',
+      start: index * 7, end: index * 7 + 6, polarity: 'positive', negator_span: null })) });
+  await app.release(app.request(tonePath()), value);
+  assert.equal(app.host.querySelectorAll('.tone-matches li').length, 20);
+  const count = app.requests.length;
+  await app.click('Show more matched terms');
+  assert.equal(app.host.querySelectorAll('.tone-matches li').length, 25);
+  assert.equal(app.host.querySelector('.tone-passage').textContent, value.text);
+  assert.equal(app.requests.length, count);
+});
+
+for (const strict of [false, true]) for (const action of ['close', 'edit']) test(`SEC-NLP-01B parsed tone success before ${action} commit cannot survive${strict ? ' in StrictMode' : ''}`, async ctx => {
+  const app = await mountToneEvidence(ctx, { strict }); await app.click('Inspect passage tone');
+  const request = app.request(tonePath());
+  await act(async () => {
+    app.deliverBeforeCommit(request, toneResponse());
+    await drainResponseMicrotasks();
+    assert.equal(request.init.signal.aborted, false, 'Response validation and transport cleanup have already completed');
+    assert.equal(app.host.querySelector('.tone-passage'), null, 'React has not committed the queued success');
+    if (action === 'close') [...app.host.querySelectorAll('button')].find(button => button.textContent === 'Cancel passage tone').click();
+    else {
+      const editor = app.host.querySelector('textarea');
+      Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(editor, 'changed before commit');
+      editor.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    }
+  });
+  assert.equal(app.host.querySelector('.tone-passage'), null);
+  assert.equal(toneRequests(app).length, 1);
+  if (action === 'close') {
+    await app.click('Inspect passage tone'); assert.equal(toneRequests(app).length, 2);
+    await app.release(app.request(tonePath()), toneResponse());
+    assert.ok(app.host.querySelector('.tone-passage'));
+  }
+});

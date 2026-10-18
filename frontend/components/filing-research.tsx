@@ -1,16 +1,17 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness,
+import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness, filingToneIdentity,
   getCompanyContext, type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, type QuestionScope } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
+import PassageTone from "@/components/passage-tone";
 
 import { useResearchVersion } from "@/components/research-freshness";
 
 const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artificial intelligence"];
 
-export function EvidenceResults({ result, answer }: { result: EvidenceContext; answer?: ResearchAnswer | null }) {
+export function EvidenceResults({ result, answer, company }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company }) {
   const [expanded, setExpanded] = useState(false);
   const passages = evidencePassages(result);
   const previews = passages.map(passage => ({ ...passage, excerpt: evidenceExcerpt(passage.text, result.query, answer, passages.map(item => item.text)) }));
@@ -31,6 +32,9 @@ export function EvidenceResults({ result, answer }: { result: EvidenceContext; a
         <p>Hybrid rank {rank} · Retrieval rule: {citation.evidence_reason.replaceAll("_", " ")}</p>
         <p>Scores describe retrieval ranking, not factual confidence.</p>
       </div></details>
+      <PassageTone identity={company && result.ticker === company.ticker
+        && ("retrieval_scope" in result ? result.company_cik === company.cik && result.searched_accessions.includes(citation.accession_number)
+          : result.accession_number === citation.accession_number) ? filingToneIdentity(company, citation) : null} />
     </article>)}</div>
     {passages.length > 2 && <button type="button" className="secondary-button evidence-toggle" aria-expanded={expanded} aria-controls="ranked-evidence" onClick={() => setExpanded(!expanded)}>{expanded ? "Show less evidence" : `Show more evidence (${passages.length - 2})`}</button>}
   </div>;
@@ -216,7 +220,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     </div>
     {searchedVersion === version && searchedEvidence === evidenceIdentity && result && <><h3>Supporting SEC evidence</h3>
       <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}Passages may describe different periods and are research, not validation of the structured answer.</p>
-      <EvidenceResults key={`evidence-${result.query}-${retrievalScope}`} result={result} answer={"retrieval_scope" in result ? null : answer} />
+      <EvidenceResults key={`evidence-${result.query}-${retrievalScope}`} result={result} answer={"retrieval_scope" in result ? null : answer} company={company} />
       {"retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} />}
     </>}
   </>;

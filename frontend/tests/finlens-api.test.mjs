@@ -21,6 +21,8 @@ import {
   searchableFilings,
   filingReadiness,
   versionedController,
+  getPassageTone,
+  filingToneIdentity,
 } from "../lib/finlens-api.ts";
 
 test('DEP-01A1 accepts effective backend capabilities for each profile', async ctx => {
@@ -617,3 +619,92 @@ for (const terminal of ['timeout', 'caller']) test(`DEP-01A2 P2 endpoint ${termi
   assert.equal(getEventListeners(fixture.caller.signal, 'abort').length, 0);
   assert.equal(fixture.changed, 0);
 });
+
+// SEC-NLP-01B: the new endpoint shares existing transport semantics.
+function passageToneFixture(version = 0) {
+  const accession = '0000320193-26-000020';
+  const secUrl = `https://www.sec.gov/Archives/edgar/data/320193/${accession.replaceAll('-', '')}/${accession}-index.html`;
+  const source = { chunk_id: 'chunk_0000', form: '10-Q', filed: '2026-07-31', filename: 'report.htm', sec_url: secUrl };
+  const identity = filingToneIdentity({ ticker: 'AAPL', cik: '0000320193' }, { ...source, accession_number: accession });
+  return { identity, value: { ticker: 'AAPL', company_cik: '0000320193', company_name: 'Synthetic Apple fixture', data_version: version,
+    evidence_version: 0, publication: { accession_number: accession, data_version: 0, content_digest: 'a'.repeat(64) }, source,
+    scope: 'published_chunk', offsets: 'unicode_code_point', text: 'strong weak',
+    tone: { method_version: 'sec-filing-tone-v1', lexicon_version: 'authored-finance-tone-v1', status: 'scored', reason: null,
+      score: { numerator: 0, denominator: 1 }, token_count: 2, positive_count: 1, negative_count: 1, negated_count: 0,
+      matches: [{ text: 'strong', term: 'strong', start: 0, end: 6, polarity: 'positive', negator_span: null },
+        { text: 'weak', term: 'weak', start: 7, end: 11, polarity: 'negative', negator_span: null }] } } };
+}
+for (const version of [0, 2, Number.MAX_SAFE_INTEGER]) test(`SEC-NLP-01B tone GET sends exactly one canonical pin ${version} and selectors only`, async ctx => {
+  const { identity, value } = passageToneFixture(version);
+  const controller = versionedController(version, () => assert.fail('Unexpected reconciliation'));
+  let calls = 0;
+  ctx.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls++;
+    assert.equal(url, `/api/finlens/companies/AAPL/filings/${identity.accession_number}/chunks/chunk_0000/tone`);
+    assert.deepEqual(init.headers, { 'X-FinLens-Data-Version': String(version) });
+    assert.equal(init.cache, 'no-store'); assert.equal(init.body, undefined); assert.equal(init.method, undefined);
+    assert.notEqual(init.signal, controller.signal);
+    return new Response(JSON.stringify(value), { headers: { 'X-FinLens-Data-Version': String(version) } });
+  });
+  assert.deepEqual(await getPassageTone(identity, controller.signal), value);
+  assert.equal(calls, 1);
+});
+for (const pin of [null, undefined, -1, '0', 0.5, NaN, Number.MAX_SAFE_INTEGER + 1, -0]) {
+  test(`SEC-NLP-01B tone rejects invalid pin ${String(pin)} before fetching`, async ctx => {
+    ctx.mock.method(globalThis, 'fetch', () => assert.fail('Invalid pin fetched'));
+    await assert.rejects(getPassageTone(passageToneFixture().identity, versionedController(pin, () => {}).signal), error => error.code === 'TONE_INVALID_INPUT');
+  });
+}
+test('SEC-NLP-01B tone refuses unbound controllers and invalid source identity before fetching', async ctx => {
+  ctx.mock.method(globalThis, 'fetch', () => assert.fail('Unverified source fetched'));
+  const { identity } = passageToneFixture();
+  await assert.rejects(getPassageTone(identity, new AbortController().signal), error => error.code === 'TONE_INVALID_INPUT');
+  await assert.rejects(getPassageTone({ ...identity, sec_url: 'https://www.sec.gov/other' }, versionedController(0, () => {}).signal), error => error.code === 'TONE_INVALID_INPUT');
+});
+for (const [name, header, mutate, code, changedCount] of [
+  ['missing header', null, () => {}, 'INVALID_RESPONSE', 0],
+  ['different header', '1', () => {}, 'DATA_VERSION_CHANGED', 1],
+  ['noncanonical header', '00', () => {}, 'DATA_VERSION_CHANGED', 1],
+  ['duplicate header', '0, 0', () => {}, 'DATA_VERSION_CHANGED', 1],
+  ['body pin', '0', value => { value.data_version = 1; }, 'INVALID_RESPONSE', 0],
+  ['source substitution', '0', value => { value.source.filename = 'other.htm'; }, 'INVALID_RESPONSE', 0],
+  ['malformed payload', '0', value => { value.tone = null; }, 'INVALID_RESPONSE', 0],
+]) test(`SEC-NLP-01B tone rejects ${name}`, async ctx => {
+  const { identity, value } = passageToneFixture(); mutate(value);
+  let changed = 0;
+  ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(value), { headers: header === null ? {} : { 'X-FinLens-Data-Version': header } }));
+  await assert.rejects(getPassageTone(identity, versionedController(0, () => changed++).signal), error => error.code === code);
+  assert.equal(changed, changedCount);
+});
+test('SEC-NLP-01B tone captures originating identity before an ignored-abort delayed response', async ctx => {
+  const { identity, value } = passageToneFixture(); const pending = deferred();
+  ctx.mock.method(globalThis, 'fetch', () => pending.promise);
+  const result = getPassageTone(identity, versionedController(0, () => {}).signal);
+  identity.filename = 'caller-mutated.htm'; identity.accession_number = '0000320193-25-000001';
+  pending.resolve(new Response(JSON.stringify(value), { headers: { 'X-FinLens-Data-Version': '0' } }));
+  assert.deepEqual(await result, value);
+});
+for (const cause of ['timeout', 'caller']) for (const phase of ['fetch', 'body', 'validation']) {
+  test(`SEC-NLP-01B tone ${cause} during ${phase} retains the shared deadline and blocks late 409`, async ctx => {
+    const clock = deadlineClock(ctx), pending = deferred(), { identity, value } = passageToneFixture();
+    let changed = 0, transport;
+    const controller = versionedController(0, () => changed++);
+    const expire = () => cause === 'timeout' ? clock.advance(30_000) : controller.abort();
+    ctx.mock.method(globalThis, 'fetch', (_, init) => {
+      transport = init.signal;
+      if (phase === 'fetch') return pending.promise;
+      if (phase === 'validation') Object.defineProperty(value, 'text', { enumerable: true, get() { expire(); return 'strong weak'; } });
+      const response = new Response(null, { headers: { 'X-FinLens-Data-Version': '0' } });
+      response.json = () => phase === 'body' ? pending.promise : Promise.resolve(value);
+      return Promise.resolve(response);
+    });
+    const running = getPassageTone(identity, controller.signal);
+    const rejected = assert.rejects(running, cause === 'timeout' ? isTimeout : isCancelled);
+    if (phase !== 'validation') { await flushTransport(); expire(); }
+    await rejected;
+    pending.resolve(phase === 'fetch' ? new Response('{}', { status: 409, headers: { 'X-FinLens-Error-Code': 'DATA_VERSION_CHANGED' } }) : value);
+    await flushTransport();
+    assert.equal(changed, 0); assert.equal(transport.aborted, true);
+    assert.equal(clock.timers.size, 0); assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+  });
+}
