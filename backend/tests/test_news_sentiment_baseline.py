@@ -448,3 +448,27 @@ def test_guarded_cli_missing_input_has_only_sanitized_json():
     assert result.returncode == 2
     assert json.loads(result.stdout) == {"status": "error", "error": "invalid_arguments"}
     assert result.stderr == ""
+
+
+def test_shared_training_helpers_match_original_constructor_behavior(ml):
+    rows = synthetic_rows()
+    grouping = news.group_rows(rows)
+    parts, _ = news.make_split(rows, grouping, ml)
+    training = parts["train"]
+    vectorizer, matrix, labels = news.fit_training_features(rows, training, ml)
+    reference = ml.vectorizer(lowercase=True, ngram_range=(1, 2), min_df=2,
+                             sublinear_tf=True, norm="l2", dtype=ml.np.float64)
+    expected_matrix = reference.fit_transform([rows[i].text for i in training])
+    expected_labels = ml.np.array([rows[i].label for i in training])
+    assert vectorizer.vocabulary_ == reference.vocabulary_
+    assert ml.np.array_equal(vectorizer.idf_, reference.idf_)
+    assert ml.np.array_equal(labels, expected_labels)
+    assert (matrix != expected_matrix).nnz == 0
+    with ml.thread_limit(limits=1):
+        actual = news.fit_linear_classifier(matrix, labels, ml, 10.)
+        expected = ml.classifier(C=10., class_weight="balanced", random_state=42,
+                                 max_iter=10000, tol=1e-4, dual="auto")
+        expected.fit(expected_matrix, expected_labels)
+    assert ml.np.array_equal(actual.coef_, expected.coef_)
+    assert ml.np.array_equal(actual.intercept_, expected.intercept_)
+    assert ml.np.array_equal(actual.predict(matrix), expected.predict(matrix))

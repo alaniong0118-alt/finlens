@@ -351,26 +351,43 @@ def metric_report(actual, predicted, ml):
             "confusion_matrix": ml.metrics.confusion_matrix(actual, predicted, labels=LABELS).tolist()}
 
 
+def vectorizer_parameters():
+    return {"lowercase": True, "ngram_range": (1, 2), "min_df": 2,
+            "sublinear_tf": True, "norm": "l2"}
+
+
+def classifier_parameters():
+    return {"class_weight": "balanced", "random_state": SEED,
+            "max_iter": 10000, "tol": 1e-4, "dual": "auto"}
+
+
+def fit_training_features(rows, train, ml):
+    """Memory-only training helper; caller owns thread/warning policy."""
+    vectorizer = ml.vectorizer(**vectorizer_parameters(), dtype=ml.np.float64)
+    matrix = vectorizer.fit_transform([rows[i].text for i in train])
+    labels = ml.np.array([rows[i].label for i in train])
+    return vectorizer, matrix, labels
+
+
+def fit_linear_classifier(matrix, labels, ml, c):
+    classifier = ml.classifier(C=c, **classifier_parameters())
+    classifier.fit(matrix, labels)
+    return classifier
+
+
 def evaluate(rows, grouping, parts, ml):
     """No model, features or row-level predictions escape this function."""
     validate_split(rows, grouping, parts)
     train, validation, test = (parts[k] for k in ("train", "validation", "test"))
-    ytrain = ml.np.array([rows[i].label for i in train])
     yval = ml.np.array([rows[i].label for i in validation])
-    vectorizer_parameters = {"lowercase": True, "ngram_range": (1, 2), "min_df": 2,
-                             "sublinear_tf": True, "norm": "l2"}
-    classifier_parameters = {"class_weight": "balanced", "random_state": SEED,
-                             "max_iter": 10000, "tol": 1e-4, "dual": "auto"}
     with ml.thread_limit(limits=1), warnings.catch_warnings():
         warnings.simplefilter("error", ml.convergence_warning)
-        vectorizer = ml.vectorizer(**vectorizer_parameters, dtype=ml.np.float64)
-        xtrain = vectorizer.fit_transform([rows[i].text for i in train])
+        vectorizer, xtrain, ytrain = fit_training_features(rows, train, ml)
         xval = vectorizer.transform([rows[i].text for i in validation])
         candidates = []
         best = None
         for c in (.1, 1., 10.):
-            classifier = ml.classifier(C=c, **classifier_parameters)
-            classifier.fit(xtrain, ytrain)
+            classifier = fit_linear_classifier(xtrain, ytrain, ml, c)
             prediction = classifier.predict(xval)
             score = metric_report(yval, prediction, ml)
             candidates.append({"C": c, "accuracy": score["accuracy"], "macro_f1": score["macro_f1"]})
@@ -383,11 +400,11 @@ def evaluate(rows, grouping, parts, ml):
         ytest = ml.np.array([rows[i].label for i in test])
         test_score = metric_report(ytest, selected.predict(xtest), ml)
         return {
-            "vectorizer": {**vectorizer_parameters, "dtype": "float64",
+            "vectorizer": {**vectorizer_parameters(), "dtype": "float64",
                            "token_pattern": r"(?u)\b\w\w+\b", "strip_accents": None,
                            "stop_words": None, "use_idf": True, "smooth_idf": True,
                            "max_df": 1.0, "max_features": None},
-            "classifier": {"name": "LinearSVC", **classifier_parameters, "selected_C": best[1]},
+            "classifier": {"name": "LinearSVC", **classifier_parameters(), "selected_C": best[1]},
             "selection": {"metric": "validation_macro_f1", "tie_break": "smaller_C",
                           "candidates": candidates, "refit_train_plus_validation": False},
             "training_features": {"vocabulary_size": len(vectorizer.vocabulary_),

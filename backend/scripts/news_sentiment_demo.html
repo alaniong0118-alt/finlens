@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Private Financial News Sentiment Demo</title>
+  <style nonce="__NONCE__">
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b1424;color:#edf3fb;line-height:1.6}
+    *{box-sizing:border-box}body{margin:0}main{max-width:840px;padding:40px 22px 64px;margin:auto}
+    .eyebrow{color:#67d9ce;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+    h1{font-size:clamp(1.8rem,5vw,2.65rem);line-height:1.18;margin:10px 0 16px}h2{font-size:1.2rem;margin:0 0 12px}
+    p{margin:10px 0}.muted{color:#b7c5d9}.panel{background:#122139;border:1px solid #2d4261;border-radius:14px;padding:24px;margin:24px 0}
+    .status{padding:12px 16px;background:#102c35;border-left:4px solid #67d9ce;border-radius:6px}
+    label{font-weight:650;display:block;margin-bottom:8px}textarea{width:100%;min-height:128px;resize:vertical;border:1px solid #7d94b5;border-radius:8px;padding:14px;background:#0c182b;color:#fff;font:inherit}
+    textarea:disabled{opacity:.65}.counter{text-align:right;font-size:.85rem;color:#b7c5d9;margin-top:4px}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}button{font:inherit;font-weight:650;border:1px solid #819bbd;border-radius:8px;padding:10px 18px;background:#1d3655;color:#fff;cursor:pointer;min-height:44px}
+    button.primary{background:#67d9ce;border-color:#67d9ce;color:#08272c}button.stop{margin-left:auto}button:disabled{opacity:.48;cursor:default}
+    :focus-visible{outline:3px solid #ffc969;outline-offset:4px}.error{color:#ffd19a;min-height:1.6em}
+    .result{border-top:1px solid #2d4261;margin-top:20px;padding-top:18px}.label{font-size:1.75rem;font-weight:750;display:block}
+    [data-label="positive"]{color:#88e6cb}[data-label="negative"]{color:#ffbfaa}[data-label="neutral"]{color:#c2d5ff}
+    code{overflow-wrap:anywhere;font-size:.85rem;color:#b9dbef}summary{cursor:pointer;font-weight:650;min-height:44px;padding-top:8px}
+    ul{padding-left:22px}footer{font-size:.85rem;color:#b7c5d9;border-top:1px solid #2d4261;padding-top:20px}
+    .metrics{display:flex;gap:28px;flex-wrap:wrap}.metrics strong{font-size:1.25rem;display:block;color:#edf3fb}
+    @media(max-width:520px){main{padding:28px 16px}.panel{padding:18px}.actions button{flex:1}.actions button.stop{margin-left:0;flex-basis:100%}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">FinLens · Private university demonstration</div>
+  <h1>Private Financial News Sentiment Demo</h1>
+  <p class="muted">Classify your own short English financial-news sentence using a supervised model fitted locally once per launch.</p>
+  <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true">Connecting to the local demonstrator…</p>
+  <section class="panel" aria-labelledby="input-title" id="workspace" aria-busy="true">
+    <h2 id="input-title">Try a financial-news sentence</h2>
+    <label for="sentence">Your sentence</label>
+    <textarea id="sentence" maxlength="4000" autocomplete="off" spellcheck="false" disabled aria-describedby="input-help counter" placeholder="Enter your own sentence after the model is ready."></textarea>
+    <p id="input-help" class="muted">One nonblank line, up to 2,000 Unicode characters. English intended; language is not automatically verified. Input is processed in memory without sentence logging or history.</p>
+    <div id="counter" class="counter">0 / 2,000 characters</div>
+    <div class="actions">
+      <button id="classify" class="primary" type="button" disabled>Classify</button>
+      <button id="clear" type="button">Clear</button>
+      <button id="stop" class="stop" type="button">Stop demo</button>
+    </div>
+    <p id="error" class="error" role="alert"></p>
+    <div id="result" class="result" aria-live="polite" aria-atomic="true" hidden>
+      <span class="muted">News sentence classification</span>
+      <output id="label" class="label"></output>
+      <p class="muted">A class label from this model, not a calibrated confidence score or investment recommendation.</p>
+    </div>
+  </section>
+  <section class="panel" aria-labelledby="method-title">
+    <h2 id="method-title">Method and limits</h2>
+    <p>TF-IDF word unigrams/bigrams + LinearSVC, balanced classes, C=10. Fits only the original 2,071 training rows from Financial PhraseBank 75Agree. Repeat submissions reuse the fitted model.</p>
+    <p>Method: <code id="method">news-sentiment-tfidf-svc-v1</code><br>Demo: <code id="version">private-news-sentiment-demo-v1</code></p>
+    <details>
+      <summary>Historical ML-PB-01 held-out evaluation</summary>
+      <p class="muted">These fixed historical results describe a separate held-out experiment. They are not confidence percentages for your sentence.</p>
+      <div class="metrics"><div><strong>85.67%</strong>Test accuracy</div><div><strong>0.7998</strong>Test macro-F1</div><div><strong>≈63%</strong>Negative-class recall</div></div>
+      <p class="muted">3,453 source rows, 3,349 text groups; one held-out partition. Majority-neutral accuracy: 62.08%. Small corpus, imbalance and agreement filtering limit generalization.</p>
+    </details>
+    <ul>
+      <li>Financial-news sentence sentiment only. No SEC Filing Tone replacement or SEC-filing validation.</li>
+      <li>No cybersecurity-risk classification, calibrated probabilities, trading signals or stock/portfolio return predictions.</li>
+      <li>No production-readiness or cross-company generalization claim. The model can misclassify unfamiliar or ambiguous wording.</li>
+      <li>Private, nonprofit academic use only. No online deployment, corpus distribution or trained-weight redistribution is authorized.</li>
+    </ul>
+  </section>
+  <footer>
+    <p><strong>Financial PhraseBank v1.0 — CC BY-NC-SA 3.0 Unported</strong><br>License reference: http://creativecommons.org/licenses/by-nc-sa/3.0/</p>
+    <p>Malo, P., Sinha, A., Takala, P., Korhonen, P. and Wallenius, J. (2013): <em>Good debt or bad debt: Detecting semantic orientations in economic texts.</em> Journal of the American Society for Information Science and Technology (in Press, as recorded in the source README).</p>
+    <p>Trusted local operator and libraries only. Job Objects bound lifecycle and committed memory; they do not provide complete filesystem/network containment. Releasing model/data references is not secure memory erasure. Stop discards this launch's in-memory model.</p>
+  </footer>
+</main>
+<script nonce="__NONCE__">
+"use strict";
+let token = "__TOKEN__";
+const byId = id => document.getElementById(id);
+const input = byId("sentence"), classify = byId("classify"), clear = byId("clear"), stop = byId("stop");
+const status = byId("status"), error = byId("error"), result = byId("result"), output = byId("label");
+let state = "starting", busy = false, generation = 0, run = null, current = null, pollTimer = null, stopping = false;
+let pollGeneration = 0, pollController = null;
+let stopRequested = false; // Terminal for this page instance; navigation never resets it.
+const phases = { validating_source: "Verifying the pinned local source", grouping: "Checking duplicate groups", splitting: "Verifying the training split", fitting: "Fitting the local classifier" };
+const errors = { INVALID_INPUT: "Enter one nonblank line of at most 2,000 characters, without control characters.", INVALID_JSON: "The request could not be read. Try again.", BODY_TOO_LARGE: "The request is too large. Shorten the sentence.", BODY_TIMEOUT: "The request took too long to arrive. Try again.", UNSUPPORTED_FEATURES: "This wording has no features known to the model. Try another financial-news sentence.", BUSY: "The model is finishing the previous request. Wait briefly, then submit again.", MODEL_NOT_READY: "The model is not ready. Check the preparation status.", INFERENCE_TIMEOUT: "The worker timed out and is unavailable. Stop and explicitly relaunch the demo.", WORKER_PROTOCOL_FAILED: "The worker became unavailable. Stop and explicitly relaunch the demo.", INFERENCE_FAILED: "Classification failed. Stop and explicitly relaunch the demo.", SHUTTING_DOWN: "The demo is stopping." };
+function valid() { const text = input.value; return text.trim().length > 0 && Array.from(text).length <= 2000 && !/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(text); }
+function controls() { input.disabled = state !== "ready" || stopping; classify.disabled = state !== "ready" || busy || stopping || !valid(); byId("workspace").setAttribute("aria-busy", String(busy || state === "starting")); byId("counter").textContent = Array.from(input.value).length.toLocaleString("en-US") + " / 2,000 characters"; }
+function erase() { generation++; if (current)
+    current.abort(); current = null; input.value = ""; output.textContent = ""; output.removeAttribute("data-label"); result.hidden = true; error.textContent = ""; busy = false; controls(); }
+async function api(path, body, controller) { const timer = setTimeout(() => controller.abort(), 3000); try {
+    const response = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "X-FinLens-Demo-Token": token, ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), credentials: "omit", mode: "same-origin", redirect: "error", cache: "no-store", referrerPolicy: "no-referrer", signal: controller.signal });
+    const value = await response.json();
+    if (!response.ok)
+        throw { code: typeof value.error === "string" ? value.error : "UNAVAILABLE" };
+    return value;
+}
+finally {
+    clearTimeout(timer);
+} }
+function invalidatePoll() {
+    pollGeneration++;
+    if (pollController)
+        pollController.abort();
+    pollController = null;
+    clearTimeout(pollTimer);
+    pollTimer = null;
+}
+async function poll() { if (stopping)
+    return;
+    invalidatePoll();
+    const mine = pollGeneration, controller = new AbortController();
+    pollController = controller;
+    try {
+    const value = await api("/api/status", undefined, controller);
+    if (stopping || mine !== pollGeneration || pollController !== controller)
+        return;
+    if (!["starting", "ready", "failed", "stopping", "stopped"].includes(value.state) || typeof value.model_run_id !== "string")
+        throw new Error();
+    if (run && run !== value.model_run_id)
+        erase();
+    run = value.model_run_id;
+    state = value.state;
+    byId("method").textContent = value.method_version;
+    byId("version").textContent = value.demo_version;
+    if (state === "starting")
+        status.textContent = (phases[value.phase] || "Starting the owned worker") + " · " + value.elapsed_seconds + "s / 60s budget";
+    else if (state === "ready")
+        status.textContent = "Model ready · Local classification available";
+    else {
+        generation++;
+        if (current)
+            current.abort();
+        current = null;
+        busy = false;
+        status.textContent = state === "failed" ? "Model unavailable. Stop and explicitly relaunch the demonstrator." : "Demo is stopping or stopped.";
+        output.textContent = "";
+        result.hidden = true;
+    }
+    controls();
+}
+catch {
+    if (stopping || mine !== pollGeneration || pollController !== controller)
+        return;
+    generation++;
+    if (current)
+        current.abort();
+    current = null;
+    busy = false;
+    state = "unavailable";
+    status.textContent = "Cannot reach the local demonstrator. Check its owning terminal; use Ctrl+C if shutdown is uncertain.";
+    output.textContent = "";
+    result.hidden = true;
+    controls();
+}
+finally {
+    if (pollController === controller)
+        pollController = null;
+} if (!stopping && mine === pollGeneration)
+    pollTimer = setTimeout(poll, state === "starting" ? 500 : 1000); }
+input.addEventListener("input", () => { generation++; if (current)
+    current.abort(); current = null; busy = false; output.textContent = ""; result.hidden = true; error.textContent = ""; controls(); });
+classify.addEventListener("click", async () => { if (!valid() || busy || state !== "ready")
+    return; const mine = ++generation, expectedRun = run; current = new AbortController(); busy = true; result.hidden = true; error.textContent = ""; controls(); try {
+    const value = await api("/api/classify", { text: input.value }, current);
+    if (mine !== generation || stopping || state !== "ready")
+        return;
+    if (!["negative", "neutral", "positive"].includes(value.label) || value.model_run_id !== expectedRun || value.method_version !== "news-sentiment-tfidf-svc-v1")
+        throw { code: "WORKER_PROTOCOL_FAILED" };
+    output.textContent = value.label[0].toUpperCase() + value.label.slice(1);
+    output.dataset.label = value.label;
+    result.hidden = false;
+}
+catch (exc) {
+    if (mine !== generation || stopping)
+        return;
+    error.textContent = errors[exc.code] || "The request could not complete. Check status before trying again.";
+}
+finally {
+    if (mine === generation) {
+        busy = false;
+        current = null;
+        controls();
+    }
+} });
+clear.addEventListener("click", () => { erase(); if (!input.disabled)
+    input.focus(); });
+stop.addEventListener("click", async () => { if (stopping)
+    return; stopRequested = true; stopping = true; invalidatePoll(); erase(); stop.disabled = true; state = "stopping"; controls(); status.textContent = "Stopping the owned demonstrator…"; try {
+    await api("/api/shutdown", {}, new AbortController());
+    const deadline = performance.now() + 12000;
+    while (performance.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        try {
+            const value = await api("/api/status", undefined, new AbortController());
+            if (value.state === "stopped") {
+                status.textContent = "Demo stopped. Relaunch explicitly to fit a new in-memory model.";
+                token = "";
+                return;
+            }
+            if (value.state === "failed")
+                break;
+        }
+        catch {
+            break;
+        }
+    }
+}
+catch { } status.textContent = "Shutdown could not be verified. Press Ctrl+C in the owning terminal."; token = ""; });
+window.addEventListener("pagehide", () => { stopping = true; invalidatePoll(); erase(); });
+window.addEventListener("pageshow", event => { if (event.persisted && !stopRequested) {
+    invalidatePoll();
+    stopping = false;
+    erase();
+    state = "starting";
+    controls();
+    poll();
+} });
+controls();
+poll();
+</script>
+</body>
+</html>
