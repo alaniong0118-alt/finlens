@@ -155,3 +155,156 @@ response_sha256: bc9d0af20c28aead8f51e191c718b56b332420c2ab82a12da4530ba51e22f44
 normalized_content_sha256: 54527de98d329875e393a7e673a9dcb2b90a025d46cab503e8e3f43ecbb215fc
 publication_manifest_sha256: 5c3d90b69ce8e495faf0878345d74f65e363242a98c49a00c5de9261ec75851c
 ```
+
+## MD-WIKI increment 1: pure offline observation adapter
+
+`app.nasdaq_wiki_adapter.inspect_wiki_bytes(payload, receipt, request)` accepts
+original response **bytes**, original operator receipt **bytes**, and a frozen
+`WikiInspectionRequest`. It opens no files, starts no services and makes no
+network/provider/database calls. There is no CLI or integration into the Tiingo
+inspector. The existing market contracts and return engine are unchanged.
+
+The request requires the provider ticker, independently expected original-response
+SHA256, expected run ID, acquisition start/end dates and selected start/end dates.
+Dates are exact Python `date` instances. `input_kind` is `synthetic` or
+`unverified_local`, a declaration only. An optional `expected_receipt_sha256`
+provides an external metadata pin. Hexadecimal hash case is immaterial; payload
+whitespace, numeric lexemes and every original byte remain significant. Hashes
+are never repaired or calculated from reserialized provider JSON.
+
+### Supported schema and bounds
+
+The supported response has exactly `datatable` and `meta`; the table has exactly
+`columns` and `data`, and metadata has exactly `next_cursor_id`, which must be
+explicitly null. Every column has exactly `name` and `type`. Supported names/types:
+
+| Column names | Exact declared type |
+|---|---|
+| ticker | String |
+| date | Date |
+| open, high, low, close | BigDecimal(34,12) |
+| volume | BigDecimal(37,15) |
+| ex-dividend | BigDecimal(42,20) |
+| split_ratio, adj_volume | double |
+| adj_open, adj_high, adj_low, adj_close | BigDecimal(50,28) |
+
+Columns and matching cells may be reordered; the schema must otherwise match
+exactly. Unknown columns/types/envelopes reject instead of triggering inference.
+Increment 1B corrected volume's exact observed declaration to BigDecimal(37,15);
+the obsolete BigDecimal(37,0) and arbitrary alternative types remain rejected.
+Read-only acceptance against the three retained, independently pinned originals
+now establishes compatibility with those specific bytes, as recorded below.
+
+Limits reject rather than truncate: 4 MiB per response, 64 KiB per receipt and
+canonical request context, 1,000 response rows, one to three receipt ticker
+records, and 1,461 inclusive acquisition calendar dates. Empty acquisition
+responses reject; a valid selection containing no observations returns an empty
+tuple with `empty_selected_observations`. A selected window must be within the
+acquisition window. Every acquisition row is validated before selection.
+
+JSON rejects duplicate keys, malformed UTF-8, nonfinite values, excessive numeric
+tokens/precision/magnitude, and malformed nested structures. Financial numbers
+are decoded directly to bounded `Decimal` values, never through binary floats.
+Raw and adjusted OHLC must be positive and internally coherent; volume is
+nonnegative, raw volume integral, ex-dividend nonnegative and split ratio positive.
+Adjusted fields undergo structural validation only and are never projected.
+
+### Operator receipt and source bindings
+
+The supported original receipt shape is demonstrated by the fictional in-memory
+receipt in `tests/test_nasdaq_wiki_adapter.py`. Root and record keys are exact.
+The pilot/source labels must identify the limited original WIKI/PRICES acquisition;
+run ID must match the explicit expectation. Requested tickers and records must
+be unique and agree. Request counts must equal the bounded ticker inventory;
+page size is exactly 1,000. Receipt declarations require completed acquisition,
+HTTP 200, `CAPTURED_STRUCTURAL_ONLY`, `has_more_pages=false`, and
+`financial_quality_approved=false`. An approval flag cannot grant eligibility.
+
+Each record's filename must be exactly
+`WIKI_PRICES_<ticker>_<requested-start>_<requested-end>.json`; filenames are
+validated strings, never filesystem paths to open. Credential-free query metadata
+must contain exactly one of each: `ticker`, `date.gte`, `date.lte`,
+`qopts.per_page`, with values matching that record's ticker/request dates/1,000.
+Credentials, extra/duplicate parameters, blank values and mismatched bounds reject.
+Errors contain stable market-contract codes, without echoing untrusted metadata.
+
+The selected record's hash and byte size must match the supplied response, whose
+hash must independently match the request pin. Actual row count and date extrema
+must agree with the receipt; rows must have the requested ticker, unique dates
+and dates inside acquisition bounds. Nonselected records are structurally checked;
+their response contents/hashes are **not cross-file verified** by a one-response
+call. Acquisition/request counts remain operator declarations, not network proof.
+
+`captured_at_utc` accepts a valid UTC timestamp with up to seven fractional digits
+and is returned verbatim, including trailing zeros. Its whole-second date/time
+must not precede the run ID's start time or the records' observed dates. Fractional
+text is not converted to a microsecond timestamp or silently rounded. It is a
+run capture timestamp; `retrieved_at` and historical `available_at` stay null.
+
+### Projection and financial restrictions
+
+The frozen result holds a frozen request, tuple of frozen raw-close observations,
+and tuple of blockers. Fresh JSON projections contain exact fixed-point close
+strings, provider date labels and zero-based original row indices. Vendor dividend
+and split indicators are explicitly unverified indicators, never canonical actions.
+Acquisition bounds/count/extrema and selected bounds/count remain distinct.
+Response, receipt, canonical inspection context and inspection-result SHA256 are
+separate bindings. The inspection hash includes all three input bindings, version,
+selected rows, blockers and the known dataset limitation. It is not a publication
+manifest or market-data version pin; original bytes bind even unprojected fields.
+
+All results remain financially blocked: custody, security identity, currency
+authority, listing continuity, calendar completeness, corporate-action completeness
+and adjustment semantics are unverified. Freshness is unknown and knowledge mode
+is retrospective/revised. No security/company/CIK/listing identity, currency, MIC,
+session close time, calendar, publication, version pin or action coverage is invented.
+No adjusted prices, percentage changes, admitted returns, compounding or performance
+values are produced. Receipt/hash consistency proves neither authenticated provider
+custody nor financial correctness.
+
+The coordinator-supplied missing AAPL dividend warning for 2017-11-10 and 2018-02-09
+is retained as a **dataset limitation**, including for synthetic inspection. It is
+not a claim that fictional test prices independently establish those events.
+Zero ex-dividend/default split indicators never imply complete action coverage.
+Positive indicators add blockers without removing any existing blocker.
+
+Missing dates remain absent; there is no forward fill, interpolation or inferred
+exchange calendar. In particular, shared-price filtering must not bridge the
+reported 2017-08-07 gap. Once proper financial evidence exists, the unchanged
+`market_returns.calculate_returns`, `align_returns` and `reinvested_growth` remain
+the calculation infrastructure; this adapter supplies no alternative engine.
+
+### Focused synthetic verification
+
+From `backend`, using the existing environment:
+
+```powershell
+.venv/Scripts/python.exe -B -m pytest -p no:cacheprovider tests/test_nasdaq_wiki_adapter.py -q
+```
+
+All response/receipt fixtures are fictional bytes constructed inside that test
+module. Focused tests cover exact and immutable projections, bindings, schema,
+pagination, numeric/date/resource limits, metadata/query rejection, missing dates,
+capture precision, non-promotion of actions/adjustments and offline isolation.
+The guarded fresh-process test checks imports and file/socket/process audit events
+during inspection; it does not claim OS-level containment. No completed Tiingo or
+market-return suites, browser/API checks or financial eligibility acceptance ran.
+
+Increment 1B focused regression: **175 passed, 0 failed, 0 skipped**, comprising
+the existing 172 cases and three targeted volume-schema cases. Read-only local
+acceptance used the public interface with explicit response and receipt hash pins:
+
+| Retained original | Acquired rows | Selected rows | 2017-08-07 present |
+|---|---|---|---|
+| AAPL | 961 | 955 | No |
+| MSFT | 962 | 956 | Yes |
+| COST | 961 | 955 | No |
+
+Requested acquisition: 2014-06-01 through 2018-03-27; actual extrema:
+2014-06-02 through 2018-03-27; selected extrema: 2014-06-10 through 2018-03-27.
+Every selected date/close and original row reference matched the source bytes.
+The three original SHA256 pins and recorded receipt pin matched independently
+before invocation and on fresh reads afterward. Capture precision and all required
+financial blockers survived; trusted custody remained false and financial
+eligibility blocked. These checks establish bounded structural compatibility,
+not provider authentication, action completeness or eligible returns.
