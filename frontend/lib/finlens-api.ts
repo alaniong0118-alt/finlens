@@ -674,9 +674,9 @@ export function getAnnualFinancials(ticker: string, fiscalYear: number | null, s
 export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });
 }
-export function getFilingContext(ticker: string, accession: string, query: string, signal?: AbortSignal): Promise<FilingContext> {
+export function getFilingContext(ticker: string, accession: string, query: string, signal?: AbortSignal, requirePublishedVersion = false): Promise<FilingContext> {
   const params = new URLSearchParams({ q: query, limit: "5" });
-  return requestJson(`/companies/${encodeURIComponent(ticker)}/filings/${encodeURIComponent(accession)}/context?${params}`, { signal });
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/filings/${encodeURIComponent(accession)}/context?${params}`, { signal }, requirePublishedVersion);
 }
 
 export function getCompanyContext(ticker: string, cik: string, query: string, signal: AbortSignal): Promise<CompanyContext> {

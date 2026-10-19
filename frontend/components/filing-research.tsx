@@ -6,19 +6,20 @@ import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, offic
 import DirectResearchAnswer from "@/components/research-answer";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
 import PassageTone from "@/components/passage-tone";
+import { RISK_TOPICS, RISK_EXPLANATION, riskTopic, riskQueryLabel, validateRiskEvidence, RiskEvidenceError, type RiskRequest } from "@/lib/sec-risk";
 
 import { useResearchVersion } from "@/components/research-freshness";
 
 const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artificial intelligence"];
 
-export function EvidenceResults({ result, answer, company }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company }) {
+export function EvidenceResults({ result, answer, company, risk = false }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company; risk?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const passages = evidencePassages(result);
   const previews = passages.map(passage => ({ ...passage, excerpt: evidenceExcerpt(passage.text, result.query, answer, passages.map(item => item.text)) }));
   return <div className="evidence-results" aria-live="polite">
-    <div className="section-heading"><h3>{passages.length ? `${passages.length} SEC evidence passages` : "retrieval_scope" in result ? "Insufficient evidence in published company filings" : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
+    <div className="section-heading"><h3>{risk ? passages.length ? "Candidate SEC passages" : "Insufficient topic evidence in the searched scope" : passages.length ? `${passages.length} SEC evidence passages` : "retrieval_scope" in result ? "Insufficient evidence in published company filings" : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
     <p className="muted small">Search: “{result.query}” · Highlights mark matching text, not verified claim support. Excerpts retain the source wording.</p>
-    {passages.length === 0 && <div className="empty-state"><p>Try a more specific financial topic. FinLens does not substitute model knowledge when filing evidence is weak.</p></div>}
+    {passages.length === 0 && <div className="empty-state"><p>{risk ? "No qualifying passages were returned for this topic and scope. This does not mean no risk. Edit the query or explicitly choose another scope and search again." : "Try a more specific financial topic. FinLens does not substitute model knowledge when filing evidence is weak."}</p></div>}
     <div id="ranked-evidence">{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt }) => <article className="evidence-card" key={citation.citation_id}>
       <div className="evidence-heading"><h4>Evidence {rank} <span className="muted">· {citation.form}</span></h4><span className="small muted">Filed {formatDate(citation.filed)}</span></div>
       <p className="excerpt evidence-preview">{excerpt.start > 0 && "… "}{excerpt.parts.map((part, index) => part.kind ? <mark key={index} className={`evidence-highlight ${part.kind === "value" ? "value-match" : ""}`}>{part.text}</mark> : part.text)}{excerpt.end < text.length && " …"}</p>
@@ -32,9 +33,9 @@ export function EvidenceResults({ result, answer, company }: { result: EvidenceC
         <p>Hybrid rank {rank} · Retrieval rule: {citation.evidence_reason.replaceAll("_", " ")}</p>
         <p>Scores describe retrieval ranking, not factual confidence.</p>
       </div></details>
-      <PassageTone identity={company && result.ticker === company.ticker
+      {!risk && <PassageTone identity={company && result.ticker === company.ticker
         && ("retrieval_scope" in result ? result.company_cik === company.cik && result.searched_accessions.includes(citation.accession_number)
-          : result.accession_number === citation.accession_number) ? filingToneIdentity(company, citation) : null} />
+          : result.accession_number === citation.accession_number) ? filingToneIdentity(company, citation) : null} />}
     </article>)}</div>
     {passages.length > 2 && <button type="button" className="secondary-button evidence-toggle" aria-expanded={expanded} aria-controls="ranked-evidence" onClick={() => setExpanded(!expanded)}>{expanded ? "Show less evidence" : `Show more evidence (${passages.length - 2})`}</button>}
   </div>;
@@ -101,6 +102,9 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [guideMetric, setGuideMetric] = useState("revenue");
   const [guideScope, setGuideScope] = useState<QuestionScope>("latest_available");
+  const [purpose, setPurpose] = useState<"general" | "risk">("general");
+  const [riskGuide, setRiskGuide] = useState("supply_chain");
+  const [searchedRisk, setSearchedRisk] = useState<{ owner: string; request: RiskRequest } | null>(null);
   const questionInput = useRef<HTMLTextAreaElement | null>(null);
   const presentation = METRIC_CATALOG.find(item => item.id === guideMetric)!;
   const preparedQuestion = guidedQuestion(guideMetric, guideScope);
@@ -111,6 +115,11 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const answerPending = useRef(false);
   const evidencePending = useRef(false);
   const evidenceIdentity = retrievalScope === "company" ? (companyEvidenceReady ? "company" : "company-unavailable") : filing?.accession_number ?? "";
+  const riskReady = retrievalScope === "company" ? companyEvidenceReady : Boolean(filing);
+  const riskOwner = JSON.stringify([company.ticker, company.cik, version, retrievalScope, evidenceIdentity, purpose, query, riskGuide]);
+  const liveRiskOwner = useRef(riskOwner);
+  // A render can precede passive-effect cancellation. Old callbacks must not own it.
+  liveRiskOwner.current = riskOwner;
   const [searchedEvidence, setSearchedEvidence] = useState(evidenceIdentity);
   useEffect(() => {
     const currentScope = scope.current;
@@ -141,8 +150,35 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     setQuery(value); setResult(null); setLoading(false); setError(null);
     setAnswer(null); setAnswerLoading(false); setAnswerError(null);
   }
-  async function search(event: FormEvent<HTMLFormElement>) {
+  async function search(event: Pick<FormEvent<HTMLFormElement>, "preventDefault">) {
     event.preventDefault(); if (version === null || !query.trim() || answerPending.current || evidencePending.current) return;
+    if (purpose === "risk") {
+      if (!riskReady) return;
+      const request: RiskRequest = Object.freeze({ ticker: company.ticker, cik: company.cik, version, query: query.trim(),
+        scope: retrievalScope, accession: retrievalScope === "filing" ? filing!.accession_number : null });
+      const owner = riskOwner;
+      const evidenceId = evidenceScope.current.start();
+      evidenceController.current?.abort();
+      const transport = versionedController(version, changed);
+      evidenceController.current = transport;
+      const current = () => evidenceScope.current.current(evidenceId) && liveRiskOwner.current === owner && !transport.signal.aborted;
+      evidencePending.current = true;
+      setSearchedRisk({ owner, request }); setSearchedVersion(version); setSearchedEvidence(evidenceIdentity);
+      setResult(null); setError(null); setLoading(true); setAnswer(null); setAnswerError(null); setAnswerLoading(false);
+      try {
+        const response = retrievalScope === "company"
+          ? await getCompanyContext(request.ticker, request.cik, request.query, transport.signal)
+          : await getFilingContext(request.ticker, request.accession!, request.query, transport.signal, true);
+        if (!current()) return;
+        validateRiskEvidence(response, request);
+        if (current()) setResult(response);
+      } catch (failure) {
+        if (current()) setError(failure instanceof FinLensApiError ? describeApiError(failure) : new RiskEvidenceError().message);
+      } finally {
+        if (current()) { evidencePending.current = false; setLoading(false); }
+      }
+      return;
+    }
     setSearchedVersion(version);
     const id = scope.current.start();
     controller.current?.abort(); controller.current = versionedController(version, changed);
@@ -178,7 +214,23 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       {officialSecUrl(filing.sec_url) && <a href={officialSecUrl(filing.sec_url)} target="_blank" rel="noopener noreferrer">Open official filing ↗</a>}
     </div>}
     <form onSubmit={search} className="search-form">
-      <fieldset className="question-guide">
+      <label>Research purpose<select value={purpose} onChange={event => {
+        edit(""); setSearchedRisk(null); setPurpose(event.target.value === "risk" ? "risk" : "general");
+      }}><option value="general">General research</option><option value="risk">Risk-topic exploration</option></select></label>
+      {purpose === "risk" ? <fieldset className="question-guide">
+        <legend>Explore risk-related SEC evidence</legend>
+        <label>Risk topic<select value={riskGuide} onChange={event => {
+          const topic = riskTopic(event.target.value);
+          if (topic) { setRiskGuide(topic.id); edit(topic.query); }
+        }}>{RISK_TOPICS.map(topic => <option key={topic.id} value={topic.id}>{topic.label}</option>)}</select></label>
+        <p className="question-preview">{riskTopic(riskGuide)?.query}</p>
+        <button type="button" className="secondary-button" onClick={() => {
+          const topic = riskTopic(riskGuide);
+          if (topic) { edit(topic.query); questionInput.current?.focus(); }
+        }}>Use risk topic</button>
+        <p className="muted small">Topic selection prepares the editor. Review or edit it, then submit explicitly. These guides are not an exhaustive list of issuer disclosures.</p>
+        <p className="muted small">{RISK_EXPLANATION}</p>
+      </fieldset> : <fieldset className="question-guide">
         <legend>Prepare a financial question</legend>
         <div className="guide-controls">
           <label>Question metric<select value={guideMetric} onChange={event => {
@@ -194,11 +246,12 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
           if (preparedQuestion) { edit(preparedQuestion); questionInput.current?.focus(); }
         }}>Use question</button>
         <p className="muted small">Fills the editor below. Review or edit it, then submit explicitly.</p>
-      </fieldset>
+      </fieldset>}
       <label htmlFor="research-query">Research question or search<textarea ref={questionInput} id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
-      <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>
-      <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading}>{loading || answerLoading ? "Researching stored SEC data…" : "Research question"}</button>
-      <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). {(retrievalScope === "filing" ? !filing : !companyEvidenceReady) ? "Filing evidence is unavailable for this selection; only direct financial answers can be requested." : "Other questions search SEC evidence."} No AI generation.</p>
+      {purpose === "general" && <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>}
+      <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading || purpose === "risk" && !riskReady}>{loading || answerLoading ? "Researching stored SEC data…" : purpose === "risk" ? "Search risk topic" : "Research question"}</button>
+      {purpose === "risk" ? <p className="muted small">{version === null ? "Verify this company’s published data before searching." : !riskReady ? "Searchable SEC evidence is unavailable for this selection. Check the filing availability above." : "Search the selected scope explicitly. No direct financial answer, AI analysis or tone scoring is requested."}</p>
+        : <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). {(retrievalScope === "filing" ? !filing : !companyEvidenceReady) ? "Filing evidence is unavailable for this selection; only direct financial answers can be requested." : "Other questions search SEC evidence."} No AI generation.</p>}
     </form>
     {searchedVersion !== version && <p className="notice">Data updated; research this question again.</p>}
     <div aria-live="polite" aria-busy={answerLoading}>
@@ -210,18 +263,19 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     </div>
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">{retrievalScope === "company" ? "Finding relevant passages in published company filings…" : "Finding relevant passages in this filing…"}</p>}
-      {error && <p role="alert" className="error-state">{error}</p>}
-      {!result && !answer && !loading && !answerLoading && !error && <div className="empty-state">
+      {error && <><p role="alert" className="error-state">{error}</p>{purpose === "risk" && <button type="button" className="secondary-button" disabled={version === null || !riskReady || loading} onClick={search}>Retry risk-topic search</button>}</>}
+      {purpose === "general" && !result && !answer && !loading && !answerLoading && !error && <div className="empty-state">
         <h3>{(retrievalScope === "company" ? companyEvidenceReady : filing) ? "Explore the filing evidence" : "Explore financial questions"}</h3>
         <p>{(retrievalScope === "company" ? companyEvidenceReady : filing)
           ? "Choose a topic, read the retrieved passages, and follow the official SEC links. No OpenAI access is required."
           : "Searchable filing evidence is unavailable for this selection. Prepare a supported financial question above; direct answers use stored financial observations and may be unavailable. No OpenAI access is required."}</p>
       </div>}
     </div>
-    {searchedVersion === version && searchedEvidence === evidenceIdentity && result && <><h3>Supporting SEC evidence</h3>
-      <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}Passages may describe different periods and are research, not validation of the structured answer.</p>
-      <EvidenceResults key={`evidence-${result.query}-${retrievalScope}`} result={result} answer={"retrieval_scope" in result ? null : answer} company={company} />
-      {"retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} />}
+    {searchedVersion === version && searchedEvidence === evidenceIdentity && result && (purpose !== "risk" || searchedRisk?.owner === riskOwner) && <>
+      {purpose === "risk" ? <><p className="small">{riskQueryLabel(searchedRisk!.request.query)} · {company.ticker} · CIK {company.cik} · Publication {searchedRisk!.request.version}</p><p className="muted small">{RISK_EXPLANATION}</p></> : <h3>Supporting SEC evidence</h3>}
+      <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}{purpose === "risk" ? "Filing dates describe the returned sources, not a current or complete risk assessment." : "Passages may describe different periods and are research, not validation of the structured answer."}</p>
+      <EvidenceResults key={`evidence-${purpose}-${result.query}-${retrievalScope}`} result={result} answer={purpose === "risk" || "retrieval_scope" in result ? null : answer} company={company} risk={purpose === "risk"} />
+      {purpose === "general" && ("retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} />)}
     </>}
   </>;
 }

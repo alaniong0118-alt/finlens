@@ -187,6 +187,260 @@ function companySource(citation, text) {
   return `[SOURCE ${citation.citation_id}]\nmetadata: ${JSON.stringify(metadata)}\ntext: |-\n${text.split('\n').map(line => `  ${line}`).join('\n')}\n[END SOURCE ${citation.citation_id}]`;
 }
 
+// RISK-SEC-01 fixtures use actual backend identities/framing, separately from
+// historical generic fixtures. No shared harness or older evidence is changed.
+const riskAcc = (ticker = 'AAPL', suffix = '000001') => `${companies.find(c => c.ticker === ticker).cik}-25-${suffix}`;
+function riskSource(ticker = 'AAPL', suffix = '000001') {
+  const acc = riskAcc(ticker, suffix), cik = companies.find(c => c.ticker === ticker).cik;
+  return { ...filing(ticker), accession_number: acc, sec_url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc.replaceAll('-', '')}/${acc}-index.html` };
+}
+function riskResponse(scope = 'filing', query = 'supply chain', version = 0, text = 'Synthetic issuer: supply chain disruptions may affect operations.') {
+  const original = context('AAPL', query).citations[0];
+  const fields = ['citation_id', 'chunk_id', 'accession_number', 'form', 'filed', 'filename', 'start_char', 'end_char', 'sec_url',
+    'similarity', 'semantic_similarity', 'lexical_score', 'hybrid_score', 'evidence_reason'];
+  const c = { ...Object.fromEntries(fields.map(key => [key, original[key]])), accession_number: riskAcc(), chunk_id: 'chunk_0000',
+    sec_url: riskSource().sec_url, end_char: text.length, ...(scope === 'company' ? { company_cik: companies[0].cik } : {}) };
+  const base = { ticker: 'AAPL', company_name: 'Synthetic issuer', query, evidence_status: 'sufficient', citations: [c],
+    context: scope === 'company' ? companySource(c, text)
+      : `[SOURCE source_1]\nchunk_id: ${c.chunk_id}\naccession_number: ${c.accession_number}\nform: ${c.form}\nsimilarity: ${c.similarity.toFixed(6)}\ntext: |-\n  ${text}\n[END SOURCE source_1]` };
+  return scope === 'filing' ? { ...base, accession_number: riskAcc() } : { ...base, retrieval_scope: 'company', company_cik: companies[0].cik,
+    data_version: version, evidence_version: 0, searched_accessions: [riskAcc()], excluded_publication_count: 0 };
+}
+async function mountRisk(ctx, { strict = false, version = 0, scope = 'filing', sourceState = 'ready' } = {}) {
+  const app = await mount(ctx, true, companies, { initialVersion: version, strict });
+  if (version !== null) {
+    await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+    await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+    await app.release(app.request(companyPath('AAPL', 'sources')), sourceState === 'error' ? { detail: 'Synthetic filing list unavailable' }
+      : sourceState === 'empty' ? [] : sourceState === 'metadata' ? [{ ...riskSource(), has_filing_chunks: false }]
+        : [riskSource(), riskSource('AAPL', '000002')], sourceState === 'error' ? 503 : 200);
+  }
+  await app.change(app.select('Research purpose'), 'risk');
+  if (scope === 'company') await app.change(app.select('Evidence search scope'), 'company');
+  await app.click('Use risk topic');
+  return app;
+}
+const riskRequestPath = scope => companyPath('AAPL', scope === 'company' ? 'context' : `filings/${riskAcc()}/context`);
+const unexpectedRiskWork = app => app.requests.filter(r => /research-answer|\/answer$|\/tone$/.test(r.path));
+
+for (const strict of [false, true]) for (const version of [0, 1]) for (const scope of ['filing', 'company']) {
+  test(`RISK-SEC-01 ${scope} pin ${version} strict ${strict}: preparation, single dispatch, provenance and duplicate-click guard`, async ctx => {
+    const app = await mountRisk(ctx, { strict, version, scope });
+    const count = app.requests.length;
+    assert.equal(document.activeElement, app.host.querySelector('textarea'));
+    assert.equal(app.host.querySelector('textarea').value, 'supply chain');
+    assert.equal(app.select('Risk topic').options.length, 6);
+    await app.change(app.select('Risk topic'), 'competition');
+    assert.equal(app.host.querySelector('textarea').value, 'competition');
+    await app.click('Use risk topic');
+    assert.equal(app.requests.length, count, 'Preparing topics never fetches');
+    const form = app.host.querySelector('.search-form');
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    assert.equal(app.requests.length, count + 1);
+    const pending = app.request(riskRequestPath(scope));
+    assert.equal(pending.params.get('q'), 'competition'); assert.equal(pending.params.get('limit'), '5');
+    assert.equal(pending.init.headers['X-FinLens-Data-Version'], String(version));
+    await app.release(pending, riskResponse(scope, 'competition', version));
+    assert.match(app.host.querySelector('.evidence-results').textContent, /Candidate SEC passages/);
+    assert.match(app.host.textContent, new RegExp(`CIK 0000320193 · Publication ${version}`));
+    assert.match(app.evidence()[0], new RegExp(riskAcc()));
+    assert.match(app.evidence()[0], /Filed May 1, 2025/);
+    assert.equal(app.host.querySelector('.evidence-card .source-link').href, riskSource().sec_url);
+    assert.equal(unexpectedRiskWork(app).length, 0);
+    assert.equal(app.host.querySelectorAll('.ai-panel, .passage-tone, .direct-answer').length, 0);
+    assert.match(app.host.textContent, /Search relevance is not risk severity or probability/);
+    const after = app.requests.length;
+    await app.change(app.host.querySelector('textarea'), 'custom operating disclosure');
+    assert.equal(app.evidence().length, 0); assert.equal(app.requests.length, after);
+    await app.click('Search risk topic');
+    await app.release(app.request(riskRequestPath(scope)), riskResponse(scope, 'custom operating disclosure', version));
+    assert.match(app.host.textContent, /Custom risk-topic search/);
+  });
+}
+
+for (const state of ['error', 'empty', 'metadata']) for (const scope of ['filing', 'company']) test(`RISK-SEC-01 ${state} ${scope} evidence is unavailable, never insufficient`, async ctx => {
+  const app = await mountRisk(ctx, { sourceState: state, scope });
+  const count = app.requests.length;
+  assert.equal(app.host.querySelector('.primary-button').disabled, true);
+  await act(async () => app.host.querySelector('.search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(app.requests.length, count); assert.equal(app.evidence().length, 0);
+  assert.match(app.host.textContent, /Searchable SEC evidence is unavailable/);
+  assert.doesNotMatch(app.host.textContent, /Insufficient topic evidence/);
+  if (state === 'error') assert.match(app.host.textContent, /Could not load the filing list/);
+});
+test('RISK-SEC-01 unknown pin keeps preparation editable and blocks every context submission', async ctx => {
+  const app = await mountRisk(ctx, { version: null, strict: true });
+  await app.change(app.select('Risk topic'), 'cybersecurity');
+  assert.equal(app.host.querySelector('textarea').value, 'cybersecurity');
+  const count = app.requests.length;
+  await act(async () => app.host.querySelector('.search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(app.requests.length, count);
+  assert.match(app.host.textContent, /Verify this company’s published data before searching/);
+});
+
+for (const scope of ['filing', 'company']) test(`RISK-SEC-01 ${scope} valid empty response is insufficient, malformed response is unavailable and retry explicit`, async ctx => {
+  const app = await mountRisk(ctx, { scope });
+  await app.click('Search risk topic');
+  const empty = { ...riskResponse(scope), citations: [], context: '', evidence_status: 'insufficient' };
+  await app.release(app.request(riskRequestPath(scope)), empty);
+  assert.match(app.host.querySelector('.evidence-results').textContent, /Insufficient topic evidence/);
+  assert.match(app.host.querySelector('.evidence-results').textContent, /does not mean no risk/);
+  await app.click('Search risk topic');
+  const bad = riskResponse(scope); bad.citations[0].sec_url = 'https://evil.test/source';
+  const count = app.requests.length;
+  await app.release(app.request(riskRequestPath(scope)), bad);
+  assert.match(app.host.querySelector('[role="alert"]').textContent, /could not be verified/);
+  assert.equal(app.evidence().length, 0); assert.equal(app.requests.length, count);
+  await app.click('Retry risk-topic search');
+  assert.equal(app.requests.length, count + 1);
+  await app.release(app.request(riskRequestPath(scope)), riskResponse(scope));
+  assert.equal(app.evidence().length, 1); assert.equal(unexpectedRiskWork(app).length, 0);
+});
+
+for (const scope of ['filing', 'company']) for (const defect of ['span', 'form', 'filed', 'filename']) {
+  test(`RISK-SEC-01 P2 mounted ${scope} rejects ${defect} before source cards or attribution render`, async ctx => {
+    const app = await mountRisk(ctx, { scope, strict: true });
+    await app.click('Search risk topic');
+    await app.release(app.request(riskRequestPath(scope)), riskResponse(scope));
+    assert.equal(app.evidence().length, 1, 'Establish valid evidence before the rejected replacement');
+    await app.click('Search risk topic');
+    const texts = ['MALFORMED PROVENANCE passage one.', 'MALFORMED PROVENANCE passage two.'];
+    const value = riskResponse(scope, 'supply chain', 0, texts[0]);
+    if (defect === 'span') value.citations[0].end_char = 1;
+    else {
+      const other = { ...value.citations[0], citation_id: 'source_2', chunk_id: 'chunk_0001', start_char: 100, end_char: 100 + texts[1].length };
+      other[defect] = { form: '10-K', filed: '2025-06-01', filename: 'other.htm' }[defect];
+      value.citations.push(other);
+    }
+    // Keep every SOURCE header/metadata field consistent with its own citation.
+    value.context = value.citations.map((c, index) => scope === 'company' ? companySource(c, texts[index])
+      : `[SOURCE ${c.citation_id}]\nchunk_id: ${c.chunk_id}\naccession_number: ${c.accession_number}\nform: ${c.form}\nsimilarity: ${c.similarity.toFixed(6)}\ntext: |-\n  ${texts[index]}\n[END SOURCE ${c.citation_id}]`).join('\n\n');
+    const count = app.requests.length;
+    await app.release(app.request(riskRequestPath(scope)), value);
+    assert.match(app.host.querySelector('[role="alert"]').textContent, /evidence response could not be verified/);
+    assert.equal(app.host.querySelectorAll('.evidence-results, .evidence-card, .evidence-results .source-link').length, 0);
+    assert.doesNotMatch(app.host.textContent, /MALFORMED PROVENANCE|Candidate SEC passages/);
+    assert.equal(app.requests.length, count, 'Rejection does not retry or change scope');
+    assert.equal(unexpectedRiskWork(app).length, 0);
+  });
+}
+
+for (const strict of [false, true]) for (const action of ['purpose', 'topic', 'query', 'filing', 'scope', 'company']) {
+  test(`RISK-SEC-01 ${action} change strict ${strict} rejects late risk delivery without automatic research`, async ctx => {
+    const app = await mountRisk(ctx, { strict }); await app.click('Search risk topic');
+    const old = app.request(riskRequestPath('filing')), count = app.requests.length;
+    if (action === 'purpose') await app.change(app.select('Research purpose'), 'general');
+    if (action === 'topic') await app.change(app.select('Risk topic'), 'cybersecurity');
+    if (action === 'query') await app.change(app.host.querySelector('textarea'), 'new custom query');
+    if (action === 'filing') await app.change(app.select('Indexed SEC filing'), riskAcc('AAPL', '000002'));
+    if (action === 'scope') await app.change(app.select('Evidence search scope'), 'company');
+    if (action === 'company') await app.change(app.host.querySelector('#company'), 'JPM');
+    assert.equal(old.init.signal.aborted, true);
+    await app.release(old, riskResponse('filing', 'supply chain', 0, 'OBSOLETE synthetic risk passage'));
+    assert.equal(app.evidence().length, 0); assert.doesNotMatch(app.host.textContent, /OBSOLETE synthetic/);
+    assert.equal(app.requests.slice(count).filter(r => /\/context$|research-answer|\/answer$|\/tone$/.test(r.path)).length, 0);
+  });
+}
+
+for (const strict of [false, true]) test(`RISK-SEC-01 pre-commit obsolete 409 strict ${strict} cannot invalidate a newly verified publication`, async ctx => {
+  const app = await mountRisk(ctx, { strict }); await app.click('Search risk topic');
+  const old = app.request(riskRequestPath('filing'));
+  await focusCheck(); const check = app.request(companyPath('AAPL', 'freshness'));
+  const freshnessCount = app.requests.filter(r => r.path.endsWith('/freshness')).length;
+  await act(async () => {
+    app.deliverBeforeCommit(check, freshnessFixture('AAPL', 1, 1)); await drainResponseMicrotasks();
+    assert.ok(app.request('/companies'));
+    assert.equal(old.init.signal.aborted, false, 'Deliver before passive cancellation');
+    app.deliverBeforeCommit(old, {}, 409, 1); await drainResponseMicrotasks();
+  });
+  assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, freshnessCount);
+  assert.equal(app.evidence().length, 0);
+  await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource()], 200, 1);
+  const count = app.requests.length;
+  await app.click('Search risk topic'); const next = app.request(riskRequestPath('filing'));
+  assert.equal(next.init.headers['X-FinLens-Data-Version'], '1'); assert.equal(app.requests.length, count + 1);
+  await app.release(next, riskResponse('filing', 'supply chain', 1), 200, 1);
+  assert.equal(app.evidence().length, 1);
+  assert.equal(unexpectedRiskWork(app).length, 0);
+});
+
+test('RISK-SEC-01 current stale pin reconciles once and never replays risk search', async ctx => {
+  const app = await mountRisk(ctx); await app.click('Search risk topic');
+  const before = app.requests.filter(r => r.path.endsWith('/freshness')).length;
+  await app.release(app.request(riskRequestPath('filing')), {}, 409, 1);
+  assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, before + 1);
+  assert.equal(app.host.querySelector('.primary-button').disabled, true);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1, 1));
+  assert.equal(app.requests.filter(r => /\/context$/.test(r.path)).length, 1);
+  assert.equal(app.evidence().length, 0);
+});
+
+test('RISK-SEC-01 switching back preserves explicit general direct-answer and selected AI behavior', async ctx => {
+  const app = await mountRisk(ctx); await app.change(app.select('Research purpose'), 'general');
+  assert.equal(app.select('Research purpose').value, 'general');
+  await app.click('Use question'); await app.click('Research question');
+  const q = 'What is the latest available revenue?';
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', q));
+  const response = riskResponse('filing', q);
+  await app.release(app.request(riskRequestPath('filing')), response);
+  assert.ok(app.host.querySelector('.direct-answer')); assert.ok(app.host.querySelector('.ai-panel'));
+  assert.ok(app.host.querySelector('.passage-tone'));
+  assert.equal(app.requests.filter(r => /\/answer$|\/tone$/.test(r.path)).length, 0);
+});
+
+for (const scope of ['filing', 'company']) for (const [code, status, message] of [
+  ['EVIDENCE_PENDING', 409, 'Synthetic evidence is pending.'],
+  ['SEARCH_SCOPE_TOO_LARGE', 409, 'Synthetic scope exceeds its resource limit.'],
+  ['RETRIEVAL_UNAVAILABLE', 503, 'Synthetic encoder is unavailable.'],
+  ['DATABASE_UNAVAILABLE', 503, 'Synthetic database is unavailable.'],
+  ['DATABASE_TIMEOUT', 504, 'Synthetic database deadline expired.'],
+  ['DATABASE_BUSY', 503, 'Synthetic database is busy.'],
+]) test(`RISK-SEC-01 ${scope} ${code} is an error without scope fallback or automatic retry`, async ctx => {
+  const app = await mountRisk(ctx, { scope }); await app.click('Search risk topic');
+  const pending = app.request(riskRequestPath(scope));
+  const count = app.requests.length;
+  pending.released = true;
+  await act(async () => pending.resolve(new Response(JSON.stringify({ detail: message }), { status, headers: {
+    'X-FinLens-Data-Version': '0', 'X-FinLens-Error-Code': code,
+  } })));
+  assert.equal(app.host.querySelector('[role="alert"]').textContent, message);
+  assert.equal(app.select('Evidence search scope').value, scope);
+  assert.equal(app.requests.length, count); assert.equal(app.evidence().length, 0);
+  assert.doesNotMatch(app.host.textContent, /Insufficient topic evidence/);
+  await app.click('Retry risk-topic search');
+  assert.equal(app.requests.length, count + 1); assert.equal(unexpectedRiskWork(app).length, 0);
+});
+
+for (const failure of ['network', 'timeout']) test(`RISK-SEC-01 ${failure} permits explicit retry and rejects late completion`, async ctx => {
+  const expire = failure === 'timeout' ? researchDeadlineClock(ctx) : null;
+  const app = await mountRisk(ctx);
+  await app.click('Search risk topic'); const pending = app.request(riskRequestPath('filing'));
+  const count = app.requests.length;
+  if (expire) await expire(); else { pending.released = true; await act(async () => pending.reject(new Error('Synthetic transport interruption'))); }
+  assert.match(app.host.querySelector('[role="alert"]').textContent, failure === 'timeout' ? /too long/ : /Cannot reach/);
+  assert.equal(app.requests.length, count); assert.equal(app.evidence().length, 0);
+  await app.click('Retry risk-topic search'); const retry = app.request(riskRequestPath('filing'));
+  if (expire) {
+    await app.release(pending, riskResponse('filing', 'supply chain', 0, 'LATE timed out synthetic passage'));
+    assert.equal(app.evidence().length, 0);
+  }
+  await app.release(retry, riskResponse()); assert.equal(app.evidence().length, 1);
+});
+
+for (const strict of [false, true]) test(`RISK-SEC-01 successful old response before version commit strict ${strict} cannot survive the new render`, async ctx => {
+  const app = await mountRisk(ctx, { strict }); await app.click('Search risk topic');
+  const old = app.request(riskRequestPath('filing'));
+  await focusCheck(); const check = app.request(companyPath('AAPL', 'freshness'));
+  await act(async () => {
+    app.deliverBeforeCommit(check, freshnessFixture('AAPL', 1, 1)); await drainResponseMicrotasks();
+    assert.equal(old.init.signal.aborted, false);
+    app.deliverBeforeCommit(old, riskResponse('filing', 'supply chain', 0, 'OLD source before passive cleanup'), 200, 0);
+    await drainResponseMicrotasks();
+  });
+  assert.equal(app.evidence().length, 0); assert.doesNotMatch(app.host.textContent, /OLD source before passive cleanup/);
+  assert.equal(app.requests.filter(r => /\/context$/.test(r.path)).length, 1);
+});
+
 async function startCompanySearch(app, ticker = 'AAPL') {
   await app.change(app.select('Evidence search scope'), 'company');
   await app.change(app.host.querySelector('textarea'), 'revenue growth');
