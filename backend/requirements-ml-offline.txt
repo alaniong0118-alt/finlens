@@ -1,0 +1,8 @@
+# Separate opt-in offline experiment environment; NOT included by app requirements.
+# Verified: CPython 3.14.7, Windows x64, Unicode 16.0.0.
+# Inventory/reproduction pins only: no installation is authorized by ML-PB-01.
+scikit-learn==1.9.1
+numpy==2.5.3
+scipy==1.18.1
+joblib==1.6.0
+threadpoolctl==3.7.0
