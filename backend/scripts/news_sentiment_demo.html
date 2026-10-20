@@ -22,6 +22,14 @@
     code{overflow-wrap:anywhere;font-size:.85rem;color:#b9dbef}summary{cursor:pointer;font-weight:650;min-height:44px;padding-top:8px}
     ul{padding-left:22px}footer{font-size:.85rem;color:#b7c5d9;border-top:1px solid #2d4261;padding-top:20px}
     .metrics{display:flex;gap:28px;flex-wrap:wrap}.metrics strong{font-size:1.25rem;display:block;color:#edf3fb}
+    #ml-fail-analysis .evaluation-table{max-width:100%;overflow-x:auto;margin:18px 0}
+    #ml-fail-analysis table{width:100%;border-collapse:collapse;font-size:.85rem}
+    #ml-fail-analysis caption{text-align:left;font-weight:650;margin-bottom:8px}
+    #ml-fail-analysis th,#ml-fail-analysis td{padding:8px;border:1px solid #2d4261;text-align:right}
+    #ml-fail-analysis th[scope="row"]{text-align:left}
+    #ml-fail-analysis td{white-space:nowrap}
+    #ml-fail-analysis dt{font-weight:650;margin-top:12px}
+    #ml-fail-analysis dd{margin-left:0;overflow-wrap:anywhere}
     @media(max-width:520px){main{padding:28px 16px}.panel{padding:18px}.actions button{flex:1}.actions button.stop{margin-left:0;flex-basis:100%}}
   </style>
 </head>
@@ -53,11 +61,51 @@
     <h2 id="method-title">Method and limits</h2>
     <p>TF-IDF word unigrams/bigrams + LinearSVC, balanced classes, C=10. Fits only the original 2,071 training rows from Financial PhraseBank 75Agree. Repeat submissions reuse the fitted model.</p>
     <p>Method: <code id="method">news-sentiment-tfidf-svc-v1</code><br>Demo: <code id="version">private-news-sentiment-demo-v1</code></p>
-    <details>
+    <details id="ml-fail-analysis">
       <summary>Historical ML-PB-01 held-out evaluation</summary>
       <p class="muted">These fixed historical results describe a separate held-out experiment. They are not confidence percentages for your sentence.</p>
-      <div class="metrics"><div><strong>85.67%</strong>Test accuracy</div><div><strong>0.7998</strong>Test macro-F1</div><div><strong>≈63%</strong>Negative-class recall</div></div>
-      <p class="muted">3,453 source rows, 3,349 text groups; one held-out partition. Majority-neutral accuracy: 62.08%. Small corpus, imbalance and agreement filtering limit generalization.</p>
+      <p>Frozen evaluation: <code id="ml-fail-evaluation">news-sentiment-tfidf-svc-v1</code>. Historical reproduction: <time id="ml-fail-date" datetime="2026-10-19">2026-10-19</time>. Financial PhraseBank sentence classification, not a current-news or SEC-filing evaluation.</p>
+      <div class="metrics"><div><strong id="ml-fail-accuracy">85.6729%</strong>Historical holdout accuracy</div><div><strong id="ml-fail-macro-f1">0.799833</strong>Historical holdout macro-F1</div><div><strong id="ml-fail-baseline">62.0839%</strong>Majority-neutral baseline accuracy</div></div>
+      <p><strong id="ml-fail-correct">592</strong> correct and <strong id="ml-fail-incorrect">99</strong> incorrect predictions among <strong id="ml-fail-total">691</strong> held-out rows. Macro-F1 gives each class equal weight; accuracy alone conceals weaker negative-class recall.</p>
+      <div class="evaluation-table" role="region" aria-labelledby="ml-fail-class-caption" tabindex="0">
+        <table id="ml-fail-classes">
+          <caption id="ml-fail-class-caption">Historical holdout class metrics and one-vs-rest error counts</caption>
+          <thead><tr><th scope="col">Actual class</th><th scope="col">Support</th><th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">F1</th><th scope="col">False positives (FP)</th><th scope="col">False negatives (FN)</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Negative</th><td>84</td><td>0.791045</td><td>0.630952</td><td>0.701987</td><td>14</td><td>31</td></tr>
+            <tr><th scope="row">Neutral</th><td>429</td><td>0.892857</td><td>0.932401</td><td>0.912201</td><td>48</td><td>29</td></tr>
+            <tr><th scope="row">Positive</th><td>178</td><td>0.789773</td><td>0.780899</td><td>0.785311</td><td>37</td><td>39</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Support counts actual rows. For each class versus all other classes, FP counts other labels predicted as that class; FN counts that class predicted as another label. Each of the 99 misclassified rows contributes one FP and one FN across classes. Adding those counts does not mean 198 distinct errors.</p>
+      <div class="evaluation-table" role="region" aria-labelledby="ml-fail-matrix-caption" tabindex="0">
+        <table id="ml-fail-matrix">
+          <caption id="ml-fail-matrix-caption">Historical confusion matrix: rows actual, columns predicted; counts of held-out rows</caption>
+          <thead><tr><th scope="col">Actual class / Predicted class</th><th scope="col">Negative</th><th scope="col">Neutral</th><th scope="col">Positive</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Negative</th><td>53</td><td>17</td><td>14</td></tr>
+            <tr><th scope="row">Neutral</th><td>6</td><td>400</td><td>23</td></tr>
+            <tr><th scope="row">Positive</th><td>8</td><td>31</td><td>139</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p id="ml-fail-negative"><strong>Negative-class recall is the weakest: 53 of 84 detected (63.0952%).</strong> The 31 missed negative rows were predicted neutral in 17 cases and positive in 14 cases. These aggregate counts do not explain why individual errors occurred.</p>
+      <details id="ml-fail-provenance">
+        <summary>Frozen evaluation identity and reproducibility</summary>
+        <dl>
+          <dt>Recorded source</dt><dd><code>docs/news-sentiment-baseline.md</code>, immutable ML-PB-01 commit <code id="ml-fail-source-commit">0a042f91232182fa13503066ece8c21f494a2158</code>. This static presentation is transcribed from that aggregate record, not a new evaluation or verification of this launch's model.</dd>
+          <dt>Dataset and label order</dt><dd>Financial PhraseBank v1.0, <code>75Agree</code> (more than 75% annotation agreement), ISO-8859-1; 3,453 source rows and 3,349 text groups. Label order: negative, neutral, positive. Original labels retained; consensus subsets were not combined.</dd>
+          <dt>Source ZIP SHA256</dt><dd><code id="ml-fail-zip">0e1a06c4900fdae46091d031068601e3773ba067c7cecb5b0da1dcba5ce989a6</code></dd>
+          <dt>Selected member and SHA256</dt><dd><code>FinancialPhraseBank-v1.0/Sentences_75Agree.txt</code><br><code id="ml-fail-member">a7ca39fb9dc60aed1c323ee635494aed4acdfc05e0349a9e74367502325303a4</code></dd>
+          <dt>Parser and grouping</dt><dd><code>phrasebank-pinned-latin1-v1</code>; <code>nfkc-numeric-jaccard-sequence-v1</code>. Duplicate/near-duplicate grouping changes grouping keys only, not model input or labels.</dd>
+          <dt>Split provenance</dt><dd>StratifiedGroupKFold, five folds, shuffle enabled, seed 42. Training folds 2–4: 2,071 rows; validation fold 1: 691 rows; test fold 0: 691 rows. Defined group-overlap checks passed in the historical reproduction.</dd>
+          <dt>Split fingerprint SHA256</dt><dd><code id="ml-fail-split">93624966453164d93d611ca3e817b85093fd204c2056406f855ce10b4f536948</code></dd>
+          <dt>Training and selection</dt><dd>Training-only TF-IDF word unigrams/bigrams and balanced LinearSVC, seed 42. C=10 selected by validation macro-F1 from 0.1, 1 and 10; ties prefer smaller C. No validation refit; test predictions occurred after selection. The baseline always predicts the training-majority label, neutral.</dd>
+          <dt>Historical environment</dt><dd>Windows x64; Python 3.14.7; Unicode 16.0.0; scikit-learn 1.9.1; NumPy 2.5.3; SciPy 1.18.1; joblib 1.6.0; threadpoolctl 3.7.0. Reproduction in other environments is not established.</dd>
+        </dl>
+      </details>
+      <p class="muted">One small, imbalanced, agreement-filtered financial-news corpus and one held-out partition limit generalization. Original sentence labels are historical annotations, not objective current issuer sentiment. Retained duplicate weighting and heuristic grouping do not establish event, issuer or time independence, or eliminate every possible overlap. These results do not establish SEC-filing suitability, calibrated probabilities, return predictability or production readiness. No corpus sentences, row-linked predictions, vocabulary or weights are provided; private noncommercial academic-demo limits and the attribution below continue to apply.</p>
     </details>
     <ul>
       <li>Financial-news sentence sentiment only. No SEC Filing Tone replacement or SEC-filing validation.</li>

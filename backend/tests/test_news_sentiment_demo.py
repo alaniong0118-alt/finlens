@@ -3,11 +3,15 @@ import ctypes
 from ctypes import wintypes as w
 import asyncio
 import json
+import hashlib
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
+from fractions import Fraction
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -17,6 +21,193 @@ from scripts import serve_news_sentiment_demo as demo
 
 
 SCRIPT = Path(demo.__file__).resolve()
+
+
+class MlFailHtml(HTMLParser):
+    """Small semantic tree for the static aggregate view; no scripts or resources."""
+
+    def __init__(self, text):
+        super().__init__(convert_charrefs=True)
+        self.root = SimpleNamespace(tag="document", attrs={}, children=[])
+        self.stack = [self.root]
+        self.feed(text)
+
+    def handle_starttag(self, tag, attrs):
+        node = SimpleNamespace(tag=tag, attrs=dict(attrs), children=[])
+        self.stack[-1].children.append(node)
+        if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+            self.stack.append(node)
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, 0, -1):
+            if self.stack[index].tag == tag:
+                del self.stack[index:]
+                break
+
+    def handle_data(self, data):
+        self.stack[-1].children.append(data)
+
+
+def ml_fail_nodes(node, tag=None):
+    for child in node.children:
+        if isinstance(child, str):
+            continue
+        if tag is None or child.tag == tag:
+            yield child
+        yield from ml_fail_nodes(child, tag)
+
+
+def ml_fail_text(node):
+    return "".join(child if isinstance(child, str) else ml_fail_text(child) for child in node.children)
+
+
+@pytest.fixture(scope="module")
+def ml_fail_record():
+    # Only approved aggregate Git documentation; never open the ZIP or evaluator.
+    root = SCRIPT.parents[2]
+    commit = "0a042f91232182fa13503066ece8c21f494a2158"
+    result = subprocess.run(["git", "show", f"{commit}:docs/news-sentiment-baseline.md"],
+                            cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=10, check=True)
+    source = result.stdout
+    current = (root / "docs/news-sentiment-baseline.md").read_text(encoding="utf-8")
+    start, end = "The following prior assessed reference values", "## Focused synthetic verification"
+    block = source[source.index(start):source.index(end)]
+    assert block == current[current.index(start):current.index(end)], "frozen aggregate record drift"
+    assert hashlib.sha256(block.encode()).hexdigest() == "b1d7425ced08a3f7724f559717f35dcfc6de597e14806f6adbfadd4b6ba09bd1"
+    matrix = [[int(n) for n in row.split()] for row in re.search(r"```text\n((?:[ \d]+\n){3})```", block)[1].splitlines()]
+    scores = re.findall(r"\| (Negative|Neutral|Positive) \| ([\d.]+) \| ([\d.]+) \| ([\d.]+) \| (\d+) \|", block)
+    return SimpleNamespace(commit=commit, source=source, matrix=matrix, scores=scores)
+
+
+@pytest.fixture(scope="module")
+def ml_fail_page():
+    raw = SCRIPT.with_name("news_sentiment_demo.html").read_text(encoding="utf-8")
+    tree = MlFailHtml(raw).root
+    ids = [node.attrs["id"] for node in ml_fail_nodes(tree) if "id" in node.attrs]
+    assert len(ids) == len(set(ids)), "duplicate element IDs"
+    by_id = {node.attrs["id"]: node for node in ml_fail_nodes(tree) if "id" in node.attrs}
+    return SimpleNamespace(raw=raw, tree=tree, by_id=by_id, analysis=by_id["ml-fail-analysis"])
+
+
+def ml_fail_rows(table):
+    body = next(ml_fail_nodes(table, "tbody"))
+    return [[ml_fail_text(cell).strip() for cell in row.children if not isinstance(cell, str)]
+            for row in ml_fail_nodes(body, "tr")]
+
+
+def test_ml_fail_frozen_identity_and_provenance(ml_fail_record, ml_fail_page):
+    record, page = ml_fail_record, ml_fail_page
+    text = ml_fail_text(page.analysis)
+    assert ml_fail_text(page.by_id["ml-fail-evaluation"]) == "news-sentiment-tfidf-svc-v1"
+    assert ml_fail_text(page.by_id["ml-fail-source-commit"]) == record.commit
+    assert page.by_id["ml-fail-date"].attrs["datetime"] == "2026-10-19"
+    assert ml_fail_text(page.by_id["ml-fail-date"]) == "2026-10-19"
+    for field in ["zip", "member", "split"]:
+        value = ml_fail_text(page.by_id[f"ml-fail-{field}"])
+        assert re.fullmatch(r"[0-9a-f]{64}", value) and value.upper() in record.source.upper()
+    for identity in ["FinancialPhraseBank-v1.0/Sentences_75Agree.txt", "phrasebank-pinned-latin1-v1",
+                     "nfkc-numeric-jaccard-sequence-v1", "StratifiedGroupKFold", "ISO-8859-1",
+                     "Python 3.14.7", "Unicode 16.0.0", "scikit-learn 1.9.1", "NumPy 2.5.3",
+                     "SciPy 1.18.1", "joblib 1.6.0", "3.7.0"]:
+        assert identity in text and identity in record.source
+    for required in ["seed 42", "2,071", "691", "3,453", "3,349", "Label order: negative, neutral, positive",
+                     "No validation refit", "not a new evaluation", "validation macro-F1", "ties prefer smaller C"]:
+        assert required in text
+
+
+def test_ml_fail_matrix_axes_supports_and_total_errors(ml_fail_record, ml_fail_page):
+    page, matrix = ml_fail_page, ml_fail_record.matrix
+    table = page.by_id["ml-fail-matrix"]
+    caption = ml_fail_text(next(ml_fail_nodes(table, "caption")))
+    assert "rows actual, columns predicted" in caption
+    headers = [ml_fail_text(node) for node in ml_fail_nodes(next(ml_fail_nodes(table, "thead")), "th")]
+    assert headers == ["Actual class / Predicted class", "Negative", "Neutral", "Positive"]
+    rows = ml_fail_rows(table)
+    assert [row[0] for row in rows] == [row[0] for row in ml_fail_record.scores]
+    assert [[int(n) for n in row[1:]] for row in rows] == matrix
+    assert [sum(row) for row in matrix] == [int(row[4]) for row in ml_fail_record.scores]
+    assert [sum(row[index] for row in matrix) for index in range(3)] == [67, 448, 176]
+    total = sum(map(sum, matrix))
+    correct = sum(matrix[index][index] for index in range(3))
+    for field, number in [("total", total), ("correct", correct), ("incorrect", total - correct)]:
+        assert ml_fail_text(page.by_id[f"ml-fail-{field}"]) == str(number)
+    assert (total, correct, total - correct) == (691, 592, 99)
+    assert ml_fail_text(page.by_id["ml-fail-accuracy"]) == f"{float(Fraction(correct, total) * 100):.4f}%"
+    baseline = max(sum(row) for row in matrix)
+    assert ml_fail_text(page.by_id["ml-fail-baseline"]) == f"{float(Fraction(baseline, total) * 100):.4f}%"
+
+
+def test_ml_fail_class_metrics_fp_fn_and_rounding(ml_fail_record, ml_fail_page):
+    matrix = ml_fail_record.matrix
+    table = ml_fail_page.by_id["ml-fail-classes"]
+    headers = [ml_fail_text(node) for node in ml_fail_nodes(next(ml_fail_nodes(table, "thead")), "th")]
+    assert headers == ["Actual class", "Support", "Precision", "Recall", "F1", "False positives (FP)", "False negatives (FN)"]
+    rows = ml_fail_rows(table)
+    f1s, false_positives, false_negatives = [], [], []
+    for index, (display, recorded) in enumerate(zip(rows, ml_fail_record.scores, strict=True)):
+        tp, support = matrix[index][index], sum(matrix[index])
+        fp = sum(row[index] for row in matrix) - tp
+        fn = support - tp
+        precision, recall, f1 = Fraction(tp, tp + fp), Fraction(tp, tp + fn), Fraction(2 * tp, 2 * tp + fp + fn)
+        metrics = [f"{float(metric):.6f}" for metric in [precision, recall, f1]]
+        assert metrics == list(recorded[1:4])
+        assert display == [recorded[0], str(support), *metrics, str(fp), str(fn)]
+        f1s.append(f1); false_positives.append(fp); false_negatives.append(fn)
+    assert ml_fail_text(ml_fail_page.by_id["ml-fail-macro-f1"]) == f"{float(sum(f1s) / 3):.6f}"
+    assert sum(false_positives) == sum(false_negatives) == 99
+    text = ml_fail_text(ml_fail_page.analysis)
+    assert "Each of the 99 misclassified rows contributes one FP and one FN" in text
+    assert "does not mean 198 distinct errors" in text
+    negative = ml_fail_text(ml_fail_page.by_id["ml-fail-negative"])
+    assert f"{matrix[0][0]} of {sum(matrix[0])}" in negative
+    assert f"{float(Fraction(matrix[0][0], sum(matrix[0])) * 100):.4f}%" in negative
+    assert "31 missed negative rows" in negative and "neutral in 17 cases and positive in 14 cases" in negative
+    assert "do not explain why individual errors occurred" in negative
+
+
+def test_ml_fail_semantic_tables_and_privacy_limits(ml_fail_page):
+    page = ml_fail_page
+    assert page.analysis.tag == "details" and "open" not in page.analysis.attrs
+    assert ml_fail_text(next(ml_fail_nodes(page.analysis, "summary"))) == "Historical ML-PB-01 held-out evaluation"
+    tables = list(ml_fail_nodes(page.analysis, "table"))
+    assert len(tables) == 2
+    for table in tables:
+        caption = next(ml_fail_nodes(table, "caption"))
+        assert "Historical" in ml_fail_text(caption)
+        head = next(ml_fail_nodes(table, "thead"))
+        assert all(node.attrs.get("scope") == "col" for node in ml_fail_nodes(head, "th"))
+        for row in ml_fail_nodes(next(ml_fail_nodes(table, "tbody")), "tr"):
+            cells = [child for child in row.children if not isinstance(child, str)]
+            assert cells[0].tag == "th" and cells[0].attrs.get("scope") == "row"
+            assert all(cell.tag == "td" for cell in cells[1:])
+    regions = [node for node in ml_fail_nodes(page.analysis) if node.attrs.get("role") == "region"]
+    assert len(regions) == 2
+    assert {node.attrs["aria-labelledby"] for node in regions} == {next(ml_fail_nodes(t, "caption")).attrs["id"] for t in tables}
+    assert all(node.attrs.get("tabindex") == "0" for node in regions)
+    assert "#ml-fail-analysis .evaluation-table{max-width:100%;overflow-x:auto;" in page.raw
+    text = " ".join(ml_fail_text(page.tree).split())
+    for required in ["not confidence percentages", "Majority-neutral baseline accuracy", "one held-out partition",
+                     "not a current-news or SEC-filing evaluation", "not objective current issuer sentiment",
+                     "do not establish event, issuer or time independence", "CC BY-NC-SA 3.0 Unported",
+                     "http://creativecommons.org/licenses/by-nc-sa/3.0/", "Malo, P.", "private noncommercial academic-demo",
+                     "No corpus sentences, row-linked predictions, vocabulary or weights", "No online deployment",
+                     "calibrated probabilities, return predictability or production readiness"]:
+        assert required in text
+    assert not list(ml_fail_nodes(page.analysis, "button"))
+    assert not list(ml_fail_nodes(page.analysis, "a"))
+    assert not list(ml_fail_nodes(page.analysis, "script"))
+
+
+def test_ml_fail_preserves_existing_javascript_and_asset_surface(ml_fail_page):
+    result = subprocess.run(["git", "show", "3490036d84b022bb4ef76272fd8690aa6e9ec736:backend/scripts/news_sentiment_demo.html"],
+                            cwd=SCRIPT.parents[2], capture_output=True, text=True, encoding="utf-8", timeout=10, check=True)
+    script = re.search(r'<script nonce="__NONCE__">([\s\S]*?)</script>', ml_fail_page.raw)[1]
+    assert script == re.search(r'<script nonce="__NONCE__">([\s\S]*?)</script>', result.stdout)[1]
+    assert hashlib.sha256(script.encode()).hexdigest() == "c2afb84d03548edfd28c44dfee9f2e53dbcc5a75b4c191230c293652f8dbc4bb"
+    original = MlFailHtml(result.stdout).root
+    for tag in ["script", "link", "iframe", "img", "form", "input", "button", "textarea"]:
+        assert [(node.attrs, ml_fail_text(node)) for node in ml_fail_nodes(ml_fail_page.tree, tag)] == [
+            (node.attrs, ml_fail_text(node)) for node in ml_fail_nodes(original, tag)]
 
 
 def command(code):
@@ -848,14 +1039,16 @@ win.fetch=async(path,options)=>{requests.push([path,options]);if(path==='/api/st
 win.Storage.prototype.setItem=()=>{throw Error('storage forbidden')};
 const code=html.match(/<script nonce="synthetic">([\s\S]*?)<\/script>/)[1];
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));const get=id=>win.document.getElementById(id);
-(async()=>{win.eval(code+'\nwindow.__testPoll=poll;');await sleep(10);assert.equal(get('sentence').disabled,true);
-remote='ready';await win.__testPoll();assert.equal(get('sentence').disabled,false);
+const analysis=get('ml-fail-analysis'),summary=analysis.querySelector('summary');
+function disclosure(){const before=requests.length;const open=analysis.open;summary.click();assert.equal(analysis.open,!open);summary.click();assert.equal(analysis.open,open);assert.equal(requests.length,before);assert.equal(analysis.querySelectorAll('table').length,2);}
+(async()=>{win.eval(code+'\nwindow.__testPoll=poll;');await sleep(10);assert.equal(get('sentence').disabled,true);disclosure();
+remote='ready';await win.__testPoll();assert.equal(get('sentence').disabled,false);disclosure();
 get('sentence').value='An invented company improves its results.';get('sentence').dispatchEvent(new win.Event('input'));get('classify').click();await sleep(10);assert.equal(get('label').textContent,'Positive');
 get('clear').click();assert.equal(get('sentence').value,'');assert.equal(get('label').textContent,'');assert.equal(get('result').hidden,true);
 hold=true;get('sentence').value='Authored pending statement.';get('sentence').dispatchEvent(new win.Event('input'));get('classify').click();await sleep(5);assert.ok(pending);get('clear').click();pending(response({label:'negative',method_version:'news-sentiment-tfidf-svc-v1',model_run_id:'run-a'}));await sleep(10);assert.equal(get('label').textContent,'');
-get('sentence').value='Authored stale result.';get('sentence').dispatchEvent(new win.Event('input'));get('classify').click();await sleep(5);remote='failed';await win.__testPoll();pending(response({label:'positive',method_version:'news-sentiment-tfidf-svc-v1',model_run_id:'run-a'}));await sleep(10);assert.equal(get('label').textContent,'');remote='ready';await win.__testPoll();
+get('sentence').value='Authored stale result.';get('sentence').dispatchEvent(new win.Event('input'));get('classify').click();await sleep(5);remote='failed';await win.__testPoll();disclosure();pending(response({label:'positive',method_version:'news-sentiment-tfidf-svc-v1',model_run_id:'run-a'}));await sleep(10);assert.equal(get('label').textContent,'');remote='ready';await win.__testPoll();
 hold=false;get('sentence').value='Sensitive authored input.';get('sentence').dispatchEvent(new win.Event('input'));get('stop').click();assert.equal(get('sentence').value,'');await sleep(460);assert.match(get('status').textContent,confirmShutdown?/Demo stopped/:/Ctrl\+C/);assert.equal(get('classify').disabled,true);
-assert.ok(requests.every(([path,options])=>path.startsWith('/api/')&&options.cache==='no-store'&&options.credentials==='omit'));assert.equal(win.document.cookie,'');console.log('synthetic_dom_ok');win.close();})().catch(error=>{console.error(error);win.close();process.exitCode=1});
+disclosure();assert.ok(requests.every(([path,options])=>['/api/status','/api/classify','/api/shutdown'].includes(path)&&options.cache==='no-store'&&options.credentials==='omit'));assert.equal(win.document.cookie,'');console.log('synthetic_dom_ok');win.close();})().catch(error=>{console.error(error);win.close();process.exitCode=1});
 '''
     result = subprocess.run(["node", "-e", script, str(ui), str(jsdom), "yes" if confirm_shutdown else "no"],
                             capture_output=True, text=True, timeout=10, check=False)
