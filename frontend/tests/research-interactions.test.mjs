@@ -2,7 +2,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import React, { act } from 'react';
 import { JSDOM } from 'jsdom';
@@ -10,7 +10,7 @@ import { JSDOM } from 'jsdom';
 // Node's existing test runner + real ReactDOM. Only Next's routing link and
 // browser layout/media APIs are adapted; page, effects, API calls and guards run.
 const require = createRequire(import.meta.url);
-let dom, createRoot, Home, ResearchFreshness;
+let dom, createRoot, Home, ResearchFreshness, SecRiskComparison;
 before(async () => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://finlens.test' });
   for (const key of ['window', 'document', 'HTMLElement', 'SVGElement', 'Node', 'Event', 'MouseEvent']) {
@@ -39,6 +39,7 @@ before(async () => {
     } }).outputText;
     const localRequire = name => {
       if (name === 'next/link') return { __esModule: true, default: props => React.createElement('a', props) };
+      if (name.startsWith('./')) return load(fileURLToPath(new URL(`${name}.ts`, pathToFileURL(path))));
       if (!name.startsWith('@/')) return require(name);
       const base = fileURLToPath(new URL(`../${name.slice(2)}`, import.meta.url));
       return load(['.tsx', '.ts'].map(extension => base + extension).find(existsSync));
@@ -48,6 +49,7 @@ before(async () => {
   }
   Home = load(fileURLToPath(new URL('../app/page.tsx', import.meta.url))).default;
   ResearchFreshness = load(fileURLToPath(new URL('../components/research-freshness.tsx', import.meta.url))).default;
+  SecRiskComparison = load(fileURLToPath(new URL('../components/sec-risk-comparison.tsx', import.meta.url))).default;
 });
 after(() => dom.window.close());
 
@@ -135,6 +137,258 @@ test('mounted query/company changes remove highlights and reset evidence expansi
 
 // Explicit synthetic API fixtures live only in tests. One filing per company;
 // no database, network, production data or generated model output is involved.
+// SEC-RISK-CC01 uses the existing mounted Home/fetch harness. Fixtures below are
+// comparison-specific canonical issuer sources, independent of generic evidence.
+function ccEvidence(ticker, version = 0, { count = 3, evidenceVersion = 0, query = 'supply chain', searched = true } = {}) {
+  const issuer = companies.find(c => c.ticker === ticker), acc = riskAcc(ticker);
+  const text = `${ticker}: ${query} synthetic disclosure. 😀 <script>literal()</script>\n\n  Unchanged source wording.`;
+  const citations = Array.from({ length: count }, (_, i) => ({ ...riskResponse('company').citations[0], company_cik: issuer.cik,
+    accession_number: acc, citation_id: `source_${i + 1}`, chunk_id: `chunk_${String(i).padStart(4, '0')}`, form: ticker === 'AAPL' ? '10-K' : '10-Q',
+    sec_url: riskSource(ticker).sec_url, start_char: i * 3000, end_char: i * 3000 + Array.from(text).length }));
+  return { ticker, company_name: issuer.name, query, retrieval_scope: 'company', company_cik: issuer.cik, data_version: version,
+    evidence_version: evidenceVersion, searched_accessions: searched ? [acc] : [], excluded_publication_count: 0,
+    evidence_status: count ? 'sufficient' : 'insufficient', citations, context: citations.map(c => companySource(c, text)).join('\n\n') };
+}
+async function mountCc(ctx, options = {}) {
+  const app = await mount(ctx, true, companies, options); await app.completeCompany('AAPL', '1000000000');
+  const panel = () => app.host.querySelector('.sec-risk-comparison');
+  await app.change(app.select('Issuer A'), 'AAPL'); await app.change(app.select('Issuer B'), 'JPM');
+  return { ...app, panel, columns: () => [...panel().querySelectorAll('.risk-comparison-column')] };
+}
+async function ccFresh(app, ticker, version = 0, evidenceVersion = 0) {
+  await app.release(app.request(companyPath(ticker, 'freshness')), freshnessFixture(ticker, version, evidenceVersion));
+}
+
+function ccFocusProbe(ctx, app) {
+  const target = [...app.panel().querySelectorAll('button')].find(button => button.textContent === 'Compare SEC evidence');
+  const nativeFocus = target.focus, calls = [];
+  ctx.mock.method(target, 'focus', function (...args) {
+    calls.push({ connected: this.isConnected, disabled: this.disabled });
+    assert.equal(this.isConnected, true, 'Never focus a disconnected submit');
+    assert.equal(this.disabled, false, 'Never focus a disabled submit');
+    return nativeFocus.apply(this, args);
+  });
+  return { target, calls, cancel: () => [...app.panel().querySelectorAll('button')].find(button => button.textContent === 'Cancel evidence comparison') };
+}
+async function ccFocusStart(app) {
+  await app.click('Compare SEC evidence'); await ccFresh(app, 'AAPL'); await ccFresh(app, 'JPM', 1);
+  return [app.request(companyPath('AAPL', 'context')), app.request(companyPath('JPM', 'context'))];
+}
+function ccCaptureDeadline(ctx) {
+  const original = globalThis.setTimeout, timers = [];
+  ctx.mock.method(globalThis, 'setTimeout', (callback, delay, ...args) => {
+    if (delay === 30000) timers.push(callback);
+    return original(callback, delay, ...args);
+  });
+  return timers;
+}
+
+for (const strict of [false, true]) for (const outcome of ['success', 'partial', 'failure', 'timeout']) {
+  test(`SEC-RISK-CC01 P2 focus current ${outcome} restores focused Cancel strict ${strict}`, async ctx => {
+    let time = 0;
+    if (outcome === 'timeout') { ctx.mock.method(performance, 'now', () => time); ctx.mock.timers.enable({ apis: ['setTimeout'] }); }
+    const app = await mountCc(ctx, { strict }), probe = ccFocusProbe(ctx, app);
+    const [a, b] = await ccFocusStart(app); const cancel = probe.cancel(); cancel.focus();
+    assert.equal(document.activeElement === cancel, true);
+    if (outcome === 'timeout') { time = 30000; await act(async () => ctx.mock.timers.tick(30000)); }
+    else {
+      await app.release(a, outcome === 'failure' ? {} : ccEvidence('AAPL'), outcome === 'failure' ? 503 : 200);
+      assert.equal(document.activeElement === cancel, true, 'First settlement leaves focused Cancel available');
+      assert.equal(probe.calls.length, 0, 'Submit is still disabled while the peer is pending');
+      await app.release(b, outcome === 'success' ? ccEvidence('JPM', 1) : {}, outcome === 'success' ? 200 : 503);
+    }
+    assert.equal(cancel.isConnected, false);
+    assert.equal(document.activeElement === probe.target, true, 'Final committed settlement returns usable focus');
+    assert.deepEqual(probe.calls, [{ connected: true, disabled: false }]);
+    assert.equal(app.requests.filter(r => /\/context$/.test(r.path)).length, 2, 'Focus does not resubmit');
+    if (outcome === 'partial') assert.equal(app.columns()[0].querySelectorAll('.evidence-card').length, 2);
+    if (outcome === 'timeout') assert.match(app.columns()[0].textContent, /30-second comparison deadline expired/);
+  });
+}
+for (const strict of [false, true]) for (const outcome of ['completion', 'explicit_cancel']) {
+  test(`SEC-RISK-CC01 P2 focus ${outcome} never steals another control strict ${strict}`, async ctx => {
+    const app = await mountCc(ctx, { strict }), probe = ccFocusProbe(ctx, app), [a, b] = await ccFocusStart(app);
+    probe.cancel().focus(); const other = app.select('Issuer B'); other.focus();
+    if (outcome === 'explicit_cancel') await app.click('Cancel evidence comparison');
+    else { await app.release(a, ccEvidence('AAPL')); await app.release(b, ccEvidence('JPM', 1)); }
+    assert.equal(document.activeElement === other, true); assert.equal(probe.calls.length, 0);
+  });
+}
+for (const strict of [false, true]) for (const delivery of ['success', 'error', 'timeout']) {
+  test(`SEC-RISK-CC01 P2 focus superseded ${delivery} cannot move current focus strict ${strict}`, async ctx => {
+    let time = 0; ctx.mock.method(performance, 'now', () => time);
+    const app = await mountCc(ctx, { strict }), probe = ccFocusProbe(ctx, app), timers = ccCaptureDeadline(ctx);
+    const [old] = await ccFocusStart(app); const oldDeadline = timers[0]; probe.cancel().focus();
+    await app.change(app.select('Comparison risk topic'), 'competition'); time = 1000;
+    await ccFocusStart(app); const currentCancel = probe.cancel(); currentCancel.focus(); const count = app.requests.length;
+    if (delivery === 'timeout') { time = 30000; await act(async () => oldDeadline()); }
+    else await app.release(old, delivery === 'success' ? ccEvidence('AAPL') : {}, delivery === 'success' ? 200 : 409, delivery === 'success' ? 0 : 7);
+    assert.equal(document.activeElement === currentCancel, true); assert.equal(probe.calls.length, 0);
+    assert.equal(app.requests.length, count); assert.equal(probe.target.disabled, true);
+  });
+}
+for (const strict of [false, true]) test(`SEC-RISK-CC01 P2 focus pre-commit user movement wins over parsed settlement strict ${strict}`, async ctx => {
+  const app = await mountCc(ctx, { strict }), probe = ccFocusProbe(ctx, app), [a, b] = await ccFocusStart(app);
+  await app.release(a, ccEvidence('AAPL')); probe.cancel().focus(); const other = app.select('Issuer B');
+  await act(async () => {
+    app.deliverBeforeCommit(b, ccEvidence('JPM', 1)); await drainResponseMicrotasks();
+    other.focus();
+  });
+  assert.equal(probe.cancel(), undefined); assert.equal(document.activeElement === other, true); assert.equal(probe.calls.length, 0);
+});
+for (const strict of [false, true]) test(`SEC-RISK-CC01 P2 focus unmount rejects delayed settlement and deadline strict ${strict}`, async ctx => {
+  let time = 0; ctx.mock.method(performance, 'now', () => time);
+  const app = await mountCc(ctx, { strict }), probe = ccFocusProbe(ctx, app), timers = ccCaptureDeadline(ctx);
+  const [a, b] = await ccFocusStart(app); const deadline = timers[0]; probe.cancel().focus();
+  await app.unmount(); assert.equal(probe.target.isConnected, false);
+  await app.release(a, ccEvidence('AAPL')); await app.release(b, {}, 409, 7);
+  time = 30000; await act(async () => deadline()); assert.equal(probe.calls.length, 0);
+});
+for (const strict of [false, true]) test(`SEC-RISK-CC01 P2 focus explicit cancellation restores only the owned focused Cancel strict ${strict}`, async ctx => {
+  const app = await mountCc(ctx, { strict }), probe = ccFocusProbe(ctx, app); await ccFocusStart(app);
+  probe.cancel().focus(); await app.click('Cancel evidence comparison');
+  assert.equal(document.activeElement === probe.target, true); assert.deepEqual(probe.calls, [{ connected: true, disabled: false }]);
+});
+
+for (const strict of [false, true]) test(`SEC-RISK-CC01 mounted independent columns, synchronous duplicate submit and local source IDs strict ${strict}`, async ctx => {
+  const app = await mountCc(ctx, { strict }), before = app.requests.length;
+  assert.ok(app.host.querySelector('a[href="#risk-comparison-title"]'));
+  await app.change(app.select('Comparison risk topic'), 'competition'); assert.equal(app.requests.length, before);
+  await act(async () => { for (let i = 0; i < 2; i++) app.panel().querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  assert.equal(app.requests.length, before + 2);
+  await ccFresh(app, 'JPM', 2, 1);
+  const b = app.request(companyPath('JPM', 'context')); assert.equal(b.init.headers['X-FinLens-Data-Version'], '2');
+  await app.release(b, ccEvidence('JPM', 2, { evidenceVersion: 1, query: 'competition' }));
+  assert.equal(app.columns()[1].querySelectorAll('.evidence-card').length, 2);
+  assert.equal(app.columns()[0].getAttribute('aria-busy'), 'true');
+  await ccFresh(app, 'AAPL', 0); const a = app.request(companyPath('AAPL', 'context'));
+  assert.equal(a.init.headers['X-FinLens-Data-Version'], '0'); await app.release(a, ccEvidence('AAPL', 0, { query: 'competition' }));
+  assert.equal(app.requests.length, before + 4);
+  assert.match(app.columns()[0].textContent, /Data version 0 · Evidence version 0/);
+  assert.match(app.columns()[1].textContent, /Data version 2 · Evidence version 1/);
+  for (const [i, ticker] of ['AAPL', 'JPM'].entries()) {
+    const column = app.columns()[i]; assert.match(column.textContent, new RegExp(`${ticker}: competition`));
+    assert.doesNotMatch(column.textContent, new RegExp(`${i ? 'AAPL' : 'JPM'}: competition`));
+    assert.ok(column.textContent.includes('<script>literal()</script>')); assert.equal(column.querySelectorAll('script').length, 0);
+    assert.equal(column.querySelector('.source-link').href, riskSource(ticker).sec_url);
+    assert.match(column.textContent, /source_1 · chunk_0000/);
+  }
+  assert.equal(app.panel().querySelectorAll('.ai-panel,.passage-tone,.direct-answer').length, 0);
+  assert.ok(app.requests.slice(before).every(r => r.init.method !== 'POST' && /\/(freshness|context)$/.test(r.path)));
+  assert.match(app.panel().textContent, /reporting-period alignment has not been established/);
+  assert.match(app.panel().textContent, /zero exclusions does not establish complete source coverage/);
+});
+
+test('SEC-RISK-CC01 mounted preferences require AAPL and COST catalog identities and do not search', async ctx => {
+  const cost = { ...companies[1], ticker: 'COST', cik: '0000909832', name: 'Costco fixture', has_indexed_filing: false };
+  const app = await mount(ctx, false, [companies[0], cost]);
+  assert.equal(app.select('Issuer A').value, 'AAPL'); assert.equal(app.select('Issuer B').value, 'COST');
+  assert.equal(app.host.querySelector('.sec-risk-comparison button').disabled, false);
+  assert.equal(app.requests.filter(r => r.path === companyPath('COST', 'freshness') || r.path.endsWith('/context')).length, 0);
+});
+for (const alias of [false, true]) test(`SEC-RISK-CC01 mounted rejects duplicate ${alias ? 'CIK alias' : 'ticker'} without requests`, async ctx => {
+  // Mount only the new section: malformed aliases must not exercise unrelated
+  // pre-existing catalog renderers that use CIK as their React option key.
+  ctx.mock.method(globalThis, 'fetch', () => assert.fail('Invalid selection must never request data'));
+  const host = document.createElement('div'); document.body.append(host); const root = createRoot(host);
+  ctx.after(async () => { await act(async () => root.unmount()); host.remove(); });
+  await act(async () => root.render(React.createElement(SecRiskComparison, { companies: alias ? [companies[0], { ...companies[1], cik: companies[0].cik }] : companies })));
+  const controls = host.querySelectorAll('select');
+  for (const [index, value] of [[0, 'AAPL'], [1, alias ? 'JPM' : 'AAPL']]) await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(controls[index], value);
+    controls[index].dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+  await act(async () => host.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.match(host.textContent, /exactly two distinct issuers/);
+});
+for (const state of ['no_publications', 'insufficient', 'mismatch', 'missing_header', 'malformed_header', 'changed']) {
+  test(`SEC-RISK-CC01 mounted ${state} preserves verified peer and allows only explicit retry`, async ctx => {
+    const app = await mountCc(ctx); await app.click('Compare SEC evidence'); await ccFresh(app, 'AAPL', 2); await ccFresh(app, 'JPM', 1);
+    await app.release(app.request(companyPath('JPM', 'context')), ccEvidence('JPM', 1));
+    const pending = app.request(companyPath('AAPL', 'context'));
+    let value = ccEvidence('AAPL', 2), status = 200, header = 2;
+    if (state === 'no_publications' || state === 'insufficient') value = ccEvidence('AAPL', 2, { count: 0, searched: state === 'insufficient' });
+    if (state === 'mismatch') value.evidence_version = 1; // Valid alone, invalid composition with captured evidence 0.
+    if (state === 'missing_header') header = null;
+    if (state === 'malformed_header') header = '02';
+    if (state === 'changed') { value = {}; status = 409; header = 3; }
+    const count = app.requests.length; await app.release(pending, value, status, header);
+    assert.equal(app.columns()[0].querySelectorAll('.evidence-card,.source-link').length, 0);
+    assert.equal(app.columns()[1].querySelectorAll('.evidence-card').length, 2);
+    assert.match(app.columns()[0].textContent, state === 'no_publications' ? /No qualifying published evidence available to search/
+      : state === 'insufficient' ? /Insufficient topic evidence/ : /Evidence unavailable or unverified/);
+    assert.equal(app.requests.length, count);
+    await app.click('Compare SEC evidence'); assert.equal(app.requests.length, count + 2);
+    assert.equal(app.panel().querySelectorAll('.evidence-card').length, 0, 'New submission clears previous snapshots');
+    await ccFresh(app, 'AAPL', 3, 1); await ccFresh(app, 'JPM', 1);
+    await app.release(app.request(companyPath('AAPL', 'context')), ccEvidence('AAPL', 3, { evidenceVersion: 1 }));
+    await app.release(app.request(companyPath('JPM', 'context')), ccEvidence('JPM', 1));
+    assert.equal(app.panel().querySelectorAll('.evidence-card').length, 4);
+  });
+}
+
+for (const strict of [false, true]) for (const edit of ['topic', 'issuer', 'cancel']) test(`SEC-RISK-CC01 mounted ${edit} revokes ownership before cleanup strict ${strict}`, async ctx => {
+  const app = await mountCc(ctx, { strict }); await app.click('Compare SEC evidence'); await ccFresh(app, 'AAPL'); await ccFresh(app, 'JPM', 1);
+  const old = app.request(companyPath('AAPL', 'context')), peer = app.request(companyPath('JPM', 'context'));
+  const count = app.requests.length;
+  await act(async () => {
+    if (edit === 'cancel') {
+      const cancel = [...app.panel().querySelectorAll('button')].find(b => b.textContent === 'Cancel evidence comparison');
+      cancel.focus(); cancel.click();
+    }
+    else {
+      const control = app.select(edit === 'topic' ? 'Comparison risk topic' : 'Issuer A');
+      Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(control, edit === 'topic' ? 'competition' : 'JPM');
+      control.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    }
+    assert.equal(old.init.signal.aborted, true); assert.equal(peer.init.signal.aborted, true);
+    app.deliverBeforeCommit(old, {}, 409, 7); app.deliverBeforeCommit(peer, ccEvidence('JPM', 1)); await drainResponseMicrotasks();
+  });
+  assert.equal(app.panel().querySelectorAll('.evidence-card').length, 0); assert.equal(app.requests.length, count);
+  assert.doesNotMatch(app.panel().textContent, /Published data changed/);
+  if (edit === 'cancel') assert.equal(document.activeElement.textContent, 'Compare SEC evidence');
+});
+for (const strict of [false, true]) test(`SEC-RISK-CC01 mounted parsed success cannot survive a pre-commit topic edit strict ${strict}`, async ctx => {
+  const app = await mountCc(ctx, { strict }); await app.click('Compare SEC evidence'); await ccFresh(app, 'AAPL');
+  const old = app.request(companyPath('AAPL', 'context'));
+  await act(async () => {
+    app.deliverBeforeCommit(old, ccEvidence('AAPL')); await drainResponseMicrotasks();
+    assert.equal(app.panel().querySelectorAll('.evidence-card').length, 0);
+    const control = app.select('Comparison risk topic');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(control, 'competition');
+    control.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+  assert.equal(app.panel().querySelectorAll('.evidence-card').length, 0);
+});
+
+test('SEC-RISK-CC01 mounted one total monotonic deadline preserves successful peer and ignores late body', async ctx => {
+  let time = 0; ctx.mock.method(performance, 'now', () => time); ctx.mock.timers.enable({ apis: ['setTimeout'] });
+  const app = await mountCc(ctx); await app.click('Compare SEC evidence');
+  await ccFresh(app, 'JPM', 1); await app.release(app.request(companyPath('JPM', 'context')), ccEvidence('JPM', 1));
+  time = 29000; await ccFresh(app, 'AAPL'); const late = app.request(companyPath('AAPL', 'context'));
+  time = 30000; await act(async () => ctx.mock.timers.tick(30000));
+  assert.match(app.columns()[0].textContent, /30-second comparison deadline expired/);
+  assert.equal(app.columns()[1].querySelectorAll('.evidence-card').length, 2); assert.equal(late.init.signal.aborted, true);
+  const count = app.requests.length; await app.release(late, ccEvidence('AAPL'));
+  assert.equal(app.columns()[0].querySelectorAll('.evidence-card').length, 0); assert.equal(app.requests.length, count);
+  await app.click('Compare SEC evidence'); assert.equal(app.requests.length, count + 2);
+});
+
+test('SEC-RISK-CC01 three simultaneous evidence instances have stable independent aria-controls', async ctx => {
+  const app = await mountCc(ctx); const general = await app.search('AAPL', 'supply chain');
+  await app.release(general, presentationContext('AAPL', 'supply chain', ['One source.', 'Two source.', 'Three source.']));
+  await app.click('Compare SEC evidence'); await ccFresh(app, 'AAPL'); await ccFresh(app, 'JPM', 1);
+  await app.release(app.request(companyPath('AAPL', 'context')), ccEvidence('AAPL'));
+  await app.release(app.request(companyPath('JPM', 'context')), ccEvidence('JPM', 1));
+  const toggles = [...app.host.querySelectorAll('.evidence-toggle')]; assert.equal(toggles.length, 3);
+  const ids = toggles.map(b => b.getAttribute('aria-controls')); assert.equal(new Set(ids).size, 3);
+  const containers = ids.map(id => document.getElementById(id)); assert.ok(containers.every(Boolean));
+  assert.deepEqual(containers.map(c => c.children.length), [2, 2, 2]);
+  await act(async () => toggles[1].click()); assert.deepEqual(containers.map(c => c.children.length), [2, 3, 2]);
+  assert.deepEqual(toggles.map(b => b.getAttribute('aria-controls')), ids);
+  const allIds = [...app.host.querySelectorAll('[id]')].map(n => n.id); assert.equal(new Set(allIds).size, allIds.length);
+});
+
 const companies = [
   { id: 1, ticker: 'AAPL', name: 'Apple fixture', cik: '0000320193', exchange: 'NASDAQ', has_indexed_filing: true, indexed_filing_count: 1 },
   { id: 2, ticker: 'JPM', name: 'JPM fixture', cik: '0000019617', exchange: 'NYSE', has_indexed_filing: true, indexed_filing_count: 1 },
@@ -556,7 +810,9 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
   });
   const host = document.createElement('div'); document.body.append(host);
   const root = createRoot(host);
-  ctx.after(async () => { await act(async () => root.unmount()); host.remove(); localStorage.clear(); });
+  let unmounted = false;
+  async function unmount() { if (!unmounted) { unmounted = true; await act(async () => root.unmount()); host.remove(); localStorage.clear(); } }
+  ctx.after(unmount);
   await act(async () => root.render(strict ? React.createElement(React.StrictMode, null, React.createElement(Home)) : React.createElement(Home)));
   function request(path, params = {}) {
     const found = requests.find(item => !item.released && !item.init.signal?.aborted && item.path === path && Object.entries(params).every(([key, value]) => item.params.get(key) === value));
@@ -614,7 +870,7 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
   await release(request('/capabilities'), capabilityPayload, capabilityStatus);
   if (catalogStatus !== null) await release(request('/companies'), catalogStatus === 200 ? catalog : { detail: 'Catalog temporarily unavailable' }, catalogStatus);
   if (catalogStatus === 200 && initialVersion !== null) await release(request(companyPath(catalog[0].ticker, 'freshness')), freshnessFixture(catalog[0].ticker, initialVersion));
-  return { host, requests, request, release, deliverBeforeCommit, change, click, select, snapshot, trends, evidence, completeCompany, search };
+  return { host, requests, request, release, deliverBeforeCommit, change, click, select, snapshot, trends, evidence, completeCompany, search, unmount };
 }
 
 test('mounted company switch keeps B summary, history and filing after delayed A responses', async ctx => {

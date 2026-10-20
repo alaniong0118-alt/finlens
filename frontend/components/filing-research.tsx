@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness, filingToneIdentity,
   getCompanyContext, type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, type QuestionScope } from "@/lib/research";
@@ -14,13 +14,14 @@ const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artif
 
 export function EvidenceResults({ result, answer, company, risk = false }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company; risk?: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const evidenceId = useId();
   const passages = evidencePassages(result);
   const previews = passages.map(passage => ({ ...passage, excerpt: evidenceExcerpt(passage.text, result.query, answer, passages.map(item => item.text)) }));
   return <div className="evidence-results" aria-live="polite">
     <div className="section-heading"><h3>{risk ? passages.length ? "Candidate SEC passages" : "Insufficient topic evidence in the searched scope" : passages.length ? `${passages.length} SEC evidence passages` : "retrieval_scope" in result ? "Insufficient evidence in published company filings" : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
     <p className="muted small">Search: “{result.query}” · Highlights mark matching text, not verified claim support. Excerpts retain the source wording.</p>
     {passages.length === 0 && <div className="empty-state"><p>{risk ? "No qualifying passages were returned for this topic and scope. This does not mean no risk. Edit the query or explicitly choose another scope and search again." : "Try a more specific financial topic. FinLens does not substitute model knowledge when filing evidence is weak."}</p></div>}
-    <div id="ranked-evidence">{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt }) => <article className="evidence-card" key={citation.citation_id}>
+    <div id={evidenceId}>{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt }) => <article className="evidence-card" key={citation.citation_id}>
       <div className="evidence-heading"><h4>Evidence {rank} <span className="muted">· {citation.form}</span></h4><span className="small muted">Filed {formatDate(citation.filed)}</span></div>
       <p className="excerpt evidence-preview">{excerpt.start > 0 && "… "}{excerpt.parts.map((part, index) => part.kind ? <mark key={index} className={`evidence-highlight ${part.kind === "value" ? "value-match" : ""}`}>{part.text}</mark> : part.text)}{excerpt.end < text.length && " …"}</p>
       <details className="provenance"><summary>Read full evidence passage</summary><p className="excerpt details-body">{text}</p></details>
@@ -37,7 +38,7 @@ export function EvidenceResults({ result, answer, company, risk = false }: { res
         && ("retrieval_scope" in result ? result.company_cik === company.cik && result.searched_accessions.includes(citation.accession_number)
           : result.accession_number === citation.accession_number) ? filingToneIdentity(company, citation) : null} />}
     </article>)}</div>
-    {passages.length > 2 && <button type="button" className="secondary-button evidence-toggle" aria-expanded={expanded} aria-controls="ranked-evidence" onClick={() => setExpanded(!expanded)}>{expanded ? "Show less evidence" : `Show more evidence (${passages.length - 2})`}</button>}
+    {passages.length > 2 && <button type="button" className="secondary-button evidence-toggle" aria-expanded={expanded} aria-controls={evidenceId} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less evidence" : `Show more evidence (${passages.length - 2})`}</button>}
   </div>;
 }
 
