@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.filing_search_service import hybrid_search_filing_chunks, hybrid_search_company_chunks
 from app.evidence_policy import evidence_reason
+from app import evidence_latency as latency
 from app.freshness_service import (
     published_company_chunks, valid_document_filename,
     validate_research_input, validate_research_chunks,
@@ -37,8 +38,9 @@ def build_company_context(session, company_cik, query, limit=5):
     validate_research_input(query, limit)
     chunks, metadata = published_company_chunks(session, company_cik)
     ranked = hybrid_search_company_chunks(chunks, query)
-    return {**_build_context(ranked, query, limit, company_wide=True), **metadata,
-            "retrieval_scope": "company", "company_cik": company_cik}
+    with latency.span("context_construction"):
+        return {**_build_context(ranked, query, limit, company_wide=True), **metadata,
+                "retrieval_scope": "company", "company_cik": company_cik}
 
 
 def _build_context(ranked_chunks, query, limit, *, company_wide=False):

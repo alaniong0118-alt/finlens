@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import FilingChunk
 from app.embedding_service import embed_texts, validate_embedding
+from app import evidence_latency as latency
 from app.freshness_service import (
     admitted_research_chunks, research_chunk_inventory, research_chunks,
     validate_research_chunks, validate_research_input,
@@ -110,19 +111,23 @@ def rank_hybrid_chunks(
 
 def hybrid_search_company_chunks(chunks, query, limit=50):
     """Rank already verified bounded publications, embedding the query once."""
-    validate_research_input(query, limit)
-    validate_research_chunks(chunks)
-    if not chunks or not (set(re.findall(r"\w+", query.casefold())) - QUERY_STOP_WORDS):
-        return []
+    with latency.span("retrieval_admission"):
+        validate_research_input(query, limit)
+        validate_research_chunks(chunks)
+        if not chunks or not (set(re.findall(r"\w+", query.casefold())) - QUERY_STOP_WORDS):
+            return []
     vector = embed_texts([query.strip()])[0]
-    validate_embedding(vector)
-    norm = math.hypot(*vector)
-    candidates = []
-    for chunk in chunks:
-        similarity = math.fsum(float(a) * float(b) for a, b in zip(vector, chunk.embedding, strict=True)) / (
-            norm * math.hypot(*chunk.embedding))
-        candidates.append((chunk, similarity))
-    return rank_hybrid_chunks(candidates, query, limit, company_wide=True)
+    with latency.span("query_vector_admission"):
+        validate_embedding(vector)
+    with latency.span("python_similarity"):
+        norm = math.hypot(*vector)
+        candidates = []
+        for chunk in chunks:
+            similarity = math.fsum(float(a) * float(b) for a, b in zip(vector, chunk.embedding, strict=True)) / (
+                norm * math.hypot(*chunk.embedding))
+            candidates.append((chunk, similarity))
+    with latency.span("python_hybrid_ranking"):
+        return rank_hybrid_chunks(candidates, query, limit, company_wide=True)
 
 
 def hybrid_search_filing_chunks(

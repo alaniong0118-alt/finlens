@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import FilingChunk
 from app.config import server_profile
+from app import evidence_latency as latency
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMENSION = 384
@@ -50,35 +51,48 @@ def _get_model():
 
 
 def _load_model():
-    if server_profile().name == "sec_readonly":
-        # Resolve a local snapshot without a hub request. Passing the local path
-        # and local_files_only also constrains nested tokenizer/model loaders.
-        from pathlib import Path
-        from huggingface_hub import try_to_load_from_cache
-        cached = try_to_load_from_cache(MODEL_NAME, "modules.json")
-        if not isinstance(cached, str) or not Path(cached).is_file():
-            raise _encoder_unavailable()
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer(str(Path(cached).parent), local_files_only=True)
-    else:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer(MODEL_NAME)
-    if model.get_sentence_embedding_dimension() != EMBEDDING_DIMENSION:
-        raise _encoder_unavailable()
-    return model
+    with latency.span("encoder_loader_body"):
+        if server_profile().name == "sec_readonly":
+            # Resolve a local snapshot without a hub request. Passing the local path
+            # and local_files_only also constrains nested tokenizer/model loaders.
+            with latency.span("encoder_dependency_import"):
+                from pathlib import Path
+                from huggingface_hub import try_to_load_from_cache
+            with latency.span("encoder_artifact_lookup"):
+                cached = try_to_load_from_cache(MODEL_NAME, "modules.json")
+                if not isinstance(cached, str) or not Path(cached).is_file():
+                    raise _encoder_unavailable()
+            with latency.span("encoder_dependency_import"):
+                from sentence_transformers import SentenceTransformer
+            with latency.span("model_constructor"):
+                model = SentenceTransformer(str(Path(cached).parent), local_files_only=True)
+        else:
+            with latency.span("encoder_dependency_import"):
+                from sentence_transformers import SentenceTransformer
+            with latency.span("model_constructor"):
+                model = SentenceTransformer(MODEL_NAME)
+        with latency.span("encoder_admission"):
+            if model.get_sentence_embedding_dimension() != EMBEDDING_DIMENSION:
+                raise _encoder_unavailable()
+        return model
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    vectors = _get_model().encode(
-        texts,
-        batch_size=32,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
-    return vectors.tolist()
+    with latency.span("query_embedding"):
+        with latency.span("model_cache_lookup"):
+            model = _get_model()
+        with latency.span("encoder_encode"):
+            vectors = model.encode(
+                texts,
+                batch_size=32,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+        with latency.span("encoder_output_conversion"):
+            return vectors.tolist()
 
 
 @development_only

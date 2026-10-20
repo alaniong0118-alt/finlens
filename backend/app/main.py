@@ -2,6 +2,7 @@ import os
 from typing import Annotated
 
 from app.config import server_profile
+from app import evidence_latency as latency
 from app.release_policy import READONLY_ROUTES, ReleaseAdmissionMiddleware
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -96,6 +97,7 @@ ResearchLimit = Annotated[int, BeforeValidator(_http_result_count), Query(ge=1, 
 class VersionedRoute(APIRoute):
     def get_route_handler(self):
         original = super().get_route_handler()
+        @latency.route
         async def handle(request):
             ticker = request.path_params.get("ticker")
             scope = {"ticker": ticker.upper() if ticker else None,
@@ -553,9 +555,11 @@ def get_company_sources(
 
         return sorted(sources, key=lambda source: (str(source.filed or ""), source.accession_number), reverse=True)
 @app.get("/companies/{ticker}/freshness", response_model=Freshness)
+@latency.worker
 def company_freshness(ticker: str):
     with read_session(HttpSessionLocal) as session:
-        return freshness(session, ticker)
+        with latency.span("freshness_read"):
+            return freshness(session, ticker)
 
 
 def stored_filing(session, ticker, accession):
@@ -731,10 +735,12 @@ def semantic_search_company_filing(
 
 
 @app.get("/companies/{ticker}/context")
+@latency.worker
 def get_company_context(ticker: str, q: ResearchQuery, limit: ResearchLimit = 5):
     validate_research_input(q, limit)
     with read_session(HttpSessionLocal) as session:
-        company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
+        with latency.span("company_read"):
+            company = session.scalar(select(Company).where(Company.ticker == ticker.upper()))
         if company is None:
             raise HTTPException(404, detail="Unknown company")
         return {"ticker": company.ticker, "company_name": company.name,
@@ -844,6 +850,8 @@ def answer_company_filing_question(
 
 
 # Freeze admission only after all maintained routes have been registered.
+# Observation stays INSIDE release admission; messages and error ordering are unchanged.
+app.add_middleware(latency.EvidenceLatencyMiddleware, profile=server_profile)
 app.add_middleware(
     ReleaseAdmissionMiddleware, router=app.router,
     admitted_routes=tuple(route for route in app.router.routes

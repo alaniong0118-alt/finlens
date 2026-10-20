@@ -12,6 +12,7 @@ from sqlalchemy.orm import load_only
 
 from app.models import Company, CompanyRefreshState, FilingChunk, FilingPublication
 from app.refresh_contracts import FilingIdentity, Freshness, StreamState, utcnow
+from app import evidence_latency as latency
 
 _schemas = WeakKeyDictionary()
 request_scope = ContextVar("finlens_read_scope", default=None)
@@ -63,18 +64,24 @@ def freshness(session, ticker):
 
 @contextmanager
 def read_session(factory):
-    session = factory()
+    with latency.span("session_factory"):
+        session = factory()
     connection = None
     try:
         if session.get_bind().dialect.name == "postgresql":
-            connection = session.connection()
-            session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+            # Composite interval: pool wait, physical setup and SQLAlchemy work may
+            # all occur here. It is not a pure pool-checkout measurement.
+            with latency.span("connection_acquire_composite"):
+                connection = session.connection()
+            with latency.span("transaction_setup"):
+                session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
         scope = request_scope.get()
         if scope and scope.get("ticker"):
             version = None
-            if schema_ready(session.connection()):
-                version = session.scalar(select(CompanyRefreshState.data_version).join(
-                    Company, Company.cik == CompanyRefreshState.company_cik).where(Company.ticker == scope["ticker"]))
+            with latency.span("version_pin_read"):
+                if schema_ready(session.connection()):
+                    version = session.scalar(select(CompanyRefreshState.data_version).join(
+                        Company, Company.cik == CompanyRefreshState.company_cik).where(Company.ticker == scope["ticker"]))
             if version is not None and (type(version) is not int or version < 0):
                 raise ValueError("Invalid publication version metadata.")
             # Zero is a verified publication. Missing metadata is unverified,
@@ -86,17 +93,23 @@ def read_session(factory):
     except BaseException:
         # Cleanup must not replace a primary query/programming/research error.
         # A failed close cannot return a suspect connection to another request.
-        try:
-            session.close()
-        except BaseException:
-            _invalidate_read_session(session, connection)
+        with latency.span("session_cleanup"):
+            try:
+                with latency.span("session_close"):
+                    session.close()
+            except BaseException:
+                with latency.span("session_invalidation"):
+                    _invalidate_read_session(session, connection)
         raise
     else:
-        try:
-            session.close()
-        except BaseException:
-            _invalidate_read_session(session, connection)
-            raise
+        with latency.span("session_cleanup"):
+            try:
+                with latency.span("session_close"):
+                    session.close()
+            except BaseException:
+                with latency.span("session_invalidation"):
+                    _invalidate_read_session(session, connection)
+                raise
 
 
 def _invalidate_read_session(session, connection):
@@ -157,12 +170,13 @@ def validate_research_chunks(chunks):
 def research_chunk_inventory(session, *predicates):
     # Never select text or vectors in admission; the sentinel covers ALL scoped
     # chunks, including missing embeddings and passages that would rank last.
-    inventory = list(session.execute(select(
-        *(getattr(FilingChunk, field) for field in CHUNK_IDENTITY_FIELDS),
-        func.length(FilingChunk.text).label("text_length"),
-    ).where(*predicates).order_by(
-        FilingChunk.company_cik, FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id,
-    ).limit(MAX_COMPANY_CHUNKS + 1)))
+    with latency.span("chunk_inventory_read"):
+        inventory = list(session.execute(select(
+            *(getattr(FilingChunk, field) for field in CHUNK_IDENTITY_FIELDS),
+            func.length(FilingChunk.text).label("text_length"),
+        ).where(*predicates).order_by(
+            FilingChunk.company_cik, FilingChunk.accession_number, FilingChunk.chunk_index, FilingChunk.id,
+        ).limit(MAX_COMPANY_CHUNKS + 1)))
     if len(inventory) > MAX_COMPANY_CHUNKS or any(
             r.text_length is None or r.text_length > MAX_COMPANY_CHUNK_CHARS for r in inventory):
         raise scope_too_large()
@@ -182,16 +196,18 @@ def admitted_research_chunks(session, inventory, *predicates, distance=None):
     stmt = stmt.order_by(FilingChunk.company_cik, FilingChunk.accession_number,
                         FilingChunk.chunk_index, FilingChunk.id) if distance is None else stmt.order_by(distance)
     stmt = stmt.limit(MAX_COMPANY_CHUNKS + 1).execution_options(populate_existing=True)
-    rows = list(session.scalars(stmt)) if distance is None else list(session.execute(stmt))
-    chunks = rows if distance is None else [row[0] for row in rows]
-    expected = {row.id: row for row in inventory}
-    if len(chunks) != len(inventory) or len({c.id for c in chunks}) != len(chunks):
-        raise inconsistent_evidence()
-    for chunk in chunks:
-        admitted = expected.get(chunk.id)
-        if (admitted is None or chunk.text is None or len(chunk.text) != admitted.text_length
-                or any(getattr(chunk, f) != getattr(admitted, f) for f in CHUNK_IDENTITY_FIELDS)):
+    with latency.span("chunk_body_read"):
+        rows = list(session.scalars(stmt)) if distance is None else list(session.execute(stmt))
+    with latency.span("chunk_admission"):
+        chunks = rows if distance is None else [row[0] for row in rows]
+        expected = {row.id: row for row in inventory}
+        if len(chunks) != len(inventory) or len({c.id for c in chunks}) != len(chunks):
             raise inconsistent_evidence()
+        for chunk in chunks:
+            admitted = expected.get(chunk.id)
+            if (admitted is None or chunk.text is None or len(chunk.text) != admitted.text_length
+                    or any(getattr(chunk, f) != getattr(admitted, f) for f in CHUNK_IDENTITY_FIELDS)):
+                raise inconsistent_evidence()
     return rows
 
 
@@ -271,7 +287,8 @@ def published_company_chunks(session, cik):
     if not schema_ready(session.connection()):
         raise HTTPException(409, "Company-wide search requires publication metadata.",
                             headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
-    state = session.get(CompanyRefreshState, cik)
+    with latency.span("publication_state_read"):
+        state = session.get(CompanyRefreshState, cik)
     if state is None:
         raise HTTPException(409, "Company-wide search requires publication version metadata.",
                             headers={"X-FinLens-Error-Code": "EVIDENCE_PENDING"})
@@ -279,14 +296,15 @@ def published_company_chunks(session, cik):
         raise HTTPException(409, "Published data changed. Refresh the research scope.",
                             headers={"X-FinLens-Error-Code": "DATA_VERSION_CHANGED"})
     pending = StreamState.model_validate(state.evidence or {}).pending_targets
-    publications = list(session.scalars(select(FilingPublication).options(load_only(
-        FilingPublication.company_cik, FilingPublication.accession_number,
-        FilingPublication.form, FilingPublication.filed, FilingPublication.filename,
-        FilingPublication.chunk_count, FilingPublication.content_digest,
-        FilingPublication.data_version,
-    )).where(FilingPublication.company_cik == cik,
-             FilingPublication.accession_number.not_in(pending))
-        .order_by(FilingPublication.accession_number).limit(MAX_COMPANY_FILINGS + 1)))
+    with latency.span("publication_read"):
+        publications = list(session.scalars(select(FilingPublication).options(load_only(
+            FilingPublication.company_cik, FilingPublication.accession_number,
+            FilingPublication.form, FilingPublication.filed, FilingPublication.filename,
+            FilingPublication.chunk_count, FilingPublication.content_digest,
+            FilingPublication.data_version,
+        )).where(FilingPublication.company_cik == cik,
+                 FilingPublication.accession_number.not_in(pending))
+            .order_by(FilingPublication.accession_number).limit(MAX_COMPANY_FILINGS + 1)))
     if len(publications) > MAX_COMPANY_FILINGS:
         raise HTTPException(409, "Company-wide search exceeds its filing limit. Use selected-filing search.",
                             headers={"X-FinLens-Error-Code": "SEARCH_SCOPE_TOO_LARGE"})
@@ -299,26 +317,29 @@ def published_company_chunks(session, cik):
         FilingChunk.accession_number.in_([p.accession_number for p in valid_publications]),
     )
     rows = research_chunks(session, *predicates) if valid_publications else []
-    groups = {}
-    for chunk in rows:
-        groups.setdefault(chunk.accession_number, []).append(chunk)
-    chunks, eligible = [], []
-    for publication in valid_publications:
-        group = groups.get(publication.accession_number, [])
-        if (len(group) != publication.chunk_count or not group
-                or any(c.company_cik != cik or not valid_document_filename(c.filename)
-                       or len(c.text) > MAX_COMPANY_CHUNK_CHARS
-                       or any(getattr(c, field) != getattr(publication, field)
-                              for field in ("form", "filed", "filename")) for c in group)):
-            continue
-        try:
-            validate_chunks(group)
-        except (ValueError, TypeError):
-            continue
-        if chunk_digest(group) != publication.content_digest:
-            continue
-        eligible.append(publication.accession_number)
-        chunks.extend(group)
+    with latency.span("publication_eligibility"):
+        groups = {}
+        for chunk in rows:
+            groups.setdefault(chunk.accession_number, []).append(chunk)
+        chunks, eligible = [], []
+        for publication in valid_publications:
+            group = groups.get(publication.accession_number, [])
+            with latency.span("publication_validation"):
+                if (len(group) != publication.chunk_count or not group
+                        or any(c.company_cik != cik or not valid_document_filename(c.filename)
+                               or len(c.text) > MAX_COMPANY_CHUNK_CHARS
+                               or any(getattr(c, field) != getattr(publication, field)
+                                      for field in ("form", "filed", "filename")) for c in group)):
+                    continue
+                try:
+                    validate_chunks(group)
+                except (ValueError, TypeError):
+                    continue
+            with latency.span("publication_digest"):
+                if chunk_digest(group) != publication.content_digest:
+                    continue
+            eligible.append(publication.accession_number)
+            chunks.extend(group)
     return chunks, {
         "data_version": state.data_version, "evidence_version": state.evidence_version,
         "searched_accessions": eligible,
