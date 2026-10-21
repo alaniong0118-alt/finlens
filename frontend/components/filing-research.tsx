@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness, filingToneIdentity,
-  getCompanyContext, type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
+  getCompanyContext, getKeywordFilingSources, captureKeywordRequest, getKeywordSearch, type KeywordRequest, type KeywordResponse,
+  type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, type QuestionScope } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
@@ -11,6 +12,161 @@ import { RISK_TOPICS, RISK_EXPLANATION, riskTopic, riskQueryLabel, validateRiskE
 import { useResearchVersion } from "@/components/research-freshness";
 
 const EXAMPLES = ["revenue growth", "gross margin", "supply constraints", "artificial intelligence"];
+
+const KEYWORD_PROVENANCE = "These are stored keyword matches, not digest-revalidated evidence, verified financial claims, or complete filing coverage. Publication-manifest presence does not validate passage content against its digest.";
+type KeywordCancellation = (cancelSources?: boolean) => void;
+
+function KeywordSearch({ company, filing, query, setQuery, retrievalScope, cancelRef }: {
+  company: Company; filing: FilingSource | null; query: string; setQuery: (value: string) => void;
+  retrievalScope: "filing" | "company"; cancelRef: RefObject<KeywordCancellation | null>;
+}) {
+  const { version, changed } = useResearchVersion();
+  const sourceOwner = JSON.stringify([company.ticker, company.cik, company.name, version, retrievalScope]);
+  const owner = JSON.stringify([sourceOwner, filing, query, company.has_indexed_filing]);
+  const live = useRef({ owner, generation: 0, mounted: true, transport: null as AbortController | null });
+  const sourceTransport = useRef<AbortController | null>(null);
+  const sourceGeneration = useRef(0);
+  const sourceRetryPending = useRef(false);
+  const liveSourceOwner = useRef(sourceOwner);
+  const [sourceAttempt, setSourceAttempt] = useState(0);
+  const [sourceRetryShown, setSourceRetryShown] = useState(false);
+  const sourceKey = JSON.stringify([sourceOwner, sourceAttempt]);
+  const liveSourceKey = useRef(sourceKey);
+  const [sources, setSources] = useState<{ owner: string; generation: number; data: FilingSource[]; error: string | null } | null>(null);
+  const [state, setState] = useState<{ owner: string; generation: number; sourceGeneration: number; pending: boolean; request: KeywordRequest; result?: KeywordResponse; error?: string } | null>(null);
+  const submitButton = useRef<HTMLButtonElement | null>(null);
+  const queryInput = useRef<HTMLTextAreaElement | null>(null);
+  const restoreSourceFocus = useRef(false);
+  const invalidate = useCallback(() => {
+    live.current.generation++; live.current.transport?.abort(); live.current.transport = null;
+  }, []);
+  const invalidateSources = useCallback(() => {
+    sourceGeneration.current++; sourceTransport.current?.abort(); invalidate();
+  }, [invalidate]);
+  // Render-time invalidation and gating cover the interval before effects run.
+  if (liveSourceKey.current !== sourceKey) {
+    if (liveSourceOwner.current !== sourceOwner) restoreSourceFocus.current = false;
+    invalidateSources(); liveSourceKey.current = sourceKey;
+  }
+  liveSourceOwner.current = sourceOwner;
+  if (live.current.owner !== owner) { invalidate(); live.current.owner = owner; }
+  useLayoutEffect(() => {
+    const lifecycle = live.current;
+    lifecycle.mounted = true;
+    cancelRef.current = (cancelSources = false) => {
+      if (cancelSources) {
+        restoreSourceFocus.current = false; invalidateSources(); setSources(null); setSourceRetryShown(false);
+        // Preserve a new verification even when a scope round trip is batched
+        // back to the same identity before React commits either intermediate UI.
+        setSourceAttempt(value => value + 1);
+      } else invalidate();
+    };
+    return () => { lifecycle.mounted = false; restoreSourceFocus.current = false; invalidateSources(); cancelRef.current = null; };
+  }, [cancelRef, invalidate, invalidateSources]);
+  useEffect(() => {
+    if (version === null || retrievalScope !== "filing") return;
+    // Every verification is a new generation, even after an A -> B -> A scope
+    // round trip. A previous successful inventory cannot admit a new search.
+    invalidateSources();
+    const generation = sourceGeneration.current;
+    sourceRetryPending.current = true;
+    setSources(null);
+    const transport = versionedController(version, () => { if (current()) changed(); });
+    sourceTransport.current = transport;
+    // The preflight belongs to the company/pin/scope, independent of query edits.
+    const current = () => live.current.mounted && liveSourceKey.current === sourceKey && sourceGeneration.current === generation
+      && !transport.signal.aborted && sourceTransport.current === transport;
+    getKeywordFilingSources(company, transport.signal).then(data => {
+      if (current()) { sourceRetryPending.current = false; setSources({ owner: sourceOwner, generation, data, error: null }); }
+    }).catch(() => {
+      if (current()) { sourceRetryPending.current = false; setSources({ owner: sourceOwner, generation, data: [], error: "The version-pinned keyword filing list is unavailable. Retry the filing check explicitly." }); }
+    });
+    return () => { if (current()) invalidateSources(); else transport.abort(); };
+    // Primitive source identity is the dependency; query/filing edits never reload it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey, changed]);
+  const pinned = sources?.owner === sourceOwner && sources.generation === sourceGeneration.current ? sources : null;
+  const source = pinned?.data.find(item => item.accession_number === filing?.accession_number && item.has_filing_chunks === true
+    && item.form === filing.form && item.filed === filing.filed && item.sec_url === filing.sec_url
+    && item.period_start === filing.period_start && item.period_end === filing.period_end
+    && JSON.stringify(item.metrics) === JSON.stringify(filing.metrics));
+  const ready = version !== null && retrievalScope === "filing" && company.has_indexed_filing === true && Boolean(source) && !pinned?.error;
+  const visible = ready && state?.owner === owner && state.generation === live.current.generation
+    && state.sourceGeneration === pinned?.generation ? state : null;
+  useLayoutEffect(() => {
+    if (pinned && !pinned.error && restoreSourceFocus.current) {
+      restoreSourceFocus.current = false;
+      if (document.activeElement !== document.body) return;
+      if (submitButton.current && !submitButton.current.disabled) submitButton.current.focus();
+      else queryInput.current?.focus();
+    }
+  }, [pinned]);
+  async function submit(event: Pick<FormEvent<HTMLFormElement>, "preventDefault">) {
+    event.preventDefault();
+    if (!ready || !source || !pinned || pinned.generation !== sourceGeneration.current || sourceRetryPending.current
+        || version === null || !query.trim() || live.current.transport) return;
+    let request: KeywordRequest;
+    try { request = captureKeywordRequest(company, source, query.trim(), version); } catch { return; }
+    const generation = ++live.current.generation;
+    const verifiedGeneration = pinned!.generation;
+    const current = () => live.current.mounted && live.current.owner === owner && live.current.generation === generation
+      && sourceGeneration.current === verifiedGeneration && !transport.signal.aborted;
+    const transport = versionedController(version, () => { if (current()) changed(); });
+    live.current.transport = transport; // Same-tick reservation precedes any await/state update.
+    setState({ owner, generation, sourceGeneration: verifiedGeneration, request, pending: true });
+    try {
+      const result = await getKeywordSearch(request, transport.signal);
+      if (current()) setState({ owner, generation, sourceGeneration: verifiedGeneration, request, pending: false, result });
+    } catch (failure) {
+      if (current()) setState({ owner, generation, sourceGeneration: verifiedGeneration, request, pending: false,
+        error: failure instanceof FinLensApiError && failure.code === "REQUEST_TIMEOUT"
+          ? "Keyword search timed out. Retry explicitly. Cancelling the client request does not guarantee SQL cancellation."
+          : "Stored keyword matches are unavailable or could not be verified. Retry explicitly." });
+    } finally { if (current()) live.current.transport = null; }
+  }
+  return <div className="keyword-search">
+    <p className="muted small">Matching uses case-insensitive substrings of entered terms, not semantic or exact-phrase search.</p>
+    <p className="muted small">{KEYWORD_PROVENANCE}</p>
+    <form className="search-form" onSubmit={submit}>
+      <label htmlFor="keyword-query">Keywords in the selected filing<textarea ref={queryInput} id="keyword-query" value={query} maxLength={2000} rows={3}
+        onChange={event => { invalidate(); setQuery(event.target.value); }} /></label>
+      <button ref={submitButton} className="primary-button" disabled={!ready || !query.trim() || visible?.pending}>{visible?.pending ? "Searching stored keyword matches…" : visible?.error ? "Retry keyword search" : "Search selected filing keywords"}</button>
+    </form>
+    {retrievalScope !== "filing" ? <p className="notice">Keyword search is available only for a selected indexed filing. Choose Selected filing above.</p>
+      : version === null ? <p className="notice">Verify this company’s published data before keyword search.</p>
+        : !pinned ? <p role="status">Checking the version-pinned keyword filing list…</p>
+          : pinned.error ? <p role="alert">{pinned.error}</p>
+            : !ready && <p className="notice">Keyword search is unavailable for this selection. Select an indexed filing with matching publication metadata.</p>}
+    {(pinned?.error || sourceRetryShown && !pinned) && retrievalScope === "filing" && version !== null &&
+      <button type="button" className="secondary-button" aria-disabled={!pinned?.error} onClick={event => {
+            if (!pinned?.error || sourceRetryPending.current) return;
+            sourceRetryPending.current = true; // Reserve repeated keyboard activation synchronously.
+            restoreSourceFocus.current = document.activeElement === event.currentTarget;
+            setSourceRetryShown(true);
+            invalidateSources();
+            setSources(null); setSourceAttempt(value => value + 1);
+          }}>Retry keyword filing check</button>}
+    <div aria-live="polite" aria-busy={Boolean(visible?.pending)}>
+      {visible?.pending && <p role="status">Searching stored keyword matches in this filing…</p>}
+      {visible?.error && <p role="alert">{visible.error}</p>}
+      {visible?.result && <section className="keyword-results" aria-label="Stored keyword matches">
+        <h3>{visible.result.result_count ? `${visible.result.result_count} stored keyword matches` : "No stored keyword matches"}</h3>
+        <p>{visible.request.company_name} · {visible.request.ticker} · CIK {visible.request.cik} · Publication {visible.request.pin}</p>
+        <p>Search: “{visible.request.query}” · Selected filing only · Accession {visible.request.accession_number}</p>
+        {!visible.result.result_count && <p>No stored passages matched these terms in the selected filing. This does not establish absence from the complete filing. Edit the terms and submit explicitly.</p>}
+        {visible.result.results.map((chunk, index) => <article className="keyword-card" key={chunk.chunk_id}>
+          <h4>Keyword match {index + 1} · {chunk.form}</h4><p>Filed {formatDate(chunk.filed)}</p>
+          <p className="excerpt" style={{ whiteSpace: "pre-wrap" }}>{chunk.text}</p>
+          <a className="source-link" href={chunk.sec_url} target="_blank" rel="noopener noreferrer">Open official SEC filing index ↗</a>
+          <details className="provenance"><summary>Stored passage source details</summary><div className="details-body wrap-anywhere">
+            <p>{chunk.chunk_id} · {chunk.filename}</p><p>Accession {visible.request.accession_number} · CIK {visible.request.cik}</p>
+            <p>Cleaned text offsets: {chunk.start_char}–{chunk.end_char} (Unicode code points)</p>
+          </div></details>
+        </article>)}
+      </section>}
+    </div>
+  </div>;
+}
 
 export function EvidenceResults({ result, answer, company, risk = false }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company; risk?: boolean }) {
   const [expanded, setExpanded] = useState(false);
@@ -88,11 +244,12 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
   </section>;
 }
 
-function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady }: {
+function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady, cancelKeyword }: {
   company: Company; filing: FilingSource | null; configured: boolean;
   retrievalScope: "filing" | "company";
   query: string; setQuery: (value: string) => void;
   companyEvidenceReady: boolean;
+  cancelKeyword: RefObject<KeywordCancellation | null>;
 }) {
   const { version, changed } = useResearchVersion();
   const [result, setResult] = useState<EvidenceContext | null>(null);
@@ -103,7 +260,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [guideMetric, setGuideMetric] = useState("revenue");
   const [guideScope, setGuideScope] = useState<QuestionScope>("latest_available");
-  const [purpose, setPurpose] = useState<"general" | "risk">("general");
+  const [purpose, setPurpose] = useState<"general" | "risk" | "keyword">("general");
   const [riskGuide, setRiskGuide] = useState("supply_chain");
   const [searchedRisk, setSearchedRisk] = useState<{ owner: string; request: RiskRequest } | null>(null);
   const questionInput = useRef<HTMLTextAreaElement | null>(null);
@@ -145,6 +302,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     setResult(null); setLoading(false); setError(null);
   }, [evidenceIdentity]);
   function edit(value: string) {
+    cancelKeyword.current?.(true);
     scope.current.invalidate(); controller.current?.abort();
     evidenceScope.current.invalidate(); evidenceController.current?.abort();
     answerPending.current = false; evidencePending.current = false;
@@ -214,10 +372,11 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       <p className="mono small wrap-anywhere">Accession {filing.accession_number}</p>
       {officialSecUrl(filing.sec_url) && <a href={officialSecUrl(filing.sec_url)} target="_blank" rel="noopener noreferrer">Open official filing ↗</a>}
     </div>}
+    <label>Research purpose<select value={purpose} onChange={event => {
+      edit(""); setSearchedRisk(null); setPurpose(event.target.value === "keyword" ? "keyword" : event.target.value === "risk" ? "risk" : "general");
+    }}><option value="general">General research</option><option value="risk">Risk-topic exploration</option><option value="keyword">Keyword search — selected filing</option></select></label>
+    {purpose === "keyword" ? <KeywordSearch company={company} filing={filing} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelRef={cancelKeyword} /> : <>
     <form onSubmit={search} className="search-form">
-      <label>Research purpose<select value={purpose} onChange={event => {
-        edit(""); setSearchedRisk(null); setPurpose(event.target.value === "risk" ? "risk" : "general");
-      }}><option value="general">General research</option><option value="risk">Risk-topic exploration</option></select></label>
       {purpose === "risk" ? <fieldset className="question-guide">
         <legend>Explore risk-related SEC evidence</legend>
         <label>Risk topic<select value={riskGuide} onChange={event => {
@@ -278,6 +437,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       <EvidenceResults key={`evidence-${purpose}-${result.query}-${retrievalScope}`} result={result} answer={purpose === "risk" || "retrieval_scope" in result ? null : answer} company={company} risk={purpose === "risk"} />
       {purpose === "general" && ("retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} />)}
     </>}
+    </>}
   </>;
 }
 
@@ -309,6 +469,7 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [sourceAttempt, setSourceAttempt] = useState(0);
   const sourcePending = useRef(false);
+  const cancelKeyword = useRef<KeywordCancellation | null>(null);
   useEffect(() => {
     setLoading(true); setError(null); setErrorCode(null);
     if (version === null) return;
@@ -339,11 +500,11 @@ export default function FilingResearch({ company, configured }: { company: Compa
   return <section className="panel filing-panel" aria-labelledby="filing-title">
     <div className="section-heading"><div><p className="eyebrow">SEC research</p><h2 id="filing-title">Read the evidence</h2></div><span className="badge">No AI required</span></div>
     <p className="muted small">Search a selected filing or published filings for this company. Metric snapshots may refer to a different period or accession.</p>
-    <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => setRetrievalScope(event.target.value as "filing" | "company")}>
+    <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => { cancelKeyword.current?.(true); setRetrievalScope(event.target.value as "filing" | "company"); }}>
       <option value="filing">Selected filing</option><option value="company">Company-wide</option>
     </select></label>
     <p className="muted small">{loading ? "Checking indexed SEC evidence…" : error ? "Indexed evidence list unavailable." : `Indexed searchable SEC evidence (${indexed.length}).`} Searchable passages do not guarantee complete filing text or sufficient evidence for AI analysis.</p>
-    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => setAccession(event.target.value)} disabled={loading || !indexed.length || !company.has_indexed_filing}>
+    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => { cancelKeyword.current?.(); setAccession(event.target.value); }} disabled={loading || !indexed.length || !company.has_indexed_filing}>
       {loading && <option value="">Loading filings…</option>}
       {!loading && !indexed.length && <option value="">{error ? "Filing list unavailable" : "No indexed filing available"}</option>}
       {indexed.map((item) => <option key={item.accession_number} value={item.accession_number}>{item.form ?? "SEC filing"} · {formatDate(item.filed)} · {item.accession_number}</option>)}
@@ -358,6 +519,6 @@ export default function FilingResearch({ company, configured }: { company: Compa
       <RecordedFilings key={`${company.ticker}-${company.cik}-${sourceVersion}-metadata`} filings={currentSources.filter(item => filingReadiness(item) === "metadata_only")} />
       <RecordedFilings key={`${company.ticker}-${company.cik}-${sourceVersion}-unknown`} unknown filings={currentSources.filter(item => filingReadiness(item) === "unknown")} />
     </>}
-    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceVersion === version && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} />
+    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceVersion === version && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} />
   </section>;
 }

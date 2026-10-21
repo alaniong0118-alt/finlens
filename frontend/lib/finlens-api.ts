@@ -486,6 +486,118 @@ export function getFilingSources(ticker: string, signal?: AbortSignal): Promise<
   );
 }
 
+export type KeywordRequest = Readonly<{
+  ticker: string; company_name: string; cik: string; accession_number: string;
+  form: string; filed: string; period_start: string | null; period_end: string | null;
+  metrics: readonly string[]; has_filing_chunks: true;
+  sec_url: string; query: string; limit: 5; pin: number;
+}>;
+export type KeywordChunk = {
+  chunk_id: string; text: string; start_char: number; end_char: number;
+  form: string; filename: string; filed: string; sec_url: string;
+};
+export type KeywordResponse = {
+  ticker: string; company_name: string; accession_number: string; query: string;
+  result_count: number; results: KeywordChunk[];
+};
+
+function invalidKeyword(): never {
+  throw new FinLensApiError("Stored keyword matches could not be verified. No passages were shown.", 502, "INVALID_RESPONSE");
+}
+function keywordCompany(value: Pick<Company, "ticker" | "cik" | "name">): boolean {
+  return typeof value.ticker === "string" && /^[A-Z0-9][A-Z0-9.-]{0,15}$/.test(value.ticker)
+    && typeof value.cik === "string" && /^[0-9]{10}$/.test(value.cik) && Number(value.cik) > 0
+    && typeof value.name === "string" && Boolean(value.name.trim());
+}
+function keywordAccession(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9]{10}-[0-9]{2}-[0-9]{6}$/.test(value);
+}
+function keywordUrl(cik: string, accession: string): string {
+  // Comparison only: the UI uses the validated returned URL, never this value.
+  return `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accession.replaceAll("-", "")}/${accession}-index.html`;
+}
+function keywordSource(value: unknown, cik: string): value is FilingSource {
+  return keys(value, ["accession_number", "form", "filed", "period_start", "period_end", "metrics", "sec_url", "has_filing_chunks"])
+    && keywordAccession(value.accession_number)
+    // /sources also contains financial-fact metadata with forms such as 8-K.
+    && (value.form === null || typeof value.form === "string" && Boolean(value.form.trim()) && value.form === value.form.trim()
+      && !/[\u0000-\u001f\u007f]/.test(value.form))
+    && (value.filed === null || filingDate(value.filed))
+    && (value.period_start === null || filingDate(value.period_start))
+    && (value.period_end === null || filingDate(value.period_end))
+    && !(typeof value.period_start === "string" && typeof value.period_end === "string" && value.period_start > value.period_end)
+    && Array.isArray(value.metrics) && value.metrics.every(item => typeof item === "string" && item.trim())
+    && new Set(value.metrics).size === value.metrics.length
+    && typeof value.has_filing_chunks === "boolean"
+    && (!value.has_filing_chunks || typeof value.form === "string" && toneForms.includes(value.form) && filingDate(value.filed))
+    && value.sec_url === keywordUrl(cik, value.accession_number);
+}
+
+/** Dedicated strict preflight; ordinary source-list consumers retain their contract. */
+export function getKeywordFilingSources(company: Company, signal: AbortSignal): Promise<FilingSource[]> {
+  const expected = { ticker: company.ticker, cik: company.cik, name: company.name };
+  const pin = versionScopes.get(signal)?.version;
+  if (!keywordCompany(expected) || !unsignedInteger(pin)) invalidKeyword();
+  return requestJson<FilingSource[]>(`/companies/${encodeURIComponent(expected.ticker)}/sources`, { signal }, true, true, data => {
+    if (!Array.isArray(data) || data.some(item => !keywordSource(item, expected.cik))
+        || new Set(data.map(item => item.accession_number)).size !== data.length) invalidKeyword();
+  });
+}
+
+export function captureKeywordRequest(company: Company, source: FilingSource, query: string, pin: number): KeywordRequest {
+  if (!keywordCompany(company) || company.has_indexed_filing !== true || !unsignedInteger(pin)
+      || !keywordSource(source, company.cik) || source.has_filing_chunks !== true
+      || typeof query !== "string" || !query.trim() || query !== query.trim() || Array.from(query).length > 2000) invalidKeyword();
+  return Object.freeze({ ticker: company.ticker, company_name: company.name, cik: company.cik,
+    accession_number: source.accession_number, form: source.form!, filed: source.filed!,
+    period_start: source.period_start, period_end: source.period_end, metrics: Object.freeze([...source.metrics]),
+    has_filing_chunks: true, sec_url: source.sec_url, query, limit: 5, pin });
+}
+
+/** Atomic consistency validation; this is not publication digest validation. */
+export function validateKeywordResponse(value: unknown, expected: KeywordRequest): asserts value is KeywordResponse {
+  if (!keywordCompany({ ticker: expected.ticker, cik: expected.cik, name: expected.company_name })
+      || !keywordAccession(expected.accession_number) || !unsignedInteger(expected.pin) || expected.limit !== 5
+      || !toneForms.includes(expected.form) || !filingDate(expected.filed)
+      || !(expected.period_start === null || filingDate(expected.period_start))
+      || !(expected.period_end === null || filingDate(expected.period_end))
+      || expected.period_start !== null && expected.period_end !== null && expected.period_start > expected.period_end
+      || !Array.isArray(expected.metrics) || expected.metrics.some(item => typeof item !== "string" || !item.trim())
+      || new Set(expected.metrics).size !== expected.metrics.length || expected.has_filing_chunks !== true
+      || expected.sec_url !== keywordUrl(expected.cik, expected.accession_number)
+      || typeof expected.query !== "string" || !expected.query.trim() || expected.query !== expected.query.trim()
+      || Array.from(expected.query).length > 2000
+      || !keys(value, ["ticker", "company_name", "accession_number", "query", "result_count", "results"])
+      || value.ticker !== expected.ticker || value.company_name !== expected.company_name
+      || value.accession_number !== expected.accession_number || value.query !== expected.query
+      || !unsignedInteger(value.result_count) || !Array.isArray(value.results)
+      || value.result_count !== value.results.length || value.results.length > expected.limit) invalidKeyword();
+  const seen = new Set<string>();
+  let filename: string | undefined;
+  for (const chunk of value.results) {
+    if (!keys(chunk, ["chunk_id", "text", "start_char", "end_char", "form", "filename", "filed", "sec_url"])
+        || typeof chunk.chunk_id !== "string" || !/^chunk_[0-9]{4}$/.test(chunk.chunk_id) || seen.has(chunk.chunk_id)
+        || chunk.form !== expected.form || chunk.filed !== expected.filed || !filingDate(chunk.filed)
+        || typeof chunk.filename !== "string" || !/^[A-Za-z0-9_.-]{1,255}$/.test(chunk.filename) || [".", ".."].includes(chunk.filename)
+        || filename !== undefined && chunk.filename !== filename || chunk.sec_url !== expected.sec_url
+        || !unsignedInteger(chunk.start_char) || !unsignedInteger(chunk.end_char) || chunk.end_char <= chunk.start_char
+        || typeof chunk.text !== "string" || !chunk.text.trim()
+        || Array.from(chunk.text).length > 3000 || Array.from(chunk.text).length > chunk.end_char - chunk.start_char) invalidKeyword();
+    seen.add(chunk.chunk_id); filename = chunk.filename;
+  }
+}
+
+export function getKeywordSearch(identity: KeywordRequest, signal: AbortSignal): Promise<KeywordResponse> {
+  const expected = Object.freeze({ ...identity, metrics: Array.isArray(identity.metrics) ? Object.freeze([...identity.metrics]) : identity.metrics });
+  // Validate the captured request even when a caller bypasses the capture helper.
+  validateKeywordResponse({ ticker: expected.ticker, company_name: expected.company_name,
+    accession_number: expected.accession_number, query: expected.query, result_count: 0, results: [] }, expected);
+  if (versionScopes.get(signal)?.version !== expected.pin) invalidKeyword();
+  const params = new URLSearchParams({ q: expected.query, limit: String(expected.limit) });
+  return requestJson<KeywordResponse>(`/companies/${encodeURIComponent(expected.ticker)}/filings/${encodeURIComponent(expected.accession_number)}/search?${params}`,
+    { signal }, true, true, value => validateKeywordResponse(value, expected));
+}
+
 export async function getPassageTone(identity: ToneIdentity, signal: AbortSignal): Promise<FilingToneResponse> {
   const scope = versionScopes.get(signal);
   if (!scope || !unsignedInteger(scope.version) || !validToneIdentity(identity)) {

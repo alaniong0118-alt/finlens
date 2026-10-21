@@ -23,6 +23,7 @@ import {
   versionedController,
   getPassageTone,
   filingToneIdentity,
+  captureKeywordRequest, validateKeywordResponse, getKeywordSearch, getKeywordFilingSources,
 } from "../lib/finlens-api.ts";
 
 test('DEP-01A1 accepts effective backend capabilities for each profile', async ctx => {
@@ -706,5 +707,154 @@ for (const cause of ['timeout', 'caller']) for (const phase of ['fetch', 'body',
     await flushTransport();
     assert.equal(changed, 0); assert.equal(transport.aborted, true);
     assert.equal(clock.timers.size, 0); assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+  });
+}
+
+// REL-LEX-01: synthetic selected-filing keyword contracts, never semantic evidence.
+function keywordFixture(pin = 0, text = '  Revenue 😀 e\u0301\r\n<script>literal()</script>  ') {
+  const company = { ticker: 'AAPL', name: 'Apple', cik: '0000320193', has_indexed_filing: true };
+  const accession = '0000320193-26-000020';
+  const source = { accession_number: accession, form: '10-Q', filed: '2026-07-31', period_start: null,
+    period_end: null, metrics: [], has_filing_chunks: true,
+    sec_url: `https://www.sec.gov/Archives/edgar/data/320193/${accession.replaceAll('-', '')}/${accession}-index.html` };
+  const request = captureKeywordRequest(company, source, 'Revenue 😀', pin);
+  const response = { ticker: 'AAPL', company_name: 'Apple', accession_number: accession, query: request.query,
+    result_count: 1, results: [{ chunk_id: 'chunk_0000', text, start_char: 5, end_char: 5 + Array.from(text).length + 4,
+      form: source.form, filename: 'report.htm', filed: source.filed, sec_url: source.sec_url }] };
+  return { company, source, request, response };
+}
+for (const pin of [0, 2]) test(`REL-LEX-01 pin ${pin}: strict preflight and exactly one keyword GET preserve Unicode and identity`, async ctx => {
+  const f = keywordFixture(pin), calls = [], controller = versionedController(pin, () => assert.fail('unexpected reconciliation'));
+  ctx.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls.push(url); assert.equal(init.headers['X-FinLens-Data-Version'], String(pin));
+    assert.equal(init.body, undefined); assert.equal(init.cache, 'no-store');
+    return new Response(JSON.stringify(url.endsWith('/sources') ? [f.source] : f.response), { headers: { 'X-FinLens-Data-Version': String(pin) } });
+  });
+  assert.deepEqual(await getKeywordFilingSources(f.company, controller.signal), [f.source]);
+  assert.deepEqual(await getKeywordSearch(f.request, controller.signal), f.response);
+  assert.deepEqual(calls, ['/api/finlens/companies/AAPL/sources',
+    `/api/finlens/companies/AAPL/filings/${f.request.accession_number}/search?q=Revenue+%F0%9F%98%80&limit=5`]);
+  assert.equal(Object.isFrozen(f.request), true);
+  assert.equal(f.response.results[0].text.startsWith('  '), true);
+});
+for (const endpoint of ['sources', 'search']) for (const header of [null, '1', '00', '0, 0']) {
+  test(`REL-LEX-01 ${endpoint} rejects header ${header}`, async ctx => {
+    const f = keywordFixture(); let changes = 0;
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(endpoint === 'sources' ? [f.source] : f.response),
+      { headers: header === null ? {} : { 'X-FinLens-Data-Version': header } }));
+    const signal = versionedController(0, () => changes++).signal;
+    await assert.rejects(async () => endpoint === 'sources' ? getKeywordFilingSources(f.company, signal) : getKeywordSearch(f.request, signal),
+      error => error.code === (header === null ? 'INVALID_RESPONSE' : 'DATA_VERSION_CHANGED'));
+    assert.equal(changes, header === null ? 0 : 1);
+  });
+}
+const badKeywordMutations = {
+  ticker: x => { x.ticker = 'MSFT'; }, name: x => { x.company_name = 'Substituted'; },
+  accession: x => { x.accession_number = '0000320193-26-000021'; }, query: x => { x.query += ' '; },
+  count: x => { x.result_count = 0; }, fraction: x => { x.result_count = 1.5; },
+  extra: x => { x.evidence_status = 'sufficient'; }, missing: x => { delete x.results[0].filename; },
+  duplicate: x => { x.results.push({ ...x.results[0] }); x.result_count++; },
+  six: x => { x.results = Array.from({ length: 6 }, (_, i) => ({ ...x.results[0], chunk_id: `chunk_000${i}` })); x.result_count = 6; },
+  id: x => { x.results[0].chunk_id = 'chunk_1'; },
+  url: x => { x.results[0].sec_url = 'https://www.sec.gov/Archives/edgar/data/320193/other-index.html'; },
+  urlSuffix: x => { x.results[0].sec_url += '?source=evil'; },
+  form: x => { x.results[0].form = '8-K'; }, wrongForm: x => { x.results[0].form = '10-K'; },
+  date: x => { x.results[0].filed = '2026-02-30'; }, wrongDate: x => { x.results[0].filed = '2026-07-30'; },
+  filename: x => { x.results[0].filename = '../report.htm'; }, dotfile: x => { x.results[0].filename = '..'; },
+  mixedFilename: x => { x.results.push({ ...x.results[0], chunk_id: 'chunk_0001', filename: 'other.htm' }); x.result_count++; },
+  blank: x => { x.results[0].text = ' \r\n '; }, overlong: x => { x.results[0].text = '😀'.repeat(3001); x.results[0].end_char = 9999; },
+  shortSpan: x => { x.results[0].end_char = x.results[0].start_char + Array.from(x.results[0].text).length - 1; },
+  reverse: x => { x.results[0].end_char = x.results[0].start_char; },
+  negative: x => { x.results[0].start_char = -1; }, fractionOffset: x => { x.results[0].end_char = 100.5; },
+  unsafe: x => { x.results[0].end_char = Number.MAX_SAFE_INTEGER + 1; },
+  lateMalformed: x => { x.results.push({ ...x.results[0], chunk_id: 'chunk_0001', text: '' }); x.result_count++; },
+};
+for (const [name, mutate] of Object.entries(badKeywordMutations)) test(`REL-LEX-01 atomically rejects ${name}`, async ctx => {
+  const f = keywordFixture(); mutate(f.response);
+  ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(f.response), { headers: { 'X-FinLens-Data-Version': '0' } }));
+  await assert.rejects(getKeywordSearch(f.request, versionedController(0, () => {}).signal), e => e.code === 'INVALID_RESPONSE');
+});
+test('REL-LEX-01 permits 3000 code points, trimmed spans and zero matches without adding evidence fields', () => {
+  for (const text of ['😀'.repeat(3000), 'e\u0301\r\ntext', 'trimmed']) {
+    const f = keywordFixture(0, text); validateKeywordResponse(f.response, f.request);
+    assert.equal(f.response.results[0].text, text);
+    assert.equal(Object.hasOwn(f.response.results[0], 'citation_id'), false);
+  }
+  const f = keywordFixture(); f.response.result_count = 0; f.response.results = [];
+  validateKeywordResponse(f.response, f.request);
+});
+test('REL-LEX-01 source preflight rejects malformed identities and missing pins without altering ordinary source contract', async ctx => {
+  const f = keywordFixture();
+  for (const data of [[{ ...f.source, filed: '2026-02-30' }], [{ ...f.source, has_filing_chunks: 'true' }],
+    [{ ...f.source, sec_url: 'https://www.sec.gov/other' }], [f.source, f.source], [null]]) {
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(data), { headers: { 'X-FinLens-Data-Version': '0' } }));
+    await assert.rejects(getKeywordFilingSources(f.company, versionedController(0, () => {}).signal), e => e.code === 'INVALID_RESPONSE');
+  }
+  ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify([f.source])));
+  assert.deepEqual(await getFilingSources('AAPL'), [f.source]);
+  assert.throws(() => getKeywordFilingSources(f.company, new AbortController().signal), e => e.code === 'INVALID_RESPONSE');
+});
+test('REL-LEX-01 captures identity before caller mutation and refuses an unpinned search', async ctx => {
+  const f = keywordFixture(), delayed = deferred();
+  const identity = { ...f.request };
+  ctx.mock.method(globalThis, 'fetch', () => delayed.promise);
+  const running = getKeywordSearch(identity, versionedController(0, () => {}).signal);
+  identity.query = 'mutated'; identity.pin = 99; identity.company_name = 'other';
+  delayed.resolve(new Response(JSON.stringify(f.response), { headers: { 'X-FinLens-Data-Version': '0' } }));
+  assert.deepEqual(await running, f.response);
+  assert.throws(() => getKeywordSearch(f.request, new AbortController().signal), e => e.code === 'INVALID_RESPONSE');
+  assert.throws(() => captureKeywordRequest(f.company, { ...f.source, has_filing_chunks: false }, 'Revenue', 0));
+});
+for (const endpoint of ['search', 'sources']) for (const cause of ['timeout', 'caller']) for (const phase of ['fetch', 'body', 'validation']) {
+  test(`REL-LEX-01 ${endpoint} ${cause} during ${phase} rejects ignored-abort late settlement and reconciliation`, async ctx => {
+    const f = keywordFixture(), clock = deadlineClock(ctx), delayed = deferred(); let changed = 0, transport;
+    const caller = versionedController(0, () => changed++), value = endpoint === 'search' ? f.response : [f.source];
+    const expire = () => cause === 'timeout' ? clock.advance(30000) : caller.abort();
+    ctx.mock.method(globalThis, 'fetch', (_, init) => {
+      transport = init.signal;
+      if (phase === 'fetch') return delayed.promise;
+      if (phase === 'validation') Object.defineProperty(endpoint === 'search' ? f.response.results[0] : f.source, endpoint === 'search' ? 'text' : 'filed',
+        { enumerable: true, get() { expire(); return endpoint === 'search' ? 'Revenue' : '2026-07-31'; } });
+      const response = new Response(null, { headers: { 'X-FinLens-Data-Version': '0' } });
+      response.json = () => phase === 'body' ? delayed.promise : Promise.resolve(value);
+      return Promise.resolve(response);
+    });
+    const running = endpoint === 'search' ? getKeywordSearch(f.request, caller.signal) : getKeywordFilingSources(f.company, caller.signal);
+    const rejected = assert.rejects(running, cause === 'timeout' ? isTimeout : isCancelled);
+    if (phase !== 'validation') { await flushTransport(); expire(); }
+    await rejected;
+    delayed.resolve(phase === 'fetch' ? new Response('{}', { status: 409, headers: { 'X-FinLens-Error-Code': 'DATA_VERSION_CHANGED' } }) : value);
+    await flushTransport(); assert.equal(changed, 0); assert.equal(transport.aborted, true);
+    assert.equal(clock.timers.size, 0); assert.equal(getEventListeners(caller.signal, 'abort').length, 0);
+  });
+}
+
+for (const pin of [0, 2]) test(`REL-LEX-01 P2 mixed metadata-only forms preserve indexed admission at pin ${pin}`, async ctx => {
+  const f = keywordFixture(pin);
+  for (const form of ['8-K', '20-F', 'DEF 14A', null]) {
+    const metadata = { ...f.source, form, has_filing_chunks: false, accession_number: '0000320193-26-000021', filed: null,
+      sec_url: 'https://www.sec.gov/Archives/edgar/data/320193/000032019326000021/0000320193-26-000021-index.html' };
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify([metadata, f.source]), { headers: { 'X-FinLens-Data-Version': String(pin) } }));
+    const list = await getKeywordFilingSources(f.company, versionedController(pin, () => {}).signal);
+    assert.deepEqual(list, [metadata, f.source]); assert.deepEqual(searchableFilings(list), [f.source]);
+    assert.throws(() => captureKeywordRequest(f.company, metadata, 'Revenue', pin), e => e.code === 'INVALID_RESPONSE');
+    assert.throws(() => captureKeywordRequest(f.company, { ...metadata, has_filing_chunks: true }, 'Revenue', pin), e => e.code === 'INVALID_RESPONSE');
+    assert.equal(captureKeywordRequest(f.company, f.source, 'Revenue', pin).form, '10-Q');
+  }
+});
+for (const damage of ['indexed form', 'blank metadata form', 'numeric metadata form', 'metadata control', 'metadata URL', 'metadata date', 'ambiguous eligibility']) {
+  test(`REL-LEX-01 P2 mixed inventory still rejects ${damage}`, async ctx => {
+    const f = keywordFixture(), metadata = { ...f.source, has_filing_chunks: false, form: '8-K' };
+    if (damage === 'indexed form') f.source.form = '8-K';
+    if (damage === 'blank metadata form') metadata.form = ' ';
+    if (damage === 'numeric metadata form') metadata.form = 8;
+    if (damage === 'metadata control') metadata.form = '8-K\n';
+    if (damage === 'metadata URL') metadata.sec_url = 'https://www.sec.gov/Archives/edgar/data/999999/other-index.html';
+    if (damage === 'metadata date') metadata.filed = '2026-02-30';
+    if (damage === 'ambiguous eligibility') metadata.has_filing_chunks = 'false';
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify([metadata]), { headers: { 'X-FinLens-Data-Version': '0' } }));
+    // Include the damaged indexed record only in its own case; duplicate IDs must not mask the tested failure.
+    if (damage === 'indexed form') ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify([f.source]), { headers: { 'X-FinLens-Data-Version': '0' } }));
+    await assert.rejects(getKeywordFilingSources(f.company, versionedController(0, () => {}).signal), e => e.code === 'INVALID_RESPONSE');
   });
 }

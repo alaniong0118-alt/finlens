@@ -549,3 +549,91 @@ def test_company_twenty_filing_ceiling_and_projection_remain_intact(count, monke
     stmt, sql = store.statements[0]
     assert "cleaned_text" not in sql
     assert stmt.compile().params["param_1"] == 21
+
+@pytest.mark.parametrize("version", [0, 2])
+@pytest.mark.parametrize("query", ["Revenue 😀", "MISSING", "REVENUE", "rev enue"])
+@pytest.mark.parametrize("trimmed", [False, True])
+def test_rel_lex_serialized_keyword_contract_and_encoder_provider_bombs(monkeypatch, forbidden_work, version, query, trimmed):
+    """Real ASGI serialization -> real TS transport/validator, entirely in memory."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    assert node, "BLOCKED: installed Node runtime unavailable; do not install"
+    raw = "  Revenue 😀 e\u0301\r\n<script>literal()</script>  "
+    text = raw.strip() if trimmed else raw
+    chunks = [chunk(0, text), chunk(1, "Revenue revenue stored second chunk.")]
+    chunks[0].end_char = len(raw)  # Stored trim can shorten text without rewriting source offsets.
+    store = Store(chunks, version=version)
+    original_execute = store.execute
+    def keyword_execute(stmt):
+        rows = original_execute(stmt)
+        if hasattr(stmt, "column_descriptions") and stmt.column_descriptions[0]["entity"] is FilingPublication:
+            return Rows((row.accession_number, row.form, row.filed) for row in rows)
+        return rows
+    monkeypatch.setattr(store, "execute", keyword_execute)
+    # Real /sources serialization also includes fact-only filings outside the
+    # indexed 10-K/10-Q form allowlist. Put the newer metadata record first.
+    original_scalars = store.scalars
+    def keyword_scalars(stmt):
+        if stmt.column_descriptions[0]["entity"].__name__ == "FinancialFact":
+            store.record(stmt)
+            return Rows([NS(accession_number="0000320193-26-000021", form="8-K", filed=date(2026, 8, 1),
+                            period_start=None, period_end=None, metric="Revenues")])
+        return original_scalars(stmt)
+    monkeypatch.setattr(store, "scalars", keyword_scalars)
+    encoder = install(monkeypatch, store)
+    encoder.side_effect = AssertionError("Keyword request must not load query encoder")
+    # Manifest presence is intentionally NOT digest validation in this endpoint.
+    store.publications[0].content_digest = "0" * 64
+    provider = Mock(side_effect=AssertionError("Keyword request must not use semantic/context/AI/tone"))
+    for name in ["answer_filing_question", "build_filing_context", "build_company_context",
+                 "search_filing_chunks_semantic", "score_published_passage", "answer_research_question"]:
+        monkeypatch.setattr(main, name, provider)
+    headers = {"X-FinLens-Data-Version": str(version)}
+    client = TestClient(main.app)
+    sources = client.get("/companies/AAPL/sources", headers=headers)
+    response = client.get(BASE + "/search", params={"q": query, "limit": 5}, headers=headers)
+    assert sources.status_code == response.status_code == 200, (sources.text, response.text)
+    assert sources.headers["X-FinLens-Data-Version"] == response.headers["X-FinLens-Data-Version"] == str(version)
+    assert [(s["form"], s["has_filing_chunks"]) for s in sources.json()] == [("8-K", False), ("10-Q", True)]
+    payload = response.json()
+    if query == "MISSING":
+        assert payload["results"] == []
+    else:
+        assert [c["chunk_id"] for c in payload["results"]] == (
+            ["chunk_0000", "chunk_0001"] if query == "Revenue 😀" else ["chunk_0001", "chunk_0000"])
+        literal = next(c for c in payload["results"] if c["chunk_id"] == "chunk_0000")
+        assert literal["text"] == text
+        assert literal["end_char"] == len(raw)
+    encoder.assert_not_called()
+    provider.assert_not_called()
+    forbidden_work.assert_not_called()
+    module = (Path(__file__).resolve().parents[2] / "frontend/lib/finlens-api.ts").as_uri()
+    script = '''
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { captureKeywordRequest, getKeywordFilingSources, getKeywordSearch, versionedController } from MODULE;
+const f = JSON.parse(readFileSync(0, 'utf8'));
+const company = { ticker: 'AAPL', cik: '0000320193', name: 'Apple', has_indexed_filing: true };
+let count = 0;
+globalThis.fetch = async url => {
+  count++;
+  return new Response(JSON.stringify(url.endsWith('/sources') ? f.sources : f.search), { headers: { 'X-FinLens-Data-Version': String(f.pin) } });
+};
+const signal = versionedController(f.pin, () => assert.fail('unexpected reconciliation')).signal;
+const sources = await getKeywordFilingSources(company, signal);
+assert.equal(sources[0].form, '8-K');
+assert.equal(sources[0].has_filing_chunks, false);
+assert.throws(() => captureKeywordRequest(company, sources[0], f.search.query, f.pin));
+assert.throws(() => captureKeywordRequest(company, { ...sources[0], has_filing_chunks: true }, f.search.query, f.pin));
+const selected = sources.find(source => source.has_filing_chunks === true);
+assert.throws(() => captureKeywordRequest(company, { ...selected, sec_url: sources[0].sec_url }, f.search.query, f.pin));
+const request = captureKeywordRequest(company, selected, f.search.query, f.pin);
+assert.deepEqual(await getKeywordSearch(request, signal), f.search);
+assert.equal(count, 2);
+'''.replace("MODULE", json.dumps(module))
+    result = subprocess.run([node, "--input-type=module", "-e", script],
+        input=json.dumps({"sources": sources.json(), "search": payload, "pin": version}),
+        text=True, capture_output=True, timeout=15)
+    assert result.returncode == 0, result.stderr

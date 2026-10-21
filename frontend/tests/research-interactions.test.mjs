@@ -3138,3 +3138,380 @@ for (const strict of [false, true]) for (const action of ['close', 'edit']) test
     assert.ok(app.host.querySelector('.tone-passage'));
   }
 });
+
+// REL-LEX-01 uses the real mounted UI, with ignored-abort synthetic fetch only.
+const lexPath = (accession = riskAcc()) => companyPath('AAPL', `filings/${accession}/search`);
+const lexRequests = app => app.requests.filter(r => r.path.endsWith('/search'));
+function lexResponse(query = 'revenue', text = '  Revenue 😀 e\u0301\r\n<script>literal()</script>  ', accession = riskAcc()) {
+  const source = riskSource(), company = companies[0];
+  return { ticker: company.ticker, company_name: company.name, accession_number: accession, query, result_count: 1,
+    results: [{ chunk_id: 'chunk_0000', text, start_char: 2, end_char: 2 + Array.from(text).length + 4,
+      form: source.form, filed: source.filed, filename: 'report.htm', sec_url: riskSource('AAPL', accession.slice(-6)).sec_url }] };
+}
+async function mountLex(ctx, { strict = false, version = 0, sourceHeader = version, sourceStatus = 200, preflight = true } = {}) {
+  const app = await mount(ctx, true, companies, { strict, initialVersion: version });
+  if (version !== null) {
+    await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+    await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+    await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource(), riskSource('AAPL', '000002')]);
+  }
+  assert.equal(app.select('Research purpose').value, 'general');
+  await app.change(app.select('Research purpose'), 'keyword');
+  if (preflight && version !== null) await app.release(app.request(companyPath('AAPL', 'sources')),
+    sourceStatus === 200 ? [riskSource(), riskSource('AAPL', '000002')] : {}, sourceStatus, sourceHeader);
+  await app.change(app.host.querySelector('#keyword-query'), 'revenue');
+  return app;
+}
+async function lexSubmitTwice(app) {
+  const form = app.host.querySelector('.keyword-search form');
+  await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+}
+for (const strict of [false, true]) for (const version of [0, 1]) {
+  test(`REL-LEX-01 mounted pin ${version} strict ${strict}: single dispatch, literal order, provenance and keyboard controls`, async ctx => {
+    const app = await mountLex(ctx, { strict, version });
+    assert.equal(lexRequests(app).length, 0);
+    const submit = app.host.querySelector('.keyword-search button.primary-button'); submit.focus();
+    const before = app.requests.length; await lexSubmitTwice(app);
+    assert.equal(app.requests.length, before + 1); assert.equal(lexRequests(app).length, 1);
+    const pending = app.request(lexPath());
+    assert.equal(pending.params.get('q'), 'revenue'); assert.equal(pending.params.get('limit'), '5');
+    assert.equal(pending.init.headers['X-FinLens-Data-Version'], String(version));
+    const payload = lexResponse();
+    payload.results.push({ ...payload.results[0], chunk_id: 'chunk_0001', text: 'Second ranked literal match.' }); payload.result_count++;
+    await app.release(pending, payload);
+    assert.deepEqual([...app.host.querySelectorAll('.keyword-card .excerpt')].map(p => p.textContent), payload.results.map(r => r.text));
+    assert.equal(app.host.querySelectorAll('.keyword-card script, .keyword-card mark').length, 0);
+    assert.equal(app.host.querySelector('.keyword-card a').href, riskSource().sec_url);
+    assert.match(app.host.querySelector('.keyword-search').textContent, /case-insensitive substrings of entered terms, not semantic or exact-phrase search/);
+    assert.match(app.host.textContent, /not digest-revalidated evidence, verified financial claims, or complete filing coverage/);
+    assert.match(app.host.textContent, new RegExp(`CIK 0000320193 · Publication ${version}`));
+    assert.equal(app.host.querySelectorAll('.ai-panel, .passage-tone, .direct-answer, .evidence-results').length, 0);
+    assert.equal(app.requests.filter(r => /context|semantic-search|research-answer|\/answer$|\/tone$/.test(r.path)).length, 0);
+    const detail = app.host.querySelector('.keyword-card summary'); assert.ok(detail); assert.equal(detail.parentElement.tagName, 'DETAILS');
+    assert.equal(document.activeElement, submit); assert.equal(submit.isConnected, true); assert.equal(submit.disabled, false);
+  });
+}
+for (const strict of [false, true]) for (const change of ['query', 'accession', 'mode', 'scope', 'company', 'version', 'unmount']) {
+  test(`REL-LEX-01 ${change} invalidates ignored-abort success/error/finalizer strict ${strict}`, async ctx => {
+    const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath());
+    if (change === 'query') { await app.change(app.host.querySelector('#keyword-query'), 'other'); await app.change(app.host.querySelector('#keyword-query'), 'revenue'); }
+    if (change === 'accession') { await app.change(app.select('Indexed SEC filing'), riskAcc('AAPL', '000002')); await app.change(app.select('Indexed SEC filing'), riskAcc()); }
+    if (change === 'mode') { await app.change(app.select('Research purpose'), 'risk'); await app.change(app.select('Research purpose'), 'keyword'); await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource()]); await app.change(app.host.querySelector('#keyword-query'), 'revenue'); }
+    if (change === 'scope') { await app.change(app.select('Evidence search scope'), 'company'); await app.change(app.select('Evidence search scope'), 'filing'); await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource()]); }
+    if (change === 'company') await app.change(app.host.querySelector('#company'), 'JPM');
+    if (change === 'version') { await focusCheck(); await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1, 1)); }
+    if (change === 'unmount') await app.unmount();
+    assert.equal(old.init.signal.aborted, true);
+    let replacement;
+    if (['query', 'accession', 'mode', 'scope'].includes(change)) { await lexSubmitTwice(app); replacement = app.request(lexPath()); }
+    const count = app.requests.length;
+    await app.release(old, {}, 409, 1);
+    assert.equal(app.requests.length, count, 'Stale 409 never reconciles or replays');
+    assert.equal(app.host.querySelector('.keyword-results'), null);
+    if (replacement) {
+      await lexSubmitTwice(app); assert.equal(app.requests.length, count, 'Stale finalizer cannot unlock replacement');
+      await app.release(replacement, lexResponse()); assert.equal(app.host.querySelectorAll('.keyword-card').length, 1);
+    }
+  });
+}
+for (const strict of [false, true]) test(`REL-LEX-01 source-list pin is mandatory, retry is explicit strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict, sourceHeader: null });
+  assert.match(app.host.querySelector('.keyword-search [role="alert"]').textContent, /version-pinned keyword filing list is unavailable/);
+  const count = app.requests.length; await lexSubmitTwice(app); assert.equal(app.requests.length, count);
+  await retryTwice(app, 'Retry keyword filing check');
+  assert.equal(app.requests.length, count + 1);
+  await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource()]);
+  assert.equal(lexRequests(app).length, 0); await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 1);
+});
+for (const strict of [false, true]) for (const kind of ['network', 'timeout', 'malformed', 'zero']) {
+  test(`REL-LEX-01 ${kind} settles honestly and explicit retry keeps focus strict ${strict}`, async ctx => {
+    const expire = kind === 'timeout' ? researchDeadlineClock(ctx) : null;
+    const app = await mountLex(ctx, { strict }); const button = app.host.querySelector('.keyword-search button.primary-button'); button.focus();
+    await lexSubmitTwice(app); const old = app.request(lexPath()), count = app.requests.length;
+    if (kind === 'timeout') await expire();
+    else if (kind === 'network') { old.released = true; await act(async () => old.reject(new Error('Private failure detail'))); }
+    else { const payload = lexResponse(); if (kind === 'zero') { payload.result_count = 0; payload.results = []; } else payload.results[0].end_char = 1; await app.release(old, payload); }
+    assert.equal(app.requests.length, count);
+    if (kind === 'zero') { assert.match(app.host.querySelector('.keyword-results').textContent, /No stored keyword matches/); assert.equal(app.host.querySelector('.keyword-search [role="alert"]'), null); }
+    else {
+      assert.ok(app.host.querySelector('.keyword-search [role="alert"]')); assert.equal(app.host.querySelector('.keyword-results'), null);
+      assert.equal(button.textContent, 'Retry keyword search'); assert.equal(document.activeElement, button);
+      await lexSubmitTwice(app); const retry = app.request(lexPath()); assert.equal(app.requests.length, count + 1);
+      if (!old.released) await app.release(old, lexResponse());
+      await lexSubmitTwice(app); assert.equal(app.requests.length, count + 1);
+      await app.release(retry, lexResponse()); assert.equal(app.host.querySelectorAll('.keyword-card').length, 1);
+      assert.equal(document.activeElement, button);
+    }
+  });
+}
+for (const strict of [false, true]) test(`REL-LEX-01 pre-commit obsolete 409 cannot reject newer pin strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath());
+  await focusCheck(); const check = app.request(companyPath('AAPL', 'freshness'));
+  const count = app.requests.filter(r => r.path.endsWith('/freshness')).length;
+  await act(async () => {
+    app.deliverBeforeCommit(check, freshnessFixture('AAPL', 1, 1)); await drainResponseMicrotasks();
+    assert.ok(app.request('/companies'));
+    assert.equal(old.init.signal.aborted, false);
+    app.deliverBeforeCommit(old, {}, 409, 1); await drainResponseMicrotasks();
+  });
+  assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, count);
+  assert.equal(app.host.querySelector('.keyword-results'), null); assert.equal(lexRequests(app).length, 1);
+});
+test('REL-LEX-01 current search 409 reconciles once with no automatic replay', async ctx => {
+  const app = await mountLex(ctx); await lexSubmitTwice(app);
+  const count = app.requests.filter(r => r.path.endsWith('/freshness')).length;
+  await app.release(app.request(lexPath()), {}, 409, 1);
+  assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, count + 1);
+  assert.equal(lexRequests(app).length, 1); assert.equal(app.host.querySelector('.keyword-results'), null);
+});
+test('REL-LEX-01 company scope and unverified publication cannot submit or silently fallback', async ctx => {
+  const app = await mountLex(ctx);
+  await app.change(app.select('Evidence search scope'), 'company'); const count = app.requests.length;
+  await lexSubmitTwice(app); assert.equal(app.requests.length, count);
+  assert.match(app.host.querySelector('.keyword-search').textContent, /only for a selected indexed filing/);
+  assert.equal(app.select('Research purpose').value, 'keyword'); assert.equal(lexRequests(app).length, 0);
+});
+
+for (const strict of [false, true]) for (const settlement of ['success', 'malformed', 'network']) {
+  test(`REL-LEX-01 query A-B-A rejects stale ${settlement} without unlocking replacement strict ${strict}`, async ctx => {
+    const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath());
+    await app.change(app.host.querySelector('#keyword-query'), 'other'); await app.change(app.host.querySelector('#keyword-query'), 'revenue');
+    await lexSubmitTwice(app); const replacement = app.request(lexPath()), count = app.requests.length;
+    if (settlement === 'network') { old.released = true; await act(async () => old.reject(new Error('Obsolete private detail'))); }
+    else { const body = lexResponse('revenue', 'Obsolete literal result'); if (settlement === 'malformed') body.results[0].filename = '../invalid'; await app.release(old, body); }
+    assert.equal(app.host.querySelector('.keyword-results'), null);
+    assert.equal(app.host.querySelector('.keyword-search [role="alert"]'), null);
+    await lexSubmitTwice(app); assert.equal(app.requests.length, count);
+    await app.release(replacement, lexResponse('revenue', 'Current stored result'));
+    assert.match(app.host.querySelector('.keyword-results').textContent, /Current stored result/);
+    assert.doesNotMatch(app.host.textContent, /Obsolete literal result|Obsolete private detail/);
+  });
+}
+for (const strict of [false, true]) test(`REL-LEX-01 already-parsed success before query commit is ownership-gated strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath());
+  await act(async () => {
+    app.deliverBeforeCommit(old, lexResponse('revenue', 'Obsolete pre-commit result'));
+    await drainResponseMicrotasks();
+    const editor = app.host.querySelector('#keyword-query');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(editor, 'new terms');
+    editor.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  });
+  assert.equal(app.host.querySelector('.keyword-results'), null); assert.doesNotMatch(app.host.textContent, /Obsolete pre-commit result/);
+});
+test('REL-LEX-01 no verified publication, metadata-only or inconsistent selected source never admits keyword submission', async ctx => {
+  const app = await mountLex(ctx, { preflight: false }); const pending = app.request(companyPath('AAPL', 'sources'));
+  const count = app.requests.length; await lexSubmitTwice(app); assert.equal(app.requests.length, count);
+  await app.release(pending, [{ ...riskSource(), has_filing_chunks: false }]);
+  await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 0);
+  assert.match(app.host.querySelector('.keyword-search').textContent, /unavailable for this selection/);
+});
+test('REL-LEX-01 null publication never requests a keyword preflight or search', async ctx => {
+  const app = await mountLex(ctx, { version: null }); const count = app.requests.length;
+  await lexSubmitTwice(app); assert.equal(app.requests.length, count);
+  assert.match(app.host.querySelector('.keyword-search').textContent, /Verify this company’s published data/);
+});
+for (const strict of [false, true]) test(`REL-LEX-01 stale source preflight cannot replace current source ownership strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict, preflight: false }), old = app.request(companyPath('AAPL', 'sources'));
+  await app.change(app.select('Research purpose'), 'general');
+  await app.change(app.select('Research purpose'), 'keyword');
+  const current = app.request(companyPath('AAPL', 'sources')), count = app.requests.length;
+  await app.release(old, {}, 409, 1); assert.equal(app.requests.length, count);
+  await app.release(current, [riskSource()]); await app.change(app.host.querySelector('#keyword-query'), 'revenue');
+  await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 1);
+});
+
+for (const strict of [false, true]) test(`REL-LEX-01 same-tick query A-B-A cancels before a late 409 and preserves retry reservation strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath()), count = app.requests.length;
+  await act(async () => {
+    const editor = app.host.querySelector('#keyword-query');
+    for (const value of ['other', 'revenue']) {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(editor, value);
+      editor.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    }
+    assert.equal(old.init.signal.aborted, true, 'Event handlers invalidate before render/effects');
+    app.deliverBeforeCommit(old, {}, 409, 1); await drainResponseMicrotasks();
+  });
+  assert.equal(app.requests.length, count); assert.equal(app.host.querySelector('.keyword-results'), null);
+  await lexSubmitTwice(app); assert.equal(app.requests.length, count + 1);
+});
+
+for (const strict of [false, true]) test(`REL-LEX-01 source preflight mode cancellation is synchronous before late 409 strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict, preflight: false }), old = app.request(companyPath('AAPL', 'sources'));
+  const count = app.requests.length;
+  await act(async () => {
+    const mode = app.select('Research purpose');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(mode, 'general');
+    mode.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    assert.equal(old.init.signal.aborted, true);
+    app.deliverBeforeCommit(old, {}, 409, 1); await drainResponseMicrotasks();
+  });
+  assert.equal(app.requests.length, count); assert.equal(app.select('Research purpose').value, 'general');
+});
+
+// Astra P2 reproductions: replacement source ownership, mixed inventory, retry focus.
+for (const order of ['search-first', 'preflight-first']) test(`REL-LEX-01 P2 replacement empty preflight invalidates eligibility ${order}`, async ctx => {
+  const app = await mountLex(ctx);
+  await app.change(app.select('Evidence search scope'), 'company');
+  await app.change(app.select('Evidence search scope'), 'filing');
+  const preflight = app.request(companyPath('AAPL', 'sources'));
+  await lexSubmitTwice(app);
+  const search = lexRequests(app).find(r => !r.released && !r.init.signal.aborted);
+  if (order === 'search-first' && search) await app.release(search, lexResponse('revenue', 'Obsolete eligibility text'));
+  await app.release(preflight, []);
+  if (order === 'preflight-first' && search) await app.release(search, lexResponse('revenue', 'Obsolete eligibility text'));
+  assert.equal(app.host.querySelector('.keyword-results'), null);
+  assert.doesNotMatch(app.host.querySelector('.keyword-search').textContent, /Obsolete eligibility text/);
+  assert.equal(lexRequests(app).length, 0, 'Replacement verification cannot reuse a previous successful inventory');
+});
+test('REL-LEX-01 P2 mixed indexed 10-Q and metadata-only 8-K remains usable', async ctx => {
+  const app = await mountLex(ctx, { preflight: false });
+  await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource(), { ...riskSource('AAPL', '000003'), form: '8-K', has_filing_chunks: false }]);
+  await lexSubmitTwice(app);
+  assert.equal(lexRequests(app).length, 1);
+});
+test('REL-LEX-01 P2 keyboard Retry failure retains the retry focus target', async ctx => {
+  const app = await mountLex(ctx, { sourceStatus: 503 });
+  const retry = [...app.host.querySelectorAll('button')].find(b => b.textContent === 'Retry keyword filing check');
+  retry.focus(); assert.equal(document.activeElement, retry);
+  await act(async () => retry.click());
+  // Native focus falls to BODY if React removed the focused control.
+  if (!retry.isConnected) document.body.focus();
+  await app.release(app.request(companyPath('AAPL', 'sources')), {}, 503);
+  const next = [...app.host.querySelectorAll('button')].find(b => b.textContent === 'Retry keyword filing check');
+  assert.equal(document.activeElement, next);
+  assert.equal(lexRequests(app).length, 0);
+});
+
+async function lexRoundTrip(app) {
+  await app.change(app.select('Evidence search scope'), 'company');
+  await app.change(app.select('Evidence search scope'), 'filing');
+  return app.request(companyPath('AAPL', 'sources'));
+}
+async function lexPreflightOutcome(app, request, outcome) {
+  if (outcome === 'network') { request.released = true; await act(async () => request.reject(new Error('Private preflight rejection'))); }
+  else if (outcome === 'malformed') await app.release(request, [{ ...riskSource(), has_filing_chunks: 'true' }]);
+  else if (outcome === 'missing-header') await app.release(request, [riskSource()], 200, null);
+  else await app.release(request, outcome === 'empty' ? [] : [riskSource()]);
+}
+for (const strict of [false, true]) for (const settled of [false, true]) for (const order of ['search-first', 'preflight-first']) {
+  for (const outcome of ['empty', 'network', 'malformed', 'missing-header', 'valid']) {
+    test(`REL-LEX-01 P2 generation strict ${strict} completed ${settled} ${order} ${outcome}`, async ctx => {
+      const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath());
+      const stale = lexResponse('revenue', 'OLD GENERATION STORED TEXT');
+      if (settled) await app.release(old, stale);
+      const preflight = await lexRoundTrip(app), count = app.requests.length;
+      assert.equal(app.host.querySelector('.keyword-results'), null, 'Replacement verification hides completed text immediately');
+      await lexSubmitTwice(app); assert.equal(app.requests.length, count, 'No inventory reuse while replacement is pending');
+      if (!settled && order === 'search-first') await app.release(old, stale);
+      assert.equal(app.host.querySelector('.keyword-results'), null);
+      await lexPreflightOutcome(app, preflight, outcome);
+      if (!settled && order === 'preflight-first') await app.release(old, stale);
+      assert.equal(app.host.querySelector('.keyword-results'), null);
+      assert.doesNotMatch(app.host.querySelector('.keyword-search').textContent, /OLD GENERATION STORED TEXT|Publication 0/);
+      await lexSubmitTwice(app);
+      if (outcome === 'valid') {
+        assert.equal(lexRequests(app).length, 2);
+        await app.release(app.request(lexPath()), lexResponse('revenue', 'NEW VERIFIED GENERATION TEXT'));
+        assert.match(app.host.querySelector('.keyword-results').textContent, /NEW VERIFIED GENERATION TEXT/);
+      } else {
+        assert.equal(lexRequests(app).length, 1, 'Loss of eligibility suppresses submission as well as rendering');
+        const next = await lexRoundTrip(app), before = app.requests.length;
+        await lexSubmitTwice(app); assert.equal(app.requests.length, before);
+        await app.release(next, [riskSource()]);
+        assert.equal(app.host.querySelector('.keyword-results'), null, 'Verification never replays an old query');
+        await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 2);
+        await app.release(app.request(lexPath()), lexResponse('revenue', 'RESTORED CURRENT GENERATION TEXT'));
+        assert.match(app.host.querySelector('.keyword-results').textContent, /RESTORED CURRENT GENERATION TEXT/);
+      }
+      assert.equal(app.requests.filter(r => /context|semantic-search|research-answer|\/answer$|\/tone$/.test(r.path)).length, 0);
+    });
+  }
+}
+for (const strict of [false, true]) for (const order of ['old-first', 'current-first']) for (const outcome of ['valid', 'network', 'malformed', 'missing-header']) {
+  test(`REL-LEX-01 P2 same source identity cannot resurrect stale preflight ${outcome} ${order} strict ${strict}`, async ctx => {
+    const app = await mountLex(ctx, { strict, preflight: false }), old = app.request(companyPath('AAPL', 'sources'));
+    const current = await lexRoundTrip(app), count = app.requests.length;
+    if (order === 'old-first') {
+      await lexPreflightOutcome(app, old, outcome); await lexSubmitTwice(app);
+      assert.equal(app.requests.length, count); assert.equal(app.host.querySelector('.keyword-results'), null);
+    }
+    await app.release(current, [riskSource()]);
+    if (order === 'current-first') await lexPreflightOutcome(app, old, outcome);
+    await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 1);
+    await app.release(app.request(lexPath()), lexResponse());
+    assert.equal(app.host.querySelectorAll('.keyword-card').length, 1);
+    assert.equal(app.host.querySelector('.keyword-search [role="alert"]'), null);
+  });
+}
+for (const strict of [false, true]) test(`REL-LEX-01 P2 same-tick scope round trip invalidates source eligibility before effects strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict }); await lexSubmitTwice(app); const old = app.request(lexPath());
+  const count = app.requests.length;
+  await act(async () => {
+    const scope = app.select('Evidence search scope'), form = app.host.querySelector('.keyword-search form');
+    for (const value of ['company', 'filing']) {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(scope, value);
+      scope.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    }
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(lexRequests(app).length, 1, 'Old render closure cannot dispatch against revoked source eligibility');
+    assert.ok(app.requests.slice(count).every(r => r.path === companyPath('AAPL', 'sources')), 'Only replacement source verification may start');
+    app.deliverBeforeCommit(old, lexResponse('revenue', 'STALE BATCHED RESPONSE')); await drainResponseMicrotasks();
+  });
+  assert.equal(app.host.querySelector('.keyword-results'), null);
+  const preflight = app.request(companyPath('AAPL', 'sources')); await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 1);
+  await app.release(preflight, [riskSource()]); await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 2);
+});
+const lexRetryButton = app => [...app.host.querySelectorAll('.keyword-search button')].find(b => b.textContent === 'Retry keyword filing check');
+async function lexKeyboardRetry(app) {
+  const retry = lexRetryButton(app); assert.ok(retry); retry.focus();
+  assert.equal(retry.type, 'button'); assert.equal(document.activeElement, retry);
+  // jsdom does not synthesize native activation from key events; invoke its click
+  // as the Enter default action after the focused keyboard event sequence.
+  await act(async () => {
+    retry.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    retry.click(); retry.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+  });
+  return retry;
+}
+for (const strict of [false, true]) test(`REL-LEX-01 P2 keyboard retry remains stable through repeated failures and recovery strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict, sourceStatus: 503 });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const retry = await lexKeyboardRetry(app), pending = app.request(companyPath('AAPL', 'sources')), count = app.requests.length;
+    assert.equal(retry.isConnected, true); assert.equal(document.activeElement, retry);
+    assert.equal(retry.getAttribute('aria-disabled'), 'true');
+    assert.match(app.host.querySelector('.keyword-search [role="status"]').textContent, /Checking the version-pinned/);
+    await act(async () => { retry.click(); retry.click(); }); assert.equal(app.requests.length, count);
+    await app.release(pending, {}, 503);
+    assert.equal(lexRetryButton(app), retry); assert.equal(document.activeElement, retry);
+    assert.equal(retry.getAttribute('aria-disabled'), 'false');
+    assert.equal(lexRequests(app).length, 0);
+  }
+  await lexKeyboardRetry(app); await app.release(app.request(companyPath('AAPL', 'sources')), [riskSource()]);
+  const submit = app.host.querySelector('.keyword-search button.primary-button');
+  assert.equal(document.activeElement, submit); assert.equal(submit.disabled, false); assert.equal(lexRequests(app).length, 0);
+});
+for (const strict of [false, true]) for (const outcome of ['failure', 'success']) test(`REL-LEX-01 P2 retry ${outcome} does not steal intentionally moved focus strict ${strict}`, async ctx => {
+  const app = await mountLex(ctx, { strict, sourceStatus: 503 }); await lexKeyboardRetry(app);
+  const editor = app.host.querySelector('#keyword-query'); editor.focus(); assert.equal(document.activeElement, editor);
+  await app.release(app.request(companyPath('AAPL', 'sources')), outcome === 'success' ? [riskSource()] : {}, outcome === 'success' ? 200 : 503);
+  assert.equal(document.activeElement, editor); assert.equal(lexRequests(app).length, 0);
+});
+for (const strict of [false, true]) for (const outcome of ['failure', 'success']) for (const leave of ['scope', 'unmount']) {
+  test(`REL-LEX-01 P2 obsolete retry ${outcome} after ${leave} never changes focus or eligibility strict ${strict}`, async ctx => {
+    const app = await mountLex(ctx, { strict, sourceStatus: 503 }); await lexKeyboardRetry(app);
+    const old = app.request(companyPath('AAPL', 'sources'));
+    let target, current;
+    if (leave === 'scope') { current = await lexRoundTrip(app); target = app.host.querySelector('#keyword-query'); target.focus(); }
+    else {
+      target = document.createElement('button'); document.body.append(target); ctx.after(() => target.remove());
+      target.focus(); await app.unmount();
+    }
+    const count = app.requests.length;
+    await app.release(old, outcome === 'success' ? [riskSource()] : {}, outcome === 'success' ? 200 : 503);
+    assert.equal(document.activeElement, target); assert.equal(app.requests.length, count); assert.equal(lexRequests(app).length, 0);
+    if (current) {
+      await app.release(current, [riskSource()]); assert.equal(document.activeElement, target);
+      assert.equal(app.host.querySelector('.keyword-results'), null); await lexSubmitTwice(app); assert.equal(lexRequests(app).length, 1);
+    }
+  });
+}
