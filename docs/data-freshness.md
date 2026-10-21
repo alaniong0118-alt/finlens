@@ -1,6 +1,6 @@
 # Data freshness and controlled refresh
 
-Status (2026-10-09): **development deployment completed and independently accepted. Live SEC refresh is not yet validated; automatic scheduling is disabled. Offline implementation history remains in [verification](../backend/reports/data_freshness_verification.json), [implementation report](../backend/reports/data_freshness_implementation.md) and the [completed implementation plan](exec-plans/completed/2026-10-08-data-freshness-automatic-refresh.md).
+Status (2026-10-09): development deployment completed and independently accepted. Live SEC refresh is not yet validated; automatic scheduling is disabled. Offline implementation history remains in [verification](../backend/reports/data_freshness_verification.json), [implementation report](../backend/reports/data_freshness_implementation.md) and the [completed implementation plan](exec-plans/completed/2026-10-08-data-freshness-automatic-refresh.md).
 
 ## Accepted development deployment
 
