@@ -182,9 +182,18 @@ def test_ml_fail_semantic_tables_and_privacy_limits(ml_fail_page):
             assert all(cell.tag == "td" for cell in cells[1:])
     regions = [node for node in ml_fail_nodes(page.analysis) if node.attrs.get("role") == "region"]
     assert len(regions) == 2
+    assert all(node.tag == "div" and node.attrs.get("class") == "evaluation-table" for node in regions)
     assert {node.attrs["aria-labelledby"] for node in regions} == {next(ml_fail_nodes(t, "caption")).attrs["id"] for t in tables}
     assert all(node.attrs.get("tabindex") == "0" for node in regions)
     assert "#ml-fail-analysis .evaluation-table{max-width:100%;overflow-x:auto;" in page.raw
+    styles = "\n".join(ml_fail_text(node) for node in ml_fail_nodes(page.tree, "style"))
+    margin_rules = re.findall(r"([^{}]+)\{([^{}]*\bscroll-margin-block\s*:[^{}]*)\}", styles)
+    assert [(selector.strip(), declarations.strip()) for selector, declarations in margin_rules] == [
+        ("#ml-fail-analysis summary", "scroll-margin-block:8px"),
+        ("#ml-fail-analysis .evaluation-table",
+         "max-width:100%;overflow-x:auto;margin:18px 0;scroll-margin-block:8px")
+    ]
+    assert ":focus-visible{outline:3px solid #ffc969;outline-offset:4px}" in styles
     text = " ".join(ml_fail_text(page.tree).split())
     for required in ["not confidence percentages", "Majority-neutral baseline accuracy", "one held-out partition",
                      "not a current-news or SEC-filing evaluation", "not objective current issuer sentiment",
