@@ -1,0 +1,1091 @@
+{
+  "schema_version": 1,
+  "task_id": "REL-DEMO-02",
+  "prepared_date": "2026-10-22",
+  "timezone": "Asia/Macau",
+  "source_baseline": {
+    "branch": "main",
+    "head": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+    "local_origin_main": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+    "index_has_staged_changes": false,
+    "remote_ref_queried": false,
+    "expected_existing_exceptions": [
+      "frontend/next-env.d.ts",
+      "backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json",
+      "backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json"
+    ],
+    "private_environment_policy": "Ignored backend/.env contents and hash never read; preservation checks metadata only."
+  },
+  "package_status": {
+    "document_acceptance": "CONDITIONAL",
+    "portable_full_showcase": "BLOCKED",
+    "new_live_execution": "NO-GO",
+    "independent_astra_high_package_review": "PENDING",
+    "timed_human_rehearsal": "NOT TESTED",
+    "runtime_or_browser_acceptance_executed_in_this_task": false,
+    "reason": "Content preparation is CONDITIONAL; S4/S5 portable accepted visuals blocked, original keyword Astra report missing, review and human timing pending. Execution scope FAILED because the first verifier's tempfile.gettempdir() created/unlinked a four-byte temporary probe.",
+    "execution_scope_compliance": "FAIL",
+    "overall_task_acceptance": "FAIL"
+  },
+  "deadlines": {
+    "feature_data_freeze": "2026-11-28",
+    "code_config_freeze": "2026-12-05",
+    "stable_university_showcase": "2026-12-15"
+  },
+  "scope": {
+    "authorized_files": [
+      "docs/exec-plans/active/2026-10-22-rel-demo-02-offline-showcase.md",
+      "docs/showcase/university-showcase.md",
+      "docs/showcase/evidence-manifest.json"
+    ],
+    "copies_or_new_screenshots": false,
+    "persisted_verifier": false,
+    "external_writes_authorized": false,
+    "external_writes_observed": true
+  },
+  "locator_rules": {
+    "repository_relative_path": "Resolve from the pinned repository checkout; never treat a path alone as hash verification.",
+    "OPERATOR_TEMP": "Operator's existing TEMP environment value, read without filesystem probing; no personal absolute path stored. Logical locator only, not durable storage.",
+    "embedded_resource": "Resolve exactly one named attachment by project and test title inside its parent JSON. SHA-256 is of decoded bytes. Decode only in memory; do not extract or copy.",
+    "missing_original_review": "keyword-astra-coordinator records the operator's authoritative attestation, not a retained original review report.",
+    "no_runtime_instruction": "Use existing screenshots, reporter data and source/Markdown text only. Do not open executable HTML, startup commands or an application URL for this package."
+  },
+  "verification": {
+    "checks_executed": "First in-memory standard-library verifier: 350 content checks PASS. Subsequent inspection confirmed an unauthorized tempfile.gettempdir() create/write/unlink probe; execution compliance FAIL. Final verification uses the existing TEMP environment value and a Python write-denying audit hook; results recorded in ExecPlan.",
+    "test_suites_rerun": false,
+    "browser_executed": false,
+    "model_or_corpus_accessed": false,
+    "recorded_counts_are_not_reexecuted_tests": true,
+    "planned_duration_seconds": 360,
+    "measured_human_duration_seconds": null,
+    "git_byte_boundary": "Actual file SHA-256 and canonical Git SHA-256 are separate where checkout newlines differ; filtered Git object identity establishes committed-content equality.",
+    "scope_deviation": {
+      "status": "FAIL",
+      "operation": "First verifier resolved OPERATOR_TEMP via tempfile.gettempdir().",
+      "observed_basis": "Installed tempfile._get_default_tempdir source inspection confirms its successful return requires creating, writing and unlinking a randomized probe.",
+      "bytes_written": 4,
+      "probe_filename": "UNKNOWN; not retained in the verifier output",
+      "probe_disposition": "Unlinked by the standard-library successful resolution path.",
+      "retained_extra_artifact": false,
+      "remediation": "Never call tempfile.gettempdir() again in this task; resolve existing TEMP environment value without filesystem probing. Final verifier denies write/delete/mkdir audit events.",
+      "waiver_granted": false
+    },
+    "historical_ml": {
+      "evaluation_id": "news-sentiment-tfidf-svc-v1",
+      "reproduction_date": "2026-10-19",
+      "frozen_source_revision": "0a042f91232182fa13503066ece8c21f494a2158",
+      "label_order": [
+        "negative",
+        "neutral",
+        "positive"
+      ],
+      "matrix_axes": "rows actual, columns predicted",
+      "confusion_matrix": [
+        [
+          53,
+          17,
+          14
+        ],
+        [
+          6,
+          400,
+          23
+        ],
+        [
+          8,
+          31,
+          139
+        ]
+      ],
+      "support": [
+        84,
+        429,
+        178
+      ],
+      "total": 691,
+      "correct": 592,
+      "incorrect": 99,
+      "accuracy_percent_display": "85.6729",
+      "macro_f1_display": "0.799833",
+      "majority_neutral_percent_display": "62.0839",
+      "false_positive": [
+        14,
+        48,
+        37
+      ],
+      "false_negative": [
+        31,
+        29,
+        39
+      ],
+      "negative_recall_percent_display": "63.0952",
+      "distinct_errors_are_not_fp_plus_fn": true,
+      "artifact_ids": [
+        "ml-frozen-aggregate",
+        "ml-static-source",
+        "ml-static-summary"
+      ]
+    }
+  },
+  "segments": [
+    {
+      "id": "S1",
+      "start_seconds": 0,
+      "end_seconds": 30,
+      "readiness": "PASS",
+      "readiness_scope": "Portable purpose/limitations narration only.",
+      "primary_artifact_ids": [
+        "product-roadmap"
+      ],
+      "supporting_artifact_ids": [
+        "runtime-boundary-runbook"
+      ],
+      "observable_output": "Committed product principle and declared historical/offline presentation mode.",
+      "permitted_claim": "FinLens is an evidence-first research tool with optional AI.",
+      "must_not_claim": [
+        "Current live execution",
+        "Personalized investment advice or production readiness"
+      ],
+      "fallback": "State the evidence-first purpose verbally; omit unsupported feature/status claims."
+    },
+    {
+      "id": "S2",
+      "start_seconds": 30,
+      "end_seconds": 120,
+      "readiness": "PASS",
+      "readiness_scope": "Portable historical prepared-data screenshots and recorded browser behavior only.",
+      "primary_artifact_ids": [
+        "financial-research-capture",
+        "financial-history-capture"
+      ],
+      "supporting_artifact_ids": [
+        "financial-research-record",
+        "financial-history-record"
+      ],
+      "observable_output": "Historical snapshot, fiscal history/comparison and source/provenance records.",
+      "permitted_claim": "Earlier prepared-data Research Mode acceptance recorded financial values, period/source disclosures and honest unavailable states.",
+      "must_not_claim": [
+        "Current financial values",
+        "Fresh SEC retrieval",
+        "Current-HEAD live application acceptance"
+      ],
+      "fallback": "Read selected historical cases from financial-history-record; if both captures and records are unavailable, mark the visual demonstration MISSING and narrate the design only."
+    },
+    {
+      "id": "S3",
+      "start_seconds": 120,
+      "end_seconds": 195,
+      "readiness": "CONDITIONAL",
+      "readiness_scope": "Historical filing presentation plus current keyword source/offline evidence; original Astra report missing.",
+      "primary_artifact_ids": [
+        "filing-evidence-capture",
+        "keyword-ui-source"
+      ],
+      "supporting_artifact_ids": [
+        "filing-evidence-record",
+        "keyword-api-source",
+        "keyword-matching-source",
+        "keyword-backend-bridge-tests",
+        "keyword-mounted-tests",
+        "keyword-offline-record",
+        "keyword-astra-coordinator"
+      ],
+      "observable_output": "Historical evidence card; committed keyword control/limitations and synthetic test definitions, not a keyword screenshot.",
+      "permitted_claim": "Explicit selected-filing keyword mode is committed and offline-tested as recorded; coordinator attests P2 Astra review PASS. Native-browser/live acceptance remains NOT TESTED.",
+      "must_not_claim": [
+        "Live keyword browser acceptance",
+        "Digest-revalidated keyword passages",
+        "Verified financial claims or complete filing coverage",
+        "Exact-phrase matching",
+        "Semantic-only mode in the UI"
+      ],
+      "fallback": "Show committed keyword controls and matching source as source inspection only; if the historical capture is unavailable, do not fabricate a keyword result. Explain semantic/hybrid retrieval as implemented but runtime-blocked."
+    },
+    {
+      "id": "S4",
+      "start_seconds": 195,
+      "end_seconds": 255,
+      "readiness": "BLOCKED",
+      "readiness_scope": "Required synthetic browser visuals depend on ignored local reporter output; portable visual segment BLOCKED.",
+      "primary_artifact_ids": [
+        "risk-browser-report",
+        "risk-desktop-layout",
+        "risk-mobile-layout"
+      ],
+      "supporting_artifact_ids": [
+        "risk-comparison-record",
+        "risk-comparison-source"
+      ],
+      "observable_output": "Embedded synthetic desktop/mobile layout PNGs and recorded six-case test/ledger outcomes, available locally only.",
+      "permitted_claim": "An earlier synthetic browser run exercised independent issuer evidence presentation; later focus repair has offline checks, not accepted current-browser closure.",
+      "must_not_claim": [
+        "Real issuer/SEC evidence",
+        "Live risk comparison",
+        "Aligned reporting periods or comparative risk severity",
+        "Current repaired source browser acceptance",
+        "Overall strict QA teardown PASS"
+      ],
+      "fallback": "Use the portable risk-comparison-record and source to explain the design verbally. Keep browser-visual segment BLOCKED; fallback does not replace synthetic browser evidence."
+    },
+    {
+      "id": "S5",
+      "start_seconds": 255,
+      "end_seconds": 330,
+      "readiness": "BLOCKED",
+      "readiness_scope": "Accepted browser captures and original acceptance chain are temporary; portable accepted-visual segment BLOCKED.",
+      "primary_artifact_ids": [
+        "ml-desktop-capture",
+        "ml-mobile-capture"
+      ],
+      "supporting_artifact_ids": [
+        "ml-static-source",
+        "ml-frozen-aggregate",
+        "ml-static-report",
+        "ml-static-summary"
+      ],
+      "observable_output": "Historical metrics, actual-row/predicted-column confusion matrix, aggregate failure analysis and attribution.",
+      "permitted_claim": "REL-SHOW-01D passed only the JavaScript-disabled static historical view; current committed HTML matches the accepted input hash.",
+      "must_not_claim": [
+        "Current classifier inference",
+        "Fresh evaluation or model loading",
+        "SEC-filing suitability",
+        "Calibrated confidence",
+        "Generalization or production deployment",
+        "198 distinct errors"
+      ],
+      "fallback": "Read historical aggregate tables from ml-frozen-aggregate and source text without executing HTML or JavaScript. Label as historical aggregate explanation, not reproduced browser acceptance; accepted-visual segment stays BLOCKED."
+    },
+    {
+      "id": "S6",
+      "start_seconds": 330,
+      "end_seconds": 360,
+      "readiness": "CONDITIONAL",
+      "readiness_scope": "Portable safeguards narration; original failed evidence files are non-portable.",
+      "primary_artifact_ids": [
+        "runtime-boundary-runbook",
+        "product-roadmap"
+      ],
+      "supporting_artifact_ids": [
+        "qa-risk-original-fail",
+        "qa-risk-teardown-fail"
+      ],
+      "observable_output": "Explicit blocked/not-tested statuses, freeze dates and preserved FAIL outcomes.",
+      "permitted_claim": "New live execution is NO-GO; database identity/encoder admission stay blocked, and strict QA immediate teardown failures stay FAIL.",
+      "must_not_claim": [
+        "Cleared operational gates",
+        "Deployment",
+        "Measured six-minute human rehearsal"
+      ],
+      "fallback": "State unresolved gates and absence of current runtime acceptance verbally; if original failure files disappear, mark originals MISSING rather than changing their recorded FAIL classification."
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "product-roadmap",
+      "category": "verified_committed_source",
+      "repository_relative_path": "ROADMAP.md",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "FinLens prioritizes evidence-based Research Mode; later phases are plans, not completed capability.",
+      "permitted_showcase_claim": "FinLens prioritizes evidence-based Research Mode; later phases are plans, not completed capability.",
+      "limitations": [
+        "Historical database counts/status prose is not a current census.",
+        "The dates in this package come from operator instructions."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "30c2e26852569b03c7032a2873431fe70b1881fcc7e4df43bb6427571abe7aa7",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 17529,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "9ef75cda691cfd106b4c533c1cb616595f7effd2",
+        "git_blob_sha256": "cfdb2fad5f36a751836cbc20a42b3eb539b605d713671c8ebbec1dd32757f0b3",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "financial-research-capture",
+      "category": "historical_browser_evidence",
+      "repository_relative_path": "docs/screenshots/research-mode-light.jpg",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Original tested revision not established; current repository binding is recorded separately.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Research Mode browser presentation recorded by financial-research-record.",
+      "permitted_showcase_claim": "A retained historical screenshot shows the financial Research Mode presentation.",
+      "limitations": [
+        "Historical prepared-data capture, not current execution.",
+        "Image alone does not prove all interactions or current financial facts."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "fb31074ba9817f7b0d06ddecef35c92a44a62a7cfc1956dec2ebc2a5eef7a206",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 102685,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "1381719044abca236d0ee9dcd4b6db0362ac1e52",
+        "git_blob_sha256": "fb31074ba9817f7b0d06ddecef35c92a44a62a7cfc1956dec2ebc2a5eef7a206",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "financial-research-record",
+      "category": "historical_browser_evidence",
+      "repository_relative_path": "backend/reports/research_mode_verification.json",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Original tested revision not established; current repository binding is recorded separately.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Recorded Research Mode acceptance exercised prepared data without a real LLM.",
+      "permitted_showcase_claim": "Recorded Research Mode acceptance exercised prepared data without a real LLM.",
+      "limitations": [
+        "Original status is completed within requested single-company research scope.",
+        "Not current-HEAD runtime acceptance or fresh SEC acquisition."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "4f44f01a873e235e4fba840a0ababce94b367c504a27d15ae2244c581787e894",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 14494,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "5664884c8bd9bc5da45da40d4e2f24889b31f653",
+        "git_blob_sha256": "c56b3d89c4d89aa27845501a47bc1b64d5138f85493987bd5701c4cac7b6a518",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "financial-history-capture",
+      "category": "historical_browser_evidence",
+      "repository_relative_path": "docs/screenshots/historical-comparison-desktop.jpg",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Original tested revision not established; current repository binding is recorded separately.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Historical/comparative browser presentation documented by financial-history-record.",
+      "permitted_showcase_claim": "A retained historical capture illustrates a bounded same-company fiscal comparison.",
+      "limitations": [
+        "Do not describe the displayed figures as current.",
+        "Not cross-company comparability or live financial validation."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "90e572d24586232f51f7594a470f2c6ba1e53d4b798ac0b6c1ec7b444f72247d",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 107341,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "3f4423c2beecea75ad87fd77c0fc58cef85aab8a",
+        "git_blob_sha256": "90e572d24586232f51f7594a470f2c6ba1e53d4b798ac0b6c1ec7b444f72247d",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "financial-history-record",
+      "category": "historical_browser_evidence",
+      "repository_relative_path": "backend/reports/historical_answers_browser.json",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Original tested revision not established; current repository binding is recorded separately.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Historical browser cases recorded direct fiscal values, +6.43% AAPL comparison and unavailable cases.",
+      "permitted_showcase_claim": "Historical browser cases recorded direct fiscal values, +6.43% AAPL comparison and unavailable cases.",
+      "limitations": [
+        "No source revision in this browser record; recorded values remain historical.",
+        "No browser or database operation repeated here."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "c67b406acf77828d30387076252bdb8cf314b0ce4587475aa3059ae3295c8471",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 4544,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "e3ae6b1044d30babc0a65f3b92baf42884da58ef",
+        "git_blob_sha256": "c67b406acf77828d30387076252bdb8cf314b0ce4587475aa3059ae3295c8471",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "filing-evidence-capture",
+      "category": "historical_browser_evidence",
+      "repository_relative_path": "docs/screenshots/answer-evidence-desktop.jpg",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Original tested revision not established; current repository binding is recorded separately.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Answer Presentation & Evidence Highlighting historical presentation acceptance.",
+      "permitted_showcase_claim": "Recorded answer/evidence presentation shows source passages and provenance alongside a deterministic answer.",
+      "limitations": [
+        "Predates explicit REL-LEX-01 keyword mode.",
+        "Passage highlighting is not factual entailment validation."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "412946fe42b8749e92dc1572f3912ec530c1107813bcc0afae05c1f57f5d9b3a",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 116453,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "e56fb3b3d0002fe3a9866705386c7068c7130080",
+        "git_blob_sha256": "412946fe42b8749e92dc1572f3912ec530c1107813bcc0afae05c1f57f5d9b3a",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "filing-evidence-record",
+      "category": "historical_browser_evidence",
+      "repository_relative_path": "docs/answer-presentation-verification.md",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Original tested revision not established; current repository binding is recorded separately.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Earlier actual browser/local-HTTP acceptance checked selected-filing passages, disclosures and source links.",
+      "permitted_showcase_claim": "Earlier actual browser/local-HTTP acceptance checked selected-filing passages, disclosures and source links.",
+      "limitations": [
+        "Historical prepared application; no new retrieval or provider call.",
+        "Not explicit keyword-mode browser acceptance."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "abaf00eb58d04b2469e8f69be1ac03c9a355671d0416ecc167c6a1d45b9a3324",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 10750,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "864b7ceaacad566448a6445a2448f2db3d06a227",
+        "git_blob_sha256": "abaf00eb58d04b2469e8f69be1ac03c9a355671d0416ecc167c6a1d45b9a3324",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "keyword-ui-source",
+      "category": "verified_committed_source",
+      "repository_relative_path": "frontend/components/filing-research.tsx",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "HEAD implements an explicit selected-filing keyword mode and honest stored-match disclosure.",
+      "permitted_showcase_claim": "HEAD implements an explicit selected-filing keyword mode and honest stored-match disclosure.",
+      "limitations": [
+        "Source inspection proves implementation only.",
+        "Live/native-browser keyword acceptance remains NOT TESTED.",
+        "Matches are not digest-revalidated evidence, verified financial claims or complete filing coverage."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "7b444a730798e91e96b469397d97a098323b30d2e76154395eb88d5af9593291",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 45451,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "2f91a13fb5c8f7626115eda84d094208ac56879b",
+        "git_blob_sha256": "6bd804f90a420e8c27efd211f49fe96f85775bf3e3925020f49a2a9cfce9c908",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "keyword-api-source",
+      "category": "verified_committed_source",
+      "repository_relative_path": "frontend/lib/finlens-api.ts",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "HEAD implements keyword source preflight, exact pin/identity response checks and bounded requests.",
+      "permitted_showcase_claim": "HEAD implements keyword source preflight, exact pin/identity response checks and bounded requests.",
+      "limitations": [
+        "Client deadline/abort does not prove SQL cancellation.",
+        "No current request executed."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "3b435cc7598341e1925c4116285364beda3cb70729fd185430d5062d2144be3f",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 51240,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "c965c0a0f3879a57574f61dfa4057649e95d13c3",
+        "git_blob_sha256": "5b5f9cbb95cc0b1a546b3f936690e709ca131de396fbe53de854199d4aedc67f",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "keyword-matching-source",
+      "category": "verified_committed_source",
+      "repository_relative_path": "backend/app/filing_search_service.py",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "Stored keyword ranking counts case-insensitive substrings within a selected accession.",
+      "permitted_showcase_claim": "Stored keyword ranking counts case-insensitive substrings within a selected accession.",
+      "limitations": [
+        "Not exact-phrase or semantic search.",
+        "Database access would still need approval; no database queried."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "153a60b2e0c6ae5b961de7cb1e4d9796586afefca90170a355a3fedc139afe99",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 8347,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "e3a58b7b88df3161cc2df71ced9fa38b9d831818",
+        "git_blob_sha256": "88b0b980cca95f6e7c328d4cef24d7241fe1bfd6c68446de8702a3013e39eac6",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "keyword-backend-bridge-tests",
+      "category": "offline_implementation_test_evidence",
+      "repository_relative_path": "backend/tests/test_bounded_research.py",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "Committed tests define real serialization-to-client checks using injected synthetic sessions and forbidden-work sentinels.",
+      "permitted_showcase_claim": "Committed tests define real serialization-to-client checks using injected synthetic sessions and forbidden-work sentinels.",
+      "limitations": [
+        "Test source inspected, not executed in REL-DEMO-02.",
+        "Their synthetic inputs are not SEC evidence."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "246c150ca1b9f5636dbdabd1297846cccfff84254208a9ade8e5742a18adfa5f",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 32941,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "044018cbca5e552516d6426ff53abc4907ec1f9b",
+        "git_blob_sha256": "30c0f417327404bc394aa92c8755d8cc1a32232f24a0529654bcbc02cde5d172",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "keyword-mounted-tests",
+      "category": "offline_implementation_test_evidence",
+      "repository_relative_path": "frontend/tests/research-interactions.test.mjs",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "Committed mounted cases cover keyword generation ownership, stale results and retry focus.",
+      "permitted_showcase_claim": "Committed mounted cases cover keyword generation ownership, stale results and retry focus.",
+      "limitations": [
+        "jsdom interactions are not native-browser acceptance.",
+        "No test suite rerun here."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "c887cda7d7b3348935b88e9ae94475194a21701e5a64e6ce30321146aac37e26",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 253444,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "1db9e5c125fa99a11452d070dc75b0024e33144f",
+        "git_blob_sha256": "56f736a52915c65a379ec6ecf76e8f59f33d7ad5e9eb03b3e0e0fdc535c0ccd0",
+        "worktree_matches_git_blob_bytes": false,
+        "worktree_matches_committed_content": true
+      },
+      "newline_note": "Working bytes differ from canonical Git blob due to checkout representation; git hash-object --path verifies equality after Git filters. SHA-256 above binds actual working bytes; git_blob_sha256 binds canonical bytes."
+    },
+    {
+      "id": "keyword-offline-record",
+      "category": "offline_implementation_test_evidence",
+      "repository_relative_path": "docs/exec-plans/active/2026-10-21-rel-lex-01-keyword-search.md",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Recorded corrected implementation/offline verification only.",
+      "permitted_showcase_claim": "The plan records 886 frontend regressions and 188 backend tests, including corrected P2 cases.",
+      "limitations": [
+        "Counts are inspected historical self-records, not reexecuted tests.",
+        "Pending independent-review wording is stale; keyword-astra-coordinator is authoritative for current review status.",
+        "Initial independent FAIL is historical and remains preserved.",
+        "Browser/live acceptance remains NOT TESTED."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "918695ad96d4b524e118d7cf58b981fa2d0ce80ef48cd2e55b0cfbe4120079a4",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 15767,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "b9f1a15b09973b5592916729128e686293be00a8",
+        "git_blob_sha256": "918695ad96d4b524e118d7cf58b981fa2d0ce80ef48cd2e55b0cfbe4120079a4",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "keyword-astra-coordinator",
+      "category": "coordinator_attestation",
+      "repository_relative_path": null,
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Operator-provided REL-DEMO-02 request, corroborating REL-DEMO-01 coordinator context; association to baseline is coordinator-reported.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "The operator attests that independent Astra High review passed the three REL-LEX-01 P2 corrections.",
+      "permitted_showcase_claim": "The operator attests that independent Astra High review passed the three REL-LEX-01 P2 corrections.",
+      "limitations": [
+        "Separate original review report is MISSING from this selected evidence set.",
+        "No review timestamp, report hash or direct independent reproduction invented.",
+        "Attestation does not authorize runtime/browser execution."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "Attestation is transcribed here; separate original review report is not retained in this package.",
+      "attestation_source": "Operator REL-DEMO-02 instructions in this conversation; original private attachment location intentionally omitted.",
+      "required_original_report": "MISSING",
+      "sha256": null,
+      "sha256_scope": null,
+      "size_bytes": null,
+      "availability_at_preparation": "MISSING",
+      "verified_committed_source": false,
+      "availability_note": "Original independent review report not retained in selected artifacts. Coordinator attestation supplied directly by operator is authoritative for status."
+    },
+    {
+      "id": "risk-comparison-source",
+      "category": "verified_committed_source",
+      "repository_relative_path": "frontend/components/sec-risk-comparison.tsx",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "HEAD integrates independent issuer/pin chains and candidate SEC passage comparison.",
+      "permitted_showcase_claim": "HEAD integrates independent issuer/pin chains and candidate SEC passage comparison.",
+      "limitations": [
+        "No comparative severity score or period alignment.",
+        "Not current prepared-data/browser acceptance."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "4983bde96cbe95927d73d21566797a52807d265d8099d45d252edf6a4382bc40",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 8821,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "d1fd4e8aa8dbf34485ba539090b2be61a7e5815f",
+        "git_blob_sha256": "4983bde96cbe95927d73d21566797a52807d265d8099d45d252edf6a4382bc40",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "risk-comparison-record",
+      "category": "offline_implementation_test_evidence",
+      "repository_relative_path": "docs/exec-plans/active/2026-10-20-sec-risk-cc01.md",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "PASS WITH CONDITIONS",
+      "original_recorded_scope": "Original increment PASS WITH CONDITIONS; six synthetic browser cases passed, and later focused offline repair recorded PASS separately.",
+      "permitted_showcase_claim": "The committed record describes six synthetic Chromium cases and later offline focus-repair checks.",
+      "limitations": [
+        "Browser run predates the later focus repair.",
+        "Earlier component/source fingerprints cannot certify all current source.",
+        "This record is a portable textual fallback, not a replacement browser capture."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "041593663df00105a5b8de03b6186907a2810a8dbc51b90d592bb511af5b9769",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 18698,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "7057c4840e3e2c4f326606b445cb9cf5eb39c94b",
+        "git_blob_sha256": "041593663df00105a5b8de03b6186907a2810a8dbc51b90d592bb511af5b9769",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "risk-browser-report",
+      "category": "synthetic_browser_acceptance",
+      "repository_relative_path": "frontend/test-results/sec-risk-cc01-final-721cd8d233a8416f87b902bee14b64bb/results.json",
+      "external_locator": null,
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "The report is bound by its artifact SHA-256 and has a historical source-fingerprint record; no tested repository commit has been established, and repository_binding remains null.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Six recorded SEC-RISK-CC01 synthetic UI browser cases; not overall strict teardown acceptance.",
+      "permitted_showcase_claim": "Retained reporter data records six expected passes, zero unexpected/flaky/skipped, with synthetic ledgers and embedded layout PNGs.",
+      "limitations": [
+        "Synthetic AAA/BBB data, not issuer facts or real SEC retrieval.",
+        "Predates later focus repair and current keyword integration.",
+        "Original strict QA-RISK acceptance FAIL is separate and must not be overridden.",
+        "Embedded captures are not standalone portable assets."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "Ignored local checkout output; absent from a fresh clone.",
+      "sha256": "57acde3ac0cbd10a4349b8b8dc45076496cdc1cba2bdb8144377449cc2262d25",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 228816,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "ml-static-source",
+      "category": "accepted_historical_ml_static_evidence",
+      "repository_relative_path": "backend/scripts/news_sentiment_demo.html",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed bytes equal the source SHA-256 recorded in ml-static-summary. Historical run used bc0a35f8 plus reviewed uncommitted source; hash is the exact binding.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "REL-SHOW-01D static historical analysis only; source bytes bound by SHA-256.",
+      "permitted_showcase_claim": "Current committed HTML is byte-identical to the REL-SHOW-01D accepted static input; historical tables are present.",
+      "limitations": [
+        "PASS covers only JavaScript-disabled static historical analysis in recorded Chromium/viewports/navigation paths.",
+        "Do not open this HTML with application JavaScript enabled: its existing script polls local APIs.",
+        "No functioning classifier, current inference, generalization or SEC suitability proved."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "679a0e59e2a3e6848931e7724ec5747c7c9b0da3847e5901a4d6007df9190717",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 21210,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "d9c871edfe516098d06b82d09c2565645c42a66e",
+        "git_blob_sha256": "679a0e59e2a3e6848931e7724ec5747c7c9b0da3847e5901a4d6007df9190717",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "ml-frozen-aggregate",
+      "category": "offline_implementation_test_evidence",
+      "repository_relative_path": "docs/news-sentiment-baseline.md",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed record; historical evaluation block additionally compared against frozen commit 0a042f91232182fa13503066ece8c21f494a2158.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Recorded 2026-10-19 historical offline PhraseBank evaluation.",
+      "permitted_showcase_claim": "A committed historical aggregate record reports a 691-row held-out evaluation and its matrix.",
+      "limitations": [
+        "No original aggregate JSON is supplied; use the committed aggregate record.",
+        "No corpus, model or evaluation accessed or rerun.",
+        "Private nonprofit academic use; no redistribution/license expansion."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "historical_evaluation_revision": "0a042f91232182fa13503066ece8c21f494a2158",
+      "sha256": "ab4a37d4d9422044a267c453e6aa05b4b06ca08de6ca159157a86c3499362452",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 24122,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "c8e519ac8c7f97c19458fcad36a1562ae4a8728d",
+        "git_blob_sha256": "ab4a37d4d9422044a267c453e6aa05b4b06ca08de6ca159157a86c3499362452",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "ml-static-report",
+      "category": "accepted_historical_ml_static_evidence",
+      "repository_relative_path": null,
+      "external_locator": {
+        "root": "OPERATOR_TEMP",
+        "relative_path": "finlens-rel-show-01d-ddab2002b8554dc2a2cb973ae2f9ad40/acceptance-report.md"
+      },
+      "source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "revision_provenance": "Recorded checkout HEAD plus reviewed uncommitted HTML; exact source identity is the accepted HTML SHA-256, not HEAD alone.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "REL-SHOW-01D JavaScript-disabled static historical evaluation/error-analysis only.",
+      "permitted_showcase_claim": "The retained report records desktop/mobile static content, native focus and immediate cleanup passing.",
+      "limitations": [
+        "Not interactive classifier, model/backend readiness, fresh performance, SEC/market suitability or deployment.",
+        "Other browsers/zoom and formal screen-reader acceptance untested."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "External operator temporary storage; no durable copy verified or authorized.",
+      "sha256": "bf8d3e6a28d6c5f3b0e530cedbe1bdfce435c3612696465f0222f1169f336f9e",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 12505,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "ml-static-summary",
+      "category": "accepted_historical_ml_static_evidence",
+      "repository_relative_path": null,
+      "external_locator": {
+        "root": "OPERATOR_TEMP",
+        "relative_path": "finlens-rel-show-01d-ddab2002b8554dc2a2cb973ae2f9ad40/acceptance-summary.json"
+      },
+      "source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "revision_provenance": "Recorded checkout HEAD plus reviewed uncommitted HTML; exact source identity is the accepted HTML SHA-256, not HEAD alone.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "REL-SHOW-01D JavaScript-disabled static historical evaluation/error-analysis only.",
+      "permitted_showcase_claim": "The retained summary records one run, zero retries, static PASS, preservation and immediate cleanup.",
+      "limitations": [
+        "Scope limited to static historical ML view.",
+        "Does not clear QA-RISK FAIL or DEP-01A3 BLOCKED."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "External operator temporary storage; no durable copy verified or authorized.",
+      "sha256": "0ee01b296fcdb777f6d1404061f9e206c71547b6fbb81079a75d2131c0abeb8d",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 867,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "ml-desktop-capture",
+      "category": "accepted_historical_ml_static_evidence",
+      "repository_relative_path": null,
+      "external_locator": {
+        "root": "OPERATOR_TEMP",
+        "relative_path": "finlens-rel-show-01d-ddab2002b8554dc2a2cb973ae2f9ad40/evidence/desktop-expanded-full.png"
+      },
+      "source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "revision_provenance": "Recorded checkout HEAD plus reviewed uncommitted HTML; exact source identity is the accepted HTML SHA-256, not HEAD alone.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "REL-SHOW-01D JavaScript-disabled static historical evaluation/error-analysis only.",
+      "permitted_showcase_claim": "Recorded desktop capture shows expanded historical metrics, matrix and provenance.",
+      "limitations": [
+        "The inactive Connecting/classifier region is outside accepted scope.",
+        "Use only as a labelled historical capture, never an operational classifier."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "External operator temporary storage; no durable copy verified or authorized.",
+      "sha256": "2efb4ca0ddf79f28a00cb4ba8824ce5491923859e502585d2b32232482b570d9",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 576289,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "ml-mobile-capture",
+      "category": "accepted_historical_ml_static_evidence",
+      "repository_relative_path": null,
+      "external_locator": {
+        "root": "OPERATOR_TEMP",
+        "relative_path": "finlens-rel-show-01d-ddab2002b8554dc2a2cb973ae2f9ad40/evidence/mobile-expanded-full.png"
+      },
+      "source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "revision_provenance": "Recorded checkout HEAD plus reviewed uncommitted HTML; exact source identity is the accepted HTML SHA-256, not HEAD alone.",
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "REL-SHOW-01D JavaScript-disabled static historical evaluation/error-analysis only.",
+      "permitted_showcase_claim": "Recorded mobile capture shows the historical static analysis at a 390x844 viewport.",
+      "limitations": [
+        "Viewport emulation is not real-device or universal accessibility certification.",
+        "No new rendered inspection performed here."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "External operator temporary storage; no durable copy verified or authorized.",
+      "sha256": "dd42f5d7793093948f71a9a575252de497bf2682f4342dccffdaaf234e4f7a1d",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 518808,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "qa-risk-original-fail",
+      "category": "known_failed_acceptance_record",
+      "repository_relative_path": null,
+      "external_locator": {
+        "root": "OPERATOR_TEMP",
+        "relative_path": "finlens-qa-risk-01-97131629aa11428ea42bbc1c1fb888a0/acceptance-summary.json"
+      },
+      "source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "revision_provenance": "HEAD explicitly recorded in the retained acceptance summary.",
+      "original_recorded_acceptance_classification": "FAIL",
+      "original_recorded_scope": "QA-RISK-01 overall strict acceptance envelope.",
+      "permitted_showcase_claim": "QA-RISK-01 overall acceptance failed its strict immediate checkpoint despite one product test passing.",
+      "limitations": [
+        "Active residual PID 173 was unidentified.",
+        "Later removal/cleanliness does not convert the acceptance to PASS.",
+        "No rerun or investigation here."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "External operator temporary storage; no durable copy verified or authorized.",
+      "sha256": "706b0ac3f83db002f4636bbebe5f446c58fe31846207a460873686525ef34848",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 1327,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "qa-risk-teardown-fail",
+      "category": "known_failed_acceptance_record",
+      "repository_relative_path": null,
+      "external_locator": {
+        "root": "OPERATOR_TEMP",
+        "relative_path": "finlens-qa-risk-01t-phase2-1de978dfac6c404595bcb2c075c17c13/diagnostic-conclusion.json"
+      },
+      "source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "revision_provenance": "HEAD explicitly recorded in retained diagnostic conclusion.",
+      "original_recorded_acceptance_classification": "FAIL",
+      "original_recorded_scope": "QA-RISK-01T single-cycle strict teardown reproduction.",
+      "permitted_showcase_claim": "The teardown reproduction retained immediate FAIL with active detached Node residual PID 157.",
+      "limitations": [
+        "Observed later clean passive samples never supersede immediate FAIL.",
+        "Specific process purpose and historical PID 173 identity remain UNKNOWN.",
+        "Not a new functional risk browser acceptance."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "External operator temporary storage; no durable copy verified or authorized.",
+      "sha256": "88684ae69f447aaf073600d71091f304fb9e14c369e88a1549976dcf6ec7ba2c",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 2610,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false,
+      "repository_binding": null
+    },
+    {
+      "id": "runtime-boundary-runbook",
+      "category": "verified_committed_source",
+      "repository_relative_path": "docs/local-demo.md",
+      "external_locator": null,
+      "source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "revision_provenance": "Current committed file bytes checked against HEAD.",
+      "original_recorded_acceptance_classification": "NOT APPLICABLE",
+      "original_recorded_scope": "Prepared-data startup, DB reads, encoder and browser acceptance require separate authorization; DEP-01A3 remains blocked.",
+      "permitted_showcase_claim": "Prepared-data startup, DB reads, encoder and browser acceptance require separate authorization; DEP-01A3 remains blocked.",
+      "limitations": [
+        "Do not execute its startup commands for this package.",
+        "Operational readiness markers do not prove scenario acceptance."
+      ],
+      "portability": "PORTABLE",
+      "portability_reason": "Tracked in the repository; portable with this pinned checkout.",
+      "sha256": "30739789fd662c5cee08bdb9d8f2498cbdf49c00a585e59eca992ba8829da151",
+      "sha256_scope": "Actual file bytes at preparation, without newline normalization.",
+      "size_bytes": 5865,
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": true,
+      "repository_binding": {
+        "revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+        "git_blob_oid": "62706c1bf9577ea0a1657d50a6e53f730e09a2a1",
+        "git_blob_sha256": "30739789fd662c5cee08bdb9d8f2498cbdf49c00a585e59eca992ba8829da151",
+        "worktree_matches_git_blob_bytes": true,
+        "worktree_matches_committed_content": true
+      }
+    },
+    {
+      "id": "risk-desktop-layout",
+      "category": "synthetic_browser_acceptance",
+      "repository_relative_path": "frontend/test-results/sec-risk-cc01-final-721cd8d233a8416f87b902bee14b64bb/results.json",
+      "external_locator": null,
+      "embedded_resource": {
+        "container_artifact_id": "risk-browser-report",
+        "project": "desktop-chromium",
+        "test_title": "SEC-RISK-CC01 independent evidence, three disclosure targets, layout and keyboard focus",
+        "attachment_name": "cc01-layout",
+        "encoding": "base64",
+        "content_type": "image/png"
+      },
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Parent report and committed risk plan record original source fingerprints; no exact committed tested revision established.",
+      "sha256": "b6f39ebab8b11b63ff8d6ca2ac690df4d9d6e49dd34dce41d234ecf6d2fe5ab8",
+      "sha256_scope": "Decoded embedded PNG bytes, not the parent JSON file.",
+      "size_bytes": 96355,
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Original six-case synthetic Chromium run; not later focus repair or strict QA envelope.",
+      "permitted_showcase_claim": "A retained synthetic layout capture illustrates independent issuer evidence presentation.",
+      "limitations": [
+        "AAA/BBB synthetic fixtures are not issuer facts.",
+        "Predates later focus repair and current keyword integration.",
+        "Only embedded in ignored local reporter JSON; no standalone image copied or generated."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "Parent is ignored local output, absent from a fresh clone.",
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false
+    },
+    {
+      "id": "risk-mobile-layout",
+      "category": "synthetic_browser_acceptance",
+      "repository_relative_path": "frontend/test-results/sec-risk-cc01-final-721cd8d233a8416f87b902bee14b64bb/results.json",
+      "external_locator": null,
+      "embedded_resource": {
+        "container_artifact_id": "risk-browser-report",
+        "project": "mobile-width-chromium",
+        "test_title": "SEC-RISK-CC01 independent evidence, three disclosure targets, layout and keyboard focus",
+        "attachment_name": "cc01-layout",
+        "encoding": "base64",
+        "content_type": "image/png"
+      },
+      "source_revision": "UNKNOWN",
+      "revision_provenance": "Parent report and committed risk plan record original source fingerprints; no exact committed tested revision established.",
+      "sha256": "56af9812536ac5e54c430e7f0a49ae5f4ceb211dc42a7ba5a4fa04576bd35f46",
+      "sha256_scope": "Decoded embedded PNG bytes, not the parent JSON file.",
+      "size_bytes": 58000,
+      "original_recorded_acceptance_classification": "PASS",
+      "original_recorded_scope": "Original six-case synthetic Chromium run; not later focus repair or strict QA envelope.",
+      "permitted_showcase_claim": "A retained synthetic layout capture illustrates independent issuer evidence presentation.",
+      "limitations": [
+        "AAA/BBB synthetic fixtures are not issuer facts.",
+        "Predates later focus repair and current keyword integration.",
+        "Only embedded in ignored local reporter JSON; no standalone image copied or generated."
+      ],
+      "portability": "NON-PORTABLE",
+      "portability_reason": "Parent is ignored local output, absent from a fresh clone.",
+      "availability_at_preparation": "AVAILABLE",
+      "verified_committed_source": false
+    }
+  ]
+}
