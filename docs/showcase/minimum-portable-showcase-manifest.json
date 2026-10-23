@@ -1,0 +1,844 @@
+{
+  "schema_version": 1,
+  "task_id": "REL-DEMO-05",
+  "prepared_date": "2026-10-23",
+  "timezone": "Asia/Macau",
+  "source_baseline": {
+    "branch": "main",
+    "head": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+    "local_origin_main": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+    "remote_ref_queried": false,
+    "index_empty_at_entry": true
+  },
+  "package_status": {
+    "mode": "MINIMUM PORTABLE RECORDED DOCUMENTATION",
+    "implementation": "PREPARED FOR REVIEW",
+    "independent_review": "PENDING",
+    "timed_human_rehearsal": "NOT TESTED",
+    "live_product_acceptance": "NOT PERFORMED",
+    "services_required": [],
+    "original_rel_demo_02_execution_scope": "FAIL",
+    "original_rel_demo_02_content": "CONDITIONAL",
+    "original_full_portable_showcase": "BLOCKED",
+    "new_live_execution": "NO-GO",
+    "native_driver_execution": "NOT TESTED",
+    "native_preflight": "NO-GO",
+    "historical_evidence_preservation": "NO-GO"
+  },
+  "hash_policy": {
+    "algorithm": "SHA-256",
+    "sha256_field": "Canonical pinned Git blob bytes; valid across checkout newline conventions.",
+    "worktree_sha256_field": "Actual file bytes inspected in this checkout; no normalization.",
+    "allowed_checkout_difference": "EXACT or CRLF_TO_LF_ONLY as explicitly recorded. All image bytes must match exactly.",
+    "revision_meaning": "Repository custody binding only; not the tested application revision. original_recorded_source_revision retains original UNKNOWN/null where applicable.",
+    "manifest_encoding": "UTF-8 without BOM, LF, two-space JSON indentation, final LF; fixed date and stable arrays, no wall-clock timestamp or personal locators."
+  },
+  "counts": {
+    "included_tracked_artifacts": 20,
+    "historical_inventory_total": 28,
+    "included_from_historical_inventory": 18,
+    "excluded_nonportable_available_at_original_preparation": 9,
+    "excluded_missing_original_review": 1,
+    "exclusion_records": 10,
+    "claims": 12,
+    "segments": 6
+  },
+  "presentation": {
+    "script_path": "docs/showcase/minimum-portable-showcase.md",
+    "planned_duration_seconds": 360,
+    "financial_duration_seconds": 185,
+    "timing_status": "PLANNED ALLOCATION ONLY; HUMAN REHEARSAL NOT TESTED",
+    "services_required": [],
+    "allowed_asset_use": "Existing tracked images and plain text only. Never execute HTML, source commands, application code, tests or native drivers; do not follow network links.",
+    "exclusion_identity_note": "Original identifiers are immutable metadata, not presenter-facing tool or reviewer attribution.",
+    "missing_or_mismatched_asset": "Stop its claim; use the script fallback or omit it. Never generate replacement evidence."
+  },
+  "financial_display_labels": {
+    "issuer": "Apple Inc.",
+    "ticker": "AAPL",
+    "metric": "revenue",
+    "unit": "USD",
+    "display_scale": "billions",
+    "earlier_fiscal_year": "FY2024",
+    "earlier_display": "$391.04B",
+    "later_fiscal_year": "FY2025",
+    "later_display": "$416.16B",
+    "revenue_basis": "customer contract",
+    "recorded_change": "+6.43%",
+    "source_artifact_id": "financial-history-record",
+    "case_query": "2024 vs 2025 revenue",
+    "interpretation": "Recorded rounded display values, not newly verified financial claims or inputs for a fresh calculation."
+  },
+  "ml_historical_aggregates": {
+    "evaluation": "news-sentiment-tfidf-svc-v1",
+    "historical_date": "2026-10-19",
+    "held_out_rows": 691,
+    "correct": 592,
+    "incorrect": 99,
+    "accuracy_percent": "85.6729",
+    "macro_f1": "0.799833",
+    "majority_baseline_accuracy_percent": "62.0839",
+    "majority_baseline_macro_f1": "0.255357",
+    "label_order": [
+      "negative",
+      "neutral",
+      "positive"
+    ],
+    "confusion_matrix": [
+      [
+        53,
+        17,
+        14
+      ],
+      [
+        6,
+        400,
+        23
+      ],
+      [
+        8,
+        31,
+        139
+      ]
+    ],
+    "negative_support": 84,
+    "negative_missed": 31,
+    "source_artifact_ids": [
+      "ml-frozen-aggregate",
+      "ml-static-source"
+    ],
+    "use": "Historical aggregate explanation only; no current inference, evaluation or SEC suitability.",
+    "license": "Financial PhraseBank v1.0; CC BY-NC-SA 3.0 Unported",
+    "attribution": "Malo, P., Sinha, A., Takala, P., Korhonen, P. and Wallenius, J. (2013): Good debt or bad debt: Detecting semantic orientations in economic texts. Journal of the American Society for Information Science and Technology (in Press, as recorded in source README).",
+    "restriction": "Private nonprofit academic-use boundaries remain. No corpus sentences, row-linked predictions, trained weights, public redistribution or online service authorized."
+  },
+  "segments": [
+    {
+      "id": "S1",
+      "start_seconds": 0,
+      "duration_seconds": 25,
+      "end_seconds": 25,
+      "claim_ids": [
+        "C01"
+      ],
+      "primary_artifact_ids": [
+        "product-roadmap"
+      ]
+    },
+    {
+      "id": "S2",
+      "start_seconds": 25,
+      "duration_seconds": 185,
+      "end_seconds": 210,
+      "claim_ids": [
+        "C02",
+        "C03",
+        "C04"
+      ],
+      "primary_artifact_ids": [
+        "financial-research-capture",
+        "financial-research-record",
+        "financial-history-capture",
+        "financial-history-record"
+      ]
+    },
+    {
+      "id": "S3",
+      "start_seconds": 210,
+      "duration_seconds": 60,
+      "end_seconds": 270,
+      "claim_ids": [
+        "C05",
+        "C06",
+        "C07"
+      ],
+      "primary_artifact_ids": [
+        "filing-evidence-capture",
+        "filing-evidence-record",
+        "keyword-ui-source"
+      ]
+    },
+    {
+      "id": "S4",
+      "start_seconds": 270,
+      "duration_seconds": 25,
+      "end_seconds": 295,
+      "claim_ids": [
+        "C08",
+        "C09"
+      ],
+      "primary_artifact_ids": [
+        "risk-comparison-record",
+        "risk-comparison-source"
+      ]
+    },
+    {
+      "id": "S5",
+      "start_seconds": 295,
+      "duration_seconds": 45,
+      "end_seconds": 340,
+      "claim_ids": [
+        "C10"
+      ],
+      "primary_artifact_ids": [
+        "ml-frozen-aggregate"
+      ]
+    },
+    {
+      "id": "S6",
+      "start_seconds": 340,
+      "duration_seconds": 20,
+      "end_seconds": 360,
+      "claim_ids": [
+        "C11",
+        "C12"
+      ],
+      "primary_artifact_ids": [
+        "runtime-boundary-runbook",
+        "historical-showcase-script",
+        "historical-evidence-manifest"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "C01",
+      "statement": "Evidence-first Research Mode and optional AI are documented product principles; no service-health claim.",
+      "artifact_ids": [
+        "product-roadmap"
+      ]
+    },
+    {
+      "id": "C02",
+      "statement": "Historical Research Mode records snapshot, history controls and source-provenance disclosures.",
+      "artifact_ids": [
+        "financial-research-capture",
+        "financial-research-record"
+      ]
+    },
+    {
+      "id": "C03",
+      "statement": "The historical Apple FY2024/FY2025 customer-contract revenue comparison displays $391.04B, $416.16B and +6.43%; no recalculation from rounded labels.",
+      "artifact_ids": [
+        "financial-history-capture",
+        "financial-history-record"
+      ]
+    },
+    {
+      "id": "C04",
+      "statement": "Historical JPM annual revenue comparison is Unavailable for incompatible scopes; the Apple causal question produces no deterministic direct answer.",
+      "artifact_ids": [
+        "financial-history-record",
+        "filing-evidence-record"
+      ]
+    },
+    {
+      "id": "C05",
+      "statement": "Historical selected-filing presentation shows passages and disclosures; highlighting is not entailment validation and the capture predates keyword mode.",
+      "artifact_ids": [
+        "filing-evidence-capture",
+        "filing-evidence-record"
+      ]
+    },
+    {
+      "id": "C06",
+      "statement": "Committed keyword source implements explicit selected-filing, version-pinned metadata checks and case-insensitive substring ranking; no request is executed.",
+      "artifact_ids": [
+        "keyword-ui-source",
+        "keyword-api-source",
+        "keyword-matching-source"
+      ]
+    },
+    {
+      "id": "C07",
+      "statement": "Keyword test definitions and offline records exist; browser/live acceptance remains NOT TESTED and the separate original review report remains MISSING.",
+      "artifact_ids": [
+        "keyword-backend-bridge-tests",
+        "keyword-mounted-tests",
+        "keyword-offline-record",
+        "historical-evidence-manifest"
+      ]
+    },
+    {
+      "id": "C08",
+      "statement": "Risk comparison source/design keeps issuer pins and partial results independent; no period alignment or comparative severity claim.",
+      "artifact_ids": [
+        "risk-comparison-source",
+        "risk-comparison-record"
+      ]
+    },
+    {
+      "id": "C09",
+      "statement": "Original risk synthetic browser cases predate the focus repair; repaired browser acceptance is not established and historical strict teardown FAIL remains FAIL.",
+      "artifact_ids": [
+        "risk-comparison-record",
+        "historical-showcase-script",
+        "historical-evidence-manifest"
+      ]
+    },
+    {
+      "id": "C10",
+      "statement": "Committed historical ML aggregates report 691 rows, 592 correct, 99 errors, 85.6729% accuracy, 0.799833 macro-F1, 62.0839% majority-baseline accuracy and the recorded confusion matrix; no inference or generalization claim.",
+      "artifact_ids": [
+        "ml-static-source",
+        "ml-frozen-aggregate",
+        "historical-evidence-manifest"
+      ]
+    },
+    {
+      "id": "C11",
+      "statement": "Runbook and presentation boundaries retain fail-closed/unavailable behavior and separate live/native admission; freeze dates are planned constraints, not delivery guarantees.",
+      "artifact_ids": [
+        "product-roadmap",
+        "runtime-boundary-runbook",
+        "historical-showcase-script"
+      ]
+    },
+    {
+      "id": "C12",
+      "statement": "Original package FAIL/CONDITIONAL/BLOCKED/NO-GO classifications remain; this reduced route is documentation prepared for review with human timing NOT TESTED.",
+      "artifact_ids": [
+        "historical-showcase-script",
+        "historical-evidence-manifest"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "product-roadmap",
+      "repository_relative_path": "ROADMAP.md",
+      "sha256": "cfdb2fad5f36a751836cbc20a42b3eb539b605d713671c8ebbec1dd32757f0b3",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "9ef75cda691cfd106b4c533c1cb616595f7effd2",
+      "worktree_sha256": "30c2e26852569b03c7032a2873431fe70b1881fcc7e4df43bb6427571abe7aa7",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "FinLens prioritizes evidence-based Research Mode; later phases are plans, not completed capability.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C01",
+        "C11"
+      ],
+      "limitations": [
+        "Dated baseline and planned phases are historical documentation, not a current database census or runtime acceptance."
+      ]
+    },
+    {
+      "id": "financial-research-capture",
+      "repository_relative_path": "docs/screenshots/research-mode-light.jpg",
+      "sha256": "fb31074ba9817f7b0d06ddecef35c92a44a62a7cfc1956dec2ebc2a5eef7a206",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "1381719044abca236d0ee9dcd4b6db0362ac1e52",
+      "worktree_sha256": "fb31074ba9817f7b0d06ddecef35c92a44a62a7cfc1956dec2ebc2a5eef7a206",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "UNKNOWN",
+      "original_classification": "PASS",
+      "original_scope": "Research Mode browser presentation recorded by financial-research-record.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C02"
+      ],
+      "limitations": [
+        "Historical prepared-data image, not current-HEAD UI acceptance. No new visual inspection or application run."
+      ]
+    },
+    {
+      "id": "financial-research-record",
+      "repository_relative_path": "backend/reports/research_mode_verification.json",
+      "sha256": "c56b3d89c4d89aa27845501a47bc1b64d5138f85493987bd5701c4cac7b6a518",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "5664884c8bd9bc5da45da40d4e2f24889b31f653",
+      "worktree_sha256": "4f44f01a873e235e4fba840a0ababce94b367c504a27d15ae2244c581787e894",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "UNKNOWN",
+      "original_classification": "PASS",
+      "original_scope": "Recorded Research Mode acceptance exercised prepared data without a real LLM.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C02"
+      ],
+      "limitations": [
+        "Historical prepared-data browser/API record. Values, periods, units and issuer identities remain those recorded; no current database check."
+      ]
+    },
+    {
+      "id": "financial-history-capture",
+      "repository_relative_path": "docs/screenshots/historical-comparison-desktop.jpg",
+      "sha256": "90e572d24586232f51f7594a470f2c6ba1e53d4b798ac0b6c1ec7b444f72247d",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "3f4423c2beecea75ad87fd77c0fc58cef85aab8a",
+      "worktree_sha256": "90e572d24586232f51f7594a470f2c6ba1e53d4b798ac0b6c1ec7b444f72247d",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "UNKNOWN",
+      "original_classification": "PASS",
+      "original_scope": "Historical/comparative browser presentation documented by financial-history-record.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C03"
+      ],
+      "limitations": [
+        "Historical bounded same-company fiscal comparison image. No new visual inspection or current financial verification."
+      ]
+    },
+    {
+      "id": "financial-history-record",
+      "repository_relative_path": "backend/reports/historical_answers_browser.json",
+      "sha256": "c67b406acf77828d30387076252bdb8cf314b0ce4587475aa3059ae3295c8471",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "e3ae6b1044d30babc0a65f3b92baf42884da58ef",
+      "worktree_sha256": "c67b406acf77828d30387076252bdb8cf314b0ce4587475aa3059ae3295c8471",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "UNKNOWN",
+      "original_classification": "PASS",
+      "original_scope": "Historical browser cases recorded direct fiscal values, +6.43% AAPL comparison and unavailable cases.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C03",
+        "C04"
+      ],
+      "limitations": [
+        "No tested Git revision is recorded in this browser record. Displayed rounded values must not be used to recompute the recorded change."
+      ]
+    },
+    {
+      "id": "filing-evidence-capture",
+      "repository_relative_path": "docs/screenshots/answer-evidence-desktop.jpg",
+      "sha256": "412946fe42b8749e92dc1572f3912ec530c1107813bcc0afae05c1f57f5d9b3a",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "e56fb3b3d0002fe3a9866705386c7068c7130080",
+      "worktree_sha256": "412946fe42b8749e92dc1572f3912ec530c1107813bcc0afae05c1f57f5d9b3a",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "UNKNOWN",
+      "original_classification": "PASS",
+      "original_scope": "Answer Presentation & Evidence Highlighting historical presentation acceptance.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C05"
+      ],
+      "limitations": [
+        "Predates explicit keyword mode. It is not a keyword-result screenshot or proof of passage entailment."
+      ]
+    },
+    {
+      "id": "filing-evidence-record",
+      "repository_relative_path": "docs/answer-presentation-verification.md",
+      "sha256": "abaf00eb58d04b2469e8f69be1ac03c9a355671d0416ecc167c6a1d45b9a3324",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "864b7ceaacad566448a6445a2448f2db3d06a227",
+      "worktree_sha256": "abaf00eb58d04b2469e8f69be1ac03c9a355671d0416ecc167c6a1d45b9a3324",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "UNKNOWN",
+      "original_classification": "PASS",
+      "original_scope": "Earlier actual browser/local-HTTP acceptance checked selected-filing passages, disclosures and source links.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C04",
+        "C05"
+      ],
+      "limitations": [
+        "Earlier selected-filing presentation acceptance only. Not keyword browser acceptance or a new retrieval run."
+      ]
+    },
+    {
+      "id": "keyword-ui-source",
+      "repository_relative_path": "frontend/components/filing-research.tsx",
+      "sha256": "6bd804f90a420e8c27efd211f49fe96f85775bf3e3925020f49a2a9cfce9c908",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "2f91a13fb5c8f7626115eda84d094208ac56879b",
+      "worktree_sha256": "7b444a730798e91e96b469397d97a098323b30d2e76154395eb88d5af9593291",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "HEAD implements an explicit selected-filing keyword mode and honest stored-match disclosure.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C06"
+      ],
+      "limitations": [
+        "Implementation only. Keyword browser/live acceptance remains NOT TESTED. Stored matches are not digest-revalidated evidence or complete filing coverage."
+      ]
+    },
+    {
+      "id": "keyword-api-source",
+      "repository_relative_path": "frontend/lib/finlens-api.ts",
+      "sha256": "5b5f9cbb95cc0b1a546b3f936690e709ca131de396fbe53de854199d4aedc67f",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "c965c0a0f3879a57574f61dfa4057649e95d13c3",
+      "worktree_sha256": "3b435cc7598341e1925c4116285364beda3cb70729fd185430d5062d2144be3f",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "HEAD implements keyword source preflight, exact pin/identity response checks and bounded requests.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C06"
+      ],
+      "limitations": [
+        "Implementation only. Response consistency checks do not validate passage digests. A client abort or timeout does not prove SQL cancellation."
+      ]
+    },
+    {
+      "id": "keyword-matching-source",
+      "repository_relative_path": "backend/app/filing_search_service.py",
+      "sha256": "88b0b980cca95f6e7c328d4cef24d7241fe1bfd6c68446de8702a3013e39eac6",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "e3a58b7b88df3161cc2df71ced9fa38b9d831818",
+      "worktree_sha256": "153a60b2e0c6ae5b961de7cb1e4d9796586afefca90170a355a3fedc139afe99",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "Stored keyword ranking counts case-insensitive substrings within a selected accession.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C06"
+      ],
+      "limitations": [
+        "Implementation only. Case-insensitive substrings in stored selected-filing chunks; neither exact-phrase nor semantic retrieval. No database access."
+      ]
+    },
+    {
+      "id": "keyword-backend-bridge-tests",
+      "repository_relative_path": "backend/tests/test_bounded_research.py",
+      "sha256": "30c0f417327404bc394aa92c8755d8cc1a32232f24a0529654bcbc02cde5d172",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "044018cbca5e552516d6426ff53abc4907ec1f9b",
+      "worktree_sha256": "246c150ca1b9f5636dbdabd1297846cccfff84254208a9ade8e5742a18adfa5f",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "Committed tests define real serialization-to-client checks using injected synthetic sessions and forbidden-work sentinels.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C07"
+      ],
+      "limitations": [
+        "Test definitions are inspected as source only. Synthetic test inputs are not SEC evidence; no tests executed here."
+      ]
+    },
+    {
+      "id": "keyword-mounted-tests",
+      "repository_relative_path": "frontend/tests/research-interactions.test.mjs",
+      "sha256": "56f736a52915c65a379ec6ecf76e8f59f33d7ad5e9eb03b3e0e0fdc535c0ccd0",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "1db9e5c125fa99a11452d070dc75b0024e33144f",
+      "worktree_sha256": "c887cda7d7b3348935b88e9ae94475194a21701e5a64e6ce30321146aac37e26",
+      "worktree_binding": "CRLF_TO_LF_ONLY",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "Committed mounted cases cover keyword generation ownership, stale results and retry focus.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C07"
+      ],
+      "limitations": [
+        "Mounted interaction definitions are source only, not browser acceptance; no tests executed here."
+      ]
+    },
+    {
+      "id": "keyword-offline-record",
+      "repository_relative_path": "docs/exec-plans/active/2026-10-21-rel-lex-01-keyword-search.md",
+      "sha256": "918695ad96d4b524e118d7cf58b981fa2d0ce80ef48cd2e55b0cfbe4120079a4",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "b9f1a15b09973b5592916729128e686293be00a8",
+      "worktree_sha256": "918695ad96d4b524e118d7cf58b981fa2d0ce80ef48cd2e55b0cfbe4120079a4",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "PASS",
+      "original_scope": "Recorded corrected implementation/offline verification only.",
+      "evidence_purpose": "RECORDED OFFLINE CHECKS ONLY",
+      "supports_claims": [
+        "C07"
+      ],
+      "limitations": [
+        "Historical recorded offline counts were not rerun. Initial independent FAIL and later corrected offline PASS retain their scopes.",
+        "Pending-review wording is historical; the original manifest transcribes later coordinator attestation. Separate original review evidence is MISSING; attestation is not a report or browser acceptance."
+      ]
+    },
+    {
+      "id": "risk-comparison-source",
+      "repository_relative_path": "frontend/components/sec-risk-comparison.tsx",
+      "sha256": "4983bde96cbe95927d73d21566797a52807d265d8099d45d252edf6a4382bc40",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "d1fd4e8aa8dbf34485ba539090b2be61a7e5815f",
+      "worktree_sha256": "4983bde96cbe95927d73d21566797a52807d265d8099d45d252edf6a4382bc40",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "HEAD integrates independent issuer/pin chains and candidate SEC passage comparison.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C08"
+      ],
+      "limitations": [
+        "Source inspection only. No comparative severity score or period alignment; no current prepared-data/browser acceptance."
+      ]
+    },
+    {
+      "id": "risk-comparison-record",
+      "repository_relative_path": "docs/exec-plans/active/2026-10-20-sec-risk-cc01.md",
+      "sha256": "041593663df00105a5b8de03b6186907a2810a8dbc51b90d592bb511af5b9769",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "7057c4840e3e2c4f326606b445cb9cf5eb39c94b",
+      "worktree_sha256": "041593663df00105a5b8de03b6186907a2810a8dbc51b90d592bb511af5b9769",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "PASS WITH CONDITIONS",
+      "original_scope": "Original increment PASS WITH CONDITIONS; six synthetic browser cases passed, and later focused offline repair recorded PASS separately.",
+      "evidence_purpose": "DESIGN AND HISTORICAL LIMITED CHECKS ONLY",
+      "supports_claims": [
+        "C08",
+        "C09"
+      ],
+      "limitations": [
+        "Original six synthetic browser cases predate the later focus repair. Later offline repair PASS does not establish repaired browser acceptance.",
+        "The original strict QA teardown FAIL remains separate and unchanged. This design record is not a replacement capture."
+      ]
+    },
+    {
+      "id": "ml-static-source",
+      "repository_relative_path": "backend/scripts/news_sentiment_demo.html",
+      "sha256": "679a0e59e2a3e6848931e7724ec5747c7c9b0da3847e5901a4d6007df9190717",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "d9c871edfe516098d06b82d09c2565645c42a66e",
+      "worktree_sha256": "679a0e59e2a3e6848931e7724ec5747c7c9b0da3847e5901a4d6007df9190717",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "PASS",
+      "original_scope": "REL-SHOW-01D static historical analysis only; source bytes bound by SHA-256.",
+      "evidence_purpose": "PLAIN-TEXT HISTORICAL TABLES ONLY",
+      "supports_claims": [
+        "C10"
+      ],
+      "limitations": [
+        "Plain-text-only table reference. Do not execute HTML or its local API polling script.",
+        "Historical REL-SHOW-01D PASS is limited to the prior JavaScript-disabled static view; accepted captures/report chain are excluded, not reconstructed. No inference, SEC suitability or calibrated confidence claim."
+      ]
+    },
+    {
+      "id": "ml-frozen-aggregate",
+      "repository_relative_path": "docs/news-sentiment-baseline.md",
+      "sha256": "ab4a37d4d9422044a267c453e6aa05b4b06ca08de6ca159157a86c3499362452",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "c8e519ac8c7f97c19458fcad36a1562ae4a8728d",
+      "worktree_sha256": "ab4a37d4d9422044a267c453e6aa05b4b06ca08de6ca159157a86c3499362452",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "PASS",
+      "original_scope": "Recorded 2026-10-19 historical offline PhraseBank evaluation.",
+      "evidence_purpose": "RECORDED HISTORICAL EVIDENCE ONLY",
+      "supports_claims": [
+        "C10"
+      ],
+      "limitations": [
+        "Historical 2026-10-19 experiment only, not a new evaluation or live inference. One held-out corpus partition does not establish generalization.",
+        "Private nonprofit academic-use limits, attribution and CC BY-NC-SA 3.0 Unported remain; no corpus sentences, row-linked predictions, weights, public redistribution or online service authorized."
+      ]
+    },
+    {
+      "id": "runtime-boundary-runbook",
+      "repository_relative_path": "docs/local-demo.md",
+      "sha256": "30739789fd662c5cee08bdb9d8f2498cbdf49c00a585e59eca992ba8829da151",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "62706c1bf9577ea0a1657d50a6e53f730e09a2a1",
+      "worktree_sha256": "30739789fd662c5cee08bdb9d8f2498cbdf49c00a585e59eca992ba8829da151",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": "3d3a245a1919a255ae510b4bfe51b5421a476eba",
+      "original_classification": "NOT APPLICABLE",
+      "original_scope": "Prepared-data startup, DB reads, encoder and browser acceptance require separate authorization; DEP-01A3 remains blocked.",
+      "evidence_purpose": "SOURCE INSPECTION ONLY",
+      "supports_claims": [
+        "C11"
+      ],
+      "limitations": [
+        "Text only; no startup commands executed. Readiness markers do not establish chosen scenario acceptance. DEP-01A3 remains BLOCKED."
+      ]
+    },
+    {
+      "id": "historical-showcase-script",
+      "repository_relative_path": "docs/showcase/university-showcase.md",
+      "sha256": "6a0f8b9b8dc704cad8cb7d1ab8ba178592050277d7a236c75a38ae623ec6aaef",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "73a29fcd08381960854c3235eabd860b59df916d",
+      "worktree_sha256": "6a0f8b9b8dc704cad8cb7d1ab8ba178592050277d7a236c75a38ae623ec6aaef",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": null,
+      "original_classification": "FAIL",
+      "original_scope": "REL-DEMO-02 execution-scope FAIL; content CONDITIONAL; full portable showcase BLOCKED; live execution NO-GO.",
+      "evidence_purpose": "HISTORICAL CLASSIFICATION WITNESS ONLY",
+      "supports_claims": [
+        "C09",
+        "C11",
+        "C12"
+      ],
+      "limitations": [
+        "Historical package record only. Its execution-scope FAIL, content CONDITIONAL, full portable showcase BLOCKED and new live execution NO-GO remain unchanged."
+      ]
+    },
+    {
+      "id": "historical-evidence-manifest",
+      "repository_relative_path": "docs/showcase/evidence-manifest.json",
+      "sha256": "457bb3acfed5eab81bd7249bee5453241190d254776b644a9468aaf761a87458",
+      "sha256_scope": "Canonical Git blob bytes at source_git_revision; not a tested-runtime attestation.",
+      "source_git_revision": "f363dab0d06f7d777f6a072317bdaeb721b6fbe5",
+      "git_blob_oid": "005add5502ae1a1a37beb45b5a848295a96ecee3",
+      "worktree_sha256": "457bb3acfed5eab81bd7249bee5453241190d254776b644a9468aaf761a87458",
+      "worktree_binding": "EXACT",
+      "original_recorded_source_revision": null,
+      "original_classification": "FAIL",
+      "original_scope": "REL-DEMO-02 historical inventory and original limited acceptance classifications; metadata witness only.",
+      "evidence_purpose": "HISTORICAL CLASSIFICATION WITNESS ONLY",
+      "supports_claims": [
+        "C07",
+        "C09",
+        "C10",
+        "C12"
+      ],
+      "limitations": [
+        "Historical metadata witness only. Excluded raw files and embedded images were not accessed and their current availability was not checked.",
+        "Historical package review fields and later coordinator-reported review wording are not silently reconciled into independent review evidence. No current acceptance upgrade."
+      ]
+    }
+  ],
+  "exclusions": [
+    {
+      "original_artifact_id": "keyword-astra-coordinator",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/13",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "MISSING",
+      "original_classification": "PASS",
+      "original_source_revision": "UNKNOWN",
+      "reason": "Separate original review report MISSING. The historical manifest transcribes coordinator attestation only; it is not replacement review evidence.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "risk-browser-report",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/16",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "UNKNOWN",
+      "reason": "Ignored local report or embedded capture is not portable with the repository. Do not copy, extract, reconstruct or substitute it.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "ml-static-report",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/19",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "reason": "External temporary historical evidence is not portable with the repository. No copying, reconstruction or current availability check.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "ml-static-summary",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/20",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "reason": "External temporary historical evidence is not portable with the repository. No copying, reconstruction or current availability check.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "ml-desktop-capture",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/21",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "reason": "External temporary historical evidence is not portable with the repository. No copying, reconstruction or current availability check.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "ml-mobile-capture",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/22",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "reason": "External temporary historical evidence is not portable with the repository. No copying, reconstruction or current availability check.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "qa-risk-original-fail",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/23",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "FAIL",
+      "original_source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "reason": "External temporary historical evidence is not portable with the repository. No copying, reconstruction or current availability check.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "qa-risk-teardown-fail",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/24",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "FAIL",
+      "original_source_revision": "bc0a35f8b97fc998a44280a9594772ad6d880117",
+      "reason": "External temporary historical evidence is not portable with the repository. No copying, reconstruction or current availability check.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "risk-desktop-layout",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/26",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "UNKNOWN",
+      "reason": "Ignored local report or embedded capture is not portable with the repository. Do not copy, extract, reconstruct or substitute it.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    },
+    {
+      "original_artifact_id": "risk-mobile-layout",
+      "original_inventory_path": "docs/showcase/evidence-manifest.json",
+      "original_inventory_pointer": "/artifacts/27",
+      "original_portability": "NON-PORTABLE",
+      "availability_at_original_preparation": "AVAILABLE",
+      "original_classification": "PASS",
+      "original_source_revision": "UNKNOWN",
+      "reason": "Ignored local report or embedded capture is not portable with the repository. Do not copy, extract, reconstruct or substitute it.",
+      "current_availability": "NOT CHECKED",
+      "replacement_artifact_id": null
+    }
+  ]
+}
