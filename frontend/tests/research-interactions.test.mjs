@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import ts from 'typescript';
 import React, { act } from 'react';
 import { JSDOM } from 'jsdom';
@@ -413,8 +414,13 @@ function summary(ticker, value, kind = 'quarter') {
     metrics: { revenue }, selection_policy: 'test fixture' };
 }
 function history(ticker, value, metric = 'revenue') {
-  return { ticker, company_cik: companies.find(company => company.ticker === ticker).cik, metric, unit: 'USD', requested_period: 'quarter', status: 'available', reason: null,
-    history: [point(ticker, value, metric)] };
+  // History fixtures mirror normalized backend units; source units stay original.
+  const unit = ['revenue_growth_yoy', 'gross_margin', 'operating_margin', 'net_margin'].includes(metric) ? 'ratio'
+    : metric === 'diluted_eps' ? 'USD/share' : 'USD';
+  const observation = point(ticker, value, metric); observation.unit = unit;
+  if (metric === 'diluted_eps') observation.provenance[0].unit = 'USD/shares';
+  return { ticker, company_cik: companies.find(company => company.ticker === ticker).cik, metric, unit, requested_period: 'quarter', status: 'available', reason: null,
+    history: [observation] };
 }
 function context(ticker, query = 'revenue growth') {
   const source = filing(ticker);
@@ -2349,10 +2355,10 @@ test('FD-01 history availability is independent and missing/not-applicable reaso
   const available = discoveryHistory('gross_profit');
   const missing = { ...available.history[0], value: null, status: 'unavailable', reason: 'No direct-quarter source; annual data is not substituted.' };
   const inapplicable = { ...missing, status: 'not_applicable', reason: 'Not applicable for this filing basis.' };
-  available.history.push(missing, inapplicable);
+  available.history.push(missing);
   await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_profit')), available);
-  assert.equal(app.trends().querySelectorAll('tbody tr').length, 3);
-  assert.deepEqual([...app.trends().querySelectorAll('tbody .metric-reason')].map(item => item.textContent), [missing.reason, inapplicable.reason]);
+  assert.equal(app.trends().querySelectorAll('tbody tr').length, 2);
+  assert.deepEqual([...app.trends().querySelectorAll('tbody .metric-reason')].map(item => item.textContent), [missing.reason]);
   assert.match(app.trends().textContent, /\$0/);
   await app.change(app.select('Metric'), 'gross_margin');
   await app.release(app.request(companyPath('AAPL', 'financials/metrics/gross_margin')), { ...discoveryHistory('gross_margin'), history: [], status: 'not_applicable', reason: inapplicable.reason });
@@ -3005,17 +3011,392 @@ for (const strict of [false, true]) test(`UX-01B retry publication mismatch wait
 
 for (const status of ['unavailable', 'not_applicable']) for (const afterRetry of [false, true]) {
   test(`UX-01B successful ${status} history has no retry${afterRetry ? ' after recovery' : ''}`, async ctx => {
-    const app = await mount(ctx), path = companyPath('AAPL', 'financials/metrics/revenue');
+    const app = await mount(ctx), metric = status === 'not_applicable' ? 'gross_profit' : 'revenue';
+    if (metric !== 'revenue') await app.change(app.select('Metric'), metric);
+    const path = companyPath('AAPL', `financials/metrics/${metric}`);
     if (afterRetry) {
       await app.release(app.request(path), { detail: 'Synthetic outage' }, 503);
       await retryTwice(app, 'Retry history');
     }
     const reason = 'Synthetic successful history availability reason.';
-    await app.release(app.request(path), { ...history('AAPL', null), history: [], status, reason });
+    await app.release(app.request(path), { ...history('AAPL', null, metric), history: [], status, reason });
     assert.ok(app.trends().textContent.includes(reason));
     assert.ok(!app.trends().querySelector('[role="alert"]'));
     assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
     assert.ok(![...app.trends().querySelectorAll('button')].some(button => button.textContent === 'Retry history'));
+  });
+}
+
+// REL-CORE-01B: reject malformed successful history before it reaches React render.
+// Before implementation, the two object-history cases below failed at doesNotReject
+// with TypeError: history.history.map is not a function (0 passed, 2 failed).
+// Command: node --test --test-reporter=spec --test-name-pattern='REL-CORE-01B object history' tests/research-interactions.test.mjs
+for (const strict of [false, true]) test(`REL-CORE-01B object history is recoverable strict ${strict}`, async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: 0, strict });
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  const snapshot = app.snapshot().querySelector('.metric-grid'), editor = app.host.querySelector('textarea');
+  const path = companyPath('AAPL', 'financials/metrics/revenue');
+  await assert.doesNotReject(
+    app.release(app.request(path), { ...history('AAPL', '987654321'), history: {} }),
+    'Malformed history must enter the history error path without a React render exception',
+  );
+  assert.ok(app.trends().querySelector('[role="alert"]'));
+  assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+  assert.equal(app.trends().querySelector('tbody'), null);
+  assert.match(app.snapshot().textContent, /\$1B/);
+  assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+  const count = app.requests.length;
+  await retryTwice(app, 'Retry history');
+  assert.equal(app.requests.length, count + 1);
+  const retry = app.request(path);
+  assert.equal(retry.init.headers['X-FinLens-Data-Version'], '0');
+  await app.release(retry, history('AAPL', '300000000'));
+  assert.match(app.trends().querySelector('table').textContent, /\$300M/);
+  assert.equal(app.snapshot().querySelector('.metric-grid'), snapshot);
+  assert.equal(app.host.querySelector('textarea'), editor);
+  assert.ok(app.requests.slice(count).every(request => request.path === path));
+  await app.release(await app.search('AAPL'), context('AAPL'));
+  assert.match(app.evidence().join(''), /AAPL test evidence/);
+});
+
+function relCoreHistory(ticker = 'AAPL', metric = 'net_income') {
+  const result = history(ticker, '-123456789.0123', metric), observation = result.history[0];
+  observation.provenance[0].original_concept = 'RELCORE source sentinel';
+  observation.alternatives = [{ ...observation.provenance[0], fact_id: 2, value: '1.234E+8' }];
+  observation.inputs = [{ role: 'reported_value', metric, value: observation.value, unit: observation.unit,
+    fact_ids: [1], period: { ...observation.period } }];
+  observation.formula = 'reported_value';
+  return result;
+}
+
+const relCoreSemanticFailures = [
+  ['P2-1 revenue 100 as 10000 percent', 'revenue', value => { value.unit = 'ratio'; value.history[0].unit = 'ratio'; value.history[0].value = '100'; }],
+  ['P2-1 normalized EPS source unit', 'diluted_eps', value => { value.unit = 'USD/shares'; value.history[0].unit = 'USD/shares'; }],
+  ['P2-2 annual in a direct quarter', 'revenue', value => { value.history[0].period = point('AAPL', '100', 'revenue', 'annual').period; }],
+  ['P2-2 reversed window', 'revenue', value => { value.history[0].period.start = '2025-04-01'; }],
+  ['P2-2 duration without start', 'revenue', value => { value.history[0].period.start = null; }],
+  ['P2-2 mislabeled annual duration', 'revenue', value => { value.history[0].period.end = '2025-12-31'; }],
+  ['P2-2 instant with start', 'total_assets', value => { value.requested_period = 'instant'; value.history[0].period.kind = 'instant'; }],
+  ['P2-3 available null value', 'revenue', value => { value.history[0].value = null; }],
+  ['P2-3 available null period', 'revenue', value => { value.history[0].period = null; }],
+  ['P2-3 unavailable with value', 'revenue', value => { value.history[0].status = 'unavailable'; value.status = 'unavailable'; }],
+  ['P2-3 not applicable with available observation', 'gross_profit', value => { value.status = 'not_applicable'; }],
+  ['P2-3 not applicable observation with value', 'gross_profit', value => { value.status = value.history[0].status = 'not_applicable'; }],
+  ['P2-3 unavailable with available observation', 'revenue', value => { value.status = 'unavailable'; }],
+  ['P2-3 available empty', 'revenue', value => { value.history = []; }],
+  ['P3-4 thirteen observations', 'revenue', value => { value.history = Array.from({ length: 13 }, () => structuredClone(value.history[0])); }],
+];
+// Initial pre-correction semantic run: 1 passed (EPS negative control), 11 failed.
+// Revenue 100 rendered as 10,000%; period/status/limit assertions found no alert.
+for (const [label, metric, corrupt] of relCoreSemanticFailures) test(`REL-CORE-01B semantic ${label}`, async ctx => {
+  const app = await mount(ctx);
+  if (metric !== 'revenue') await app.change(app.select('Metric'), metric);
+  const payload = relCoreHistory('AAPL', metric); corrupt(payload);
+  await assert.doesNotReject(app.release(app.request(companyPath('AAPL', `financials/metrics/${metric}`)), payload));
+  if (label.startsWith('P2-1 revenue')) assert.doesNotMatch(app.trends().textContent, /10,000%/, 'Revenue must never render as 10,000%');
+  assert.ok(app.trends().querySelector('[role="alert"]'), `${label} must reject the whole response`);
+  assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+  assert.equal(app.trends().querySelector('table,.source-record'), null);
+  const count = app.requests.length; await retryTwice(app, 'Retry history');
+  assert.equal(app.requests.length, count + 1);
+  assert.equal(app.request(companyPath('AAPL', `financials/metrics/${metric}`)).init.headers['X-FinLens-Data-Version'], '0');
+});
+
+const relCoreMalformed = [
+  ['missing history', value => { delete value.history; }],
+  ['null history', value => { value.history = null; }],
+  ['object history', value => { value.history = {}; }],
+  ['null entry', value => { value.history[0] = null; }],
+  ['array entry', value => { value.history[0] = []; }],
+  ['primitive entry', value => { value.history[0] = 'not an observation'; }],
+  ...['provenance', 'alternatives', 'inputs'].flatMap(field => [
+    [`missing ${field}`, value => { delete value.history[0][field]; }],
+    [`null ${field}`, value => { value.history[0][field] = null; }],
+    [`object ${field}`, value => { value.history[0][field] = {}; }],
+    [`null ${field} entry`, value => { value.history[0][field] = [null]; }],
+  ]),
+  ['envelope status', value => { value.status = 'estimated'; }],
+  ['envelope reason', value => { value.reason = {}; }],
+  ['envelope unit', value => { value.unit = 'shares'; }],
+  ['observation metric', value => { value.history[0].metric = 'revenue'; }],
+  ['observation unit', value => { value.history[0].unit = 'ratio'; }],
+  ['observation status', value => { value.history[0].status = 'estimated'; }],
+  ...[{}, '', 'NaN', 'Infinity', '1e999', '0x10'].map(invalid => [
+    `numeric value ${JSON.stringify(invalid)}`, value => { value.history[0].value = invalid; },
+  ]),
+  ...['reason', 'formula', 'revenue_basis'].map(field => [
+    `observation ${field}`, value => { value.history[0][field] = {}; },
+  ]),
+  ['period object', value => { value.history[0].period = []; }],
+  ['period kind', value => { value.history[0].period.kind = 'toString'; }],
+  ['period start', value => { value.history[0].period.start = '2025-02-30'; }],
+  ['period end', value => { value.history[0].period.end = {}; }],
+  ['period fiscal year', value => { value.history[0].period.fiscal_year = {}; }],
+  ['period fiscal label', value => { value.history[0].period.fiscal_period = {}; }],
+  ...['original_concept', 'form', 'accession_number', 'sec_url', 'source_fiscal_period', 'unit'].map(field => [
+    `source ${field}`, value => { value.history[0].provenance[0][field] = {}; },
+  ]),
+  ['source fact ID', value => { value.history[0].provenance[0].fact_id = {}; }],
+  ['source value', value => { value.history[0].provenance[0].value = 'not a decimal'; }],
+  ['source filed date', value => { value.history[0].provenance[0].filed = '2025-02-30'; }],
+  ['source start', value => { value.history[0].provenance[0].period_start = {}; }],
+  ['source end', value => { value.history[0].provenance[0].period_end = null; }],
+  ['source fiscal year', value => { value.history[0].provenance[0].source_fiscal_year = {}; }],
+  ['source company', value => { value.history[0].provenance[0].company_cik = companies[1].cik; }],
+  ['alternative field', value => { value.history[0].alternatives[0].original_concept = {}; }],
+  ...['role', 'metric', 'value', 'unit', 'revenue_basis'].map(field => [
+    `input ${field}`, value => { value.history[0].inputs[0][field] = {}; },
+  ]),
+  ['input fact IDs', value => { value.history[0].inputs[0].fact_ids = {}; }],
+  ['input fact ID entry', value => { value.history[0].inputs[0].fact_ids = [{}]; }],
+  ['input period', value => { value.history[0].inputs[0].period = {}; }],
+  ['comparability object', value => { value.comparability = []; }],
+  ['comparability basis', value => { value.comparability = { value_basis: {}, status: 'unverified', reason: 'fixture' }; }],
+  ['comparability status', value => { value.comparability = { value_basis: 'reported_as_filed', status: 'verified', reason: 'fixture' }; }],
+  ['comparability reason', value => { value.comparability = { value_basis: 'reported_as_filed', status: 'unverified', reason: {} }; }],
+];
+for (const [label, corrupt] of relCoreMalformed) test(`REL-CORE-01B rejects ${label} as a whole`, async ctx => {
+  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
+  const snapshot = app.snapshot().querySelector('.metric-grid'), editor = app.host.querySelector('textarea');
+  await app.change(app.select('Metric'), 'net_income');
+  const payload = relCoreHistory();
+  // A valid sibling observation must not survive by filtering the malformed one.
+  payload.history.push(point('AAPL', '987654321', 'net_income'));
+  corrupt(payload);
+  const count = app.requests.length;
+  await assert.doesNotReject(app.release(app.request(companyPath('AAPL', 'financials/metrics/net_income')), payload));
+  assert.match(app.trends().querySelector('[role="alert"]').textContent, /Financial history could not be verified/);
+  assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+  assert.equal(app.trends().querySelector('table,.source-record'), null);
+  assert.doesNotMatch(app.trends().textContent, /987654321|RELCORE source sentinel/);
+  assert.equal([...app.trends().querySelectorAll('button')].find(button => button.textContent === 'Retry history').disabled, false);
+  assert.equal(app.requests.length, count, 'Malformed success never retries automatically');
+  assert.equal(app.snapshot().querySelector('.metric-grid'), snapshot);
+  assert.equal(app.host.querySelector('textarea'), editor);
+  assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+});
+
+for (const strict of [false, true]) for (const state of ['available', 'unavailable', 'not_applicable', 'empty', 'mixed']) {
+  test(`REL-CORE-01B preserves valid ${state} response strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const metric = state === 'not_applicable' ? 'gross_profit' : 'revenue';
+    if (metric !== 'revenue') await app.change(app.select('Metric'), metric);
+    const payload = relCoreHistory('AAPL', metric), observation = payload.history[0];
+    delete observation.revenue_basis;
+    delete observation.inputs[0].period; delete observation.inputs[0].revenue_basis;
+    observation.period.fiscal_year = null; observation.period.fiscal_period = null;
+    observation.provenance[0].source_fiscal_year = null; observation.provenance[0].source_fiscal_period = null;
+    if (state !== 'available') {
+      payload.status = state === 'empty' ? 'unavailable' : state === 'mixed' ? 'available' : state;
+      payload.reason = 'A valid unavailable history explanation.';
+      if (state === 'empty') payload.history = [];
+      else if (state === 'mixed') {
+        // Preserve unavailable rows and their source alternatives alongside an
+        // available observation, so their disclosures are actually rendered.
+        const missing = structuredClone(observation);
+        missing.status = 'unavailable'; missing.value = null; missing.period = null;
+        missing.reason = 'This observation is legitimately unavailable.';
+        missing.provenance = []; missing.inputs = [];
+        payload.history.push(missing);
+      } else {
+        observation.status = state; observation.value = null; observation.period = null;
+        observation.reason = null; observation.provenance = []; observation.inputs = [];
+      }
+    } else payload.comparability = { value_basis: 'reported_as_filed', status: 'unverified', reason: 'Existing reported-value limitation.' };
+    const original = structuredClone(payload);
+    await assert.doesNotReject(async () => { await act(async () => app.deliverBeforeCommit(app.request(companyPath('AAPL', `financials/metrics/${metric}`)), payload)); });
+    assert.deepEqual(payload, original, 'Validation must not mutate numbers, periods or provenance');
+    assert.equal(app.trends().querySelector('[role="alert"]'), null);
+    assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false');
+    assert.ok(![...app.trends().querySelectorAll('button')].some(button => button.textContent === 'Retry history'));
+    if (['empty', 'unavailable', 'not_applicable'].includes(state)) assert.match(app.trends().textContent, /A valid unavailable history explanation/);
+    else {
+      assert.match(app.trends().textContent, /-123456789\.0123 USD/);
+      assert.match(app.trends().textContent, /1\.234E\+8 USD/);
+      assert.equal(app.trends().querySelector('.source-record a').href, filing('AAPL').sec_url);
+      if (state === 'available') assert.match(app.trends().textContent, /Reported as filed · comparability unverified/);
+      else assert.match(app.trends().textContent, /This observation is legitimately unavailable/);
+    }
+  });
+}
+
+for (const [metric, unit, exact] of [
+  ['revenue', 'USD', '9007199254740993.012345'],
+  ['gross_margin', 'ratio', '-1.2345E-7'],
+  ['diluted_eps', 'USD/share', '0'],
+]) test(`REL-CORE-01B preserves ${unit} exact values without coercion`, async ctx => {
+  const app = await mount(ctx);
+  if (metric !== 'revenue') await app.change(app.select('Metric'), metric);
+  const payload = relCoreHistory('AAPL', metric);
+  payload.unit = unit; payload.history[0].unit = unit; payload.history[0].value = exact;
+  const original = structuredClone(payload);
+  await act(async () => app.deliverBeforeCommit(app.request(companyPath('AAPL', `financials/metrics/${metric}`)), payload));
+  assert.deepEqual(payload, original);
+  assert.equal(app.trends().querySelector('[role="alert"]'), null);
+  assert.ok(app.trends().textContent.includes(`Exact API value: ${exact} ${unit}`));
+  assert.match(app.trends().textContent, /RELCORE source sentinel/);
+});
+
+function relCoreBackendHistories() {
+  const backend = fileURLToPath(new URL('../../backend/', import.meta.url));
+  const python = ['.venv/Scripts/python.exe', '.venv/bin/python'].map(path => fileURLToPath(new URL(`../../backend/${path}`, import.meta.url))).find(existsSync) ?? 'python';
+  const result = spawnSync(python, ['-B', '-c', `
+import json, sys, types
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
+from types import SimpleNamespace
+
+def forbidden(*args, **kwargs):
+    raise AssertionError('Database, network and private configuration access forbidden')
+
+def guard(event, args):
+    if event == 'open' and isinstance(args[0], (str, bytes)) and Path(args[0]).name.lower() == '.env':
+        forbidden()
+    if event in ('socket.connect', 'socket.getaddrinfo'):
+        forbidden()
+sys.addaudithook(guard)
+import dotenv
+dotenv.load_dotenv = lambda *args, **kwargs: False
+import sqlalchemy
+from sqlalchemy.orm import DeclarativeBase, Session
+from sqlalchemy.engine import Engine
+sqlalchemy.create_engine = Engine.connect = Engine.raw_connection = Session.execute = forbidden
+# Real ORM declarations need a Base, but must never import database.py, which
+# initializes engines. FinancialMetrics receives ordinary in-memory objects.
+class Base(DeclarativeBase):
+    pass
+database = types.ModuleType('app.database')
+database.Base = Base
+sys.modules['app.database'] = database
+from app.financial_metrics_service import FinancialMetrics
+from app.financial_metric_registry import METRICS
+from app.sec_parser import classify_period
+company = SimpleNamespace(ticker='AAPL', cik='0000320193')
+profiles = ('normal', 'empty', 'bank', 'ambiguous', 'negative', 'zero')
+records = []
+for profile in profiles:
+    facts = []
+    if profile != 'empty':
+        for year in (2023, 2024, 2025):
+            for kind, end in (('quarter', date(year, 3, 31)), ('half_year', date(year, 6, 30)),
+                              ('nine_months', date(year, 9, 30)), ('annual', date(year, 12, 31))):
+                for name, definition in METRICS.items():
+                    if definition.kind == 'derived':
+                        continue
+                    concept = ('RevenuesNetOfInterestExpense' if profile == 'bank' else
+                               'RevenueFromContractWithCustomerExcludingAssessedTax' if profile == 'ambiguous' else
+                               'Revenues') if name == 'revenue' else definition.concepts[0]
+                    concepts = (concept, 'SalesRevenueNet') if profile == 'ambiguous' and name == 'revenue' else (concept,)
+                    for concept in concepts:
+                        amount = {'revenue': '100', 'gross_profit': '40', 'operating_income': '20',
+                                  'net_income': '10', 'diluted_eps': '1.23456789', 'operating_cash_flow': '25',
+                                  'capital_expenditures': '5'}.get(name, '123456789.012345')
+                        amount = Decimal('0') if profile == 'zero' else Decimal(amount)
+                        if profile == 'negative' and name != 'capital_expenditures':
+                            amount = -amount
+                        start = None if definition.kind == 'instant' else date(year, 1, 1)
+                        facts.append(SimpleNamespace(id=len(facts)+1, company_cik=company.cik, metric=concept,
+                            value=amount, unit=definition.source_unit, period_start=start, period_end=end,
+                            period_type='instant' if start is None else kind, fiscal_year=year, fiscal_period=None,
+                            form='10-K' if kind == 'annual' else '10-Q', filed=end+timedelta(days=30),
+                            accession_number=f'0000320193-{year % 100:02d}-000001', frame=None,
+                            source='SEC Company Facts API: '+concept, created_at=datetime(2026, 1, 1)))
+    model = FinancialMetrics(company, facts)
+    for name, definition in METRICS.items():
+        for kind in (('instant',) if definition.kind == 'instant' else ('quarter', 'annual', 'half_year', 'nine_months')):
+            response = model.history(name, kind, limit=12).model_dump(mode='json')
+            records.append({'profile': profile, 'response': response})
+assert len(records) == 306
+print(json.dumps({'records': records, 'units': {name: value.unit for name, value in METRICS.items()},
+                  'source_units': {name: value.source_unit for name, value in METRICS.items()},
+                  'duration_boundaries': {str(days): classify_period('2025-01-01', (date(2025, 1, 1)+timedelta(days=days-1)).isoformat())
+                    for days in (74, 75, 105, 106, 164, 165, 200, 201, 244, 245, 295, 296, 329, 330, 390, 391)}}))
+`], { cwd: backend, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024,
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', FINLENS_SERVER_PROFILE: 'development' } });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  return JSON.parse(result.stdout);
+}
+
+test('REL-CORE-01B semantic accepts 306 real backend serializations with no database or configuration access', async ctx => {
+  const corpus = relCoreBackendHistories(), app = await mount(ctx);
+  assert.equal(corpus.records.length, 306); assert.equal(Object.keys(corpus.units).length, 15);
+  assert.equal(corpus.units.diluted_eps, 'USD/share'); assert.equal(corpus.source_units.diluted_eps, 'USD/shares');
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  for (const { profile, response } of corpus.records) {
+    if (app.select('Metric').value !== response.metric) await app.change(app.select('Metric'), response.metric);
+    if (app.select('History period').value !== response.requested_period) await app.change(app.select('History period'), response.requested_period);
+    const pending = app.request(companyPath('AAPL', `financials/metrics/${response.metric}`), { period: response.requested_period });
+    assert.equal(pending.params.get('limit'), '12'); assert.equal(pending.init.headers['X-FinLens-Data-Version'], '0');
+    const original = structuredClone(response);
+    await act(async () => app.deliverBeforeCommit(pending, response));
+    const label = `${profile} ${response.metric} ${response.requested_period}`;
+    assert.equal(app.trends().querySelector('[role="alert"]'), null, label);
+    assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false', label);
+    assert.equal(Boolean(app.trends().querySelector('table')), response.status === 'available', label);
+    assert.deepEqual(response, original, label);
+    for (const observation of response.history) if (observation.status === 'available') {
+      assert.ok(app.trends().textContent.includes(`Exact API value: ${observation.value} ${observation.unit}`), label);
+    }
+  }
+  // Exercise both edges of the real parser's duration bands, including adjacent
+  // rejected gaps. This checks classification only, without fiscal inference.
+  for (const [days, kind] of Object.entries(corpus.duration_boundaries)) {
+    await app.change(app.select('Metric'), 'net_income'); await app.change(app.select('Metric'), 'revenue');
+    const requested = kind === 'unknown' ? 'quarter' : kind;
+    if (app.select('History period').value !== requested) await app.change(app.select('History period'), requested);
+    const payload = relCoreHistory('AAPL', 'revenue'); payload.requested_period = requested;
+    payload.history[0].period = { ...payload.history[0].period, kind: requested,
+      end: new Date(Date.UTC(2025, 0, Number(days))).toISOString().slice(0, 10) };
+    await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue'), { period: requested }), payload);
+    assert.equal(Boolean(app.trends().querySelector('[role="alert"]')), kind === 'unknown', `${days} inclusive days: ${kind}`);
+  }
+  assert.match(app.snapshot().textContent, /\$1B/);
+  assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+});
+
+for (const strict of [false, true]) test(`REL-CORE-01B semantic accepts twelve observations and uncapped nested sources strict ${strict}`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict }), payload = relCoreHistory('AAPL', 'revenue');
+  payload.history = Array.from({ length: 12 }, () => structuredClone(payload.history[0]));
+  for (const observation of payload.history) {
+    observation.provenance = Array.from({ length: 20 }, (_, index) => ({ ...observation.provenance[0], fact_id: index + 1 }));
+    observation.alternatives = Array.from({ length: 20 }, (_, index) => ({ ...observation.alternatives[0], fact_id: index + 21 }));
+    observation.inputs = Array.from({ length: 20 }, (_, index) => ({ ...observation.inputs[0], role: `operand_${index}` }));
+  }
+  await assert.doesNotReject(app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), payload));
+  assert.equal(app.trends().querySelector('[role="alert"]'), null);
+  assert.equal(app.trends().querySelectorAll('tbody tr').length, 12);
+  assert.equal(app.trends().querySelectorAll('.source-record').length, 12 * 40);
+});
+
+for (const strict of [false, true]) for (const change of ['metric', 'period', 'company', 'unmount']) {
+  test(`REL-CORE-01B malformed retry settlement cannot cross ${change} strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const path = companyPath('AAPL', 'financials/metrics/revenue');
+    await app.release(app.request(path), { ...history('AAPL', '1'), history: {} });
+    await retryTwice(app, 'Retry history'); const old = app.request(path);
+    if (change === 'metric') await app.change(app.select('Metric'), 'net_income');
+    if (change === 'period') await app.change(app.select('History period'), 'annual');
+    if (change === 'company') {
+      await app.change(app.host.querySelector('#company'), 'JPM');
+      await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 0));
+    }
+    if (change === 'unmount') await app.unmount();
+    assert.equal(old.init.signal.aborted, true);
+    const count = app.requests.length;
+    await assert.doesNotReject(app.release(old, { ...history('AAPL', '987654321'), history: {} }));
+    assert.equal(app.requests.length, count);
+    if (change === 'unmount') { assert.equal(app.host.isConnected, false); return; }
+    assert.equal(app.trends().querySelector('[role="alert"]'), null);
+    assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'true');
+    const ticker = change === 'company' ? 'JPM' : 'AAPL', metric = change === 'metric' ? 'net_income' : 'revenue';
+    const period = change === 'period' ? 'annual' : 'quarter';
+    const valid = { ...history(ticker, '300000000', metric), requested_period: period, history: [point(ticker, '300000000', metric, period)] };
+    await app.release(app.request(companyPath(ticker, `financials/metrics/${metric}`), { period }), valid);
+    assert.match(app.trends().querySelector('table').textContent, /\$300M/);
+    assert.doesNotMatch(app.trends().textContent, /987654321/);
   });
 }
 

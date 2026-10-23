@@ -118,6 +118,72 @@ function HistoryView({ data }: { data: MetricHistory }) {
   </>;
 }
 
+// Validate only this history boundary. Preserve the response and server-owned
+// calculations/source selection; malformed observations must never be filtered.
+function validateHistoryResponse(value: unknown, company: Pick<Company, "ticker" | "cik">, metric: string, period: PeriodKind): asserts value is MetricHistory {
+  // Mirror financial_metric_registry.METRICS normalized units, not source units.
+  // The offline serialization regression checks all fifteen backend definitions.
+  const normalizedUnits: Readonly<Record<string, string>> = {
+    revenue: "USD", gross_profit: "USD", operating_income: "USD", net_income: "USD", diluted_eps: "USD/share",
+    cash_and_equivalents: "USD", total_assets: "USD", total_liabilities: "USD", operating_cash_flow: "USD",
+    capital_expenditures: "USD", free_cash_flow: "USD", revenue_growth_yoy: "ratio", gross_margin: "ratio",
+    operating_margin: "ratio", net_margin: "ratio",
+  };
+  const expectedUnit = normalizedUnits[metric];
+  const record = (item: unknown): item is Record<string, unknown> => item !== null && typeof item === "object" && !Array.isArray(item);
+  const nullableText = (item: unknown) => item === null || typeof item === "string";
+  const optionalText = (item: unknown) => item === undefined || typeof item === "string";
+  const nullableInteger = (item: unknown) => item === null || Number.isSafeInteger(item);
+  const decimal = (item: unknown) => typeof item === "string"
+    && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(item) && Number.isFinite(Number(item));
+  const date = (item: unknown): item is string => typeof item === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item)
+    && Number.isFinite(Date.parse(`${item}T00:00:00Z`)) && new Date(`${item}T00:00:00Z`).toISOString().slice(0, 10) === item;
+  const status = (item: unknown) => item === "available" || item === "unavailable" || item === "not_applicable";
+  const financialPeriod = (item: unknown): boolean => {
+    if (!record(item) || !date(item.end) || !nullableInteger(item.fiscal_year) || !nullableText(item.fiscal_period)) return false;
+    if (item.kind === "instant") return item.start === null;
+    if (!date(item.start) || item.start > item.end) return false;
+    // Exact inclusive duration bands from sec_parser.classify_period. Fiscal
+    // labels remain server-owned; no replacement period is inferred here.
+    const days = (Date.parse(item.end) - Date.parse(item.start)) / 86400000 + 1;
+    return item.kind === "quarter" ? days >= 75 && days <= 105
+      : item.kind === "half_year" ? days >= 165 && days <= 200
+        : item.kind === "nine_months" ? days >= 245 && days <= 295
+          : item.kind === "annual" && days >= 330 && days <= 390;
+  };
+  const source = (item: unknown): boolean => record(item) && Number.isSafeInteger(item.fact_id)
+    && typeof item.original_concept === "string" && decimal(item.value) && typeof item.unit === "string"
+    && (item.period_start === null || date(item.period_start)) && date(item.period_end) && date(item.filed)
+    && typeof item.form === "string" && typeof item.accession_number === "string" && typeof item.sec_url === "string"
+    && item.company_cik === company.cik && nullableInteger(item.source_fiscal_year) && nullableText(item.source_fiscal_period);
+  const input = (item: unknown): boolean => record(item) && typeof item.role === "string" && typeof item.metric === "string"
+    && decimal(item.value) && typeof item.unit === "string" && optionalText(item.revenue_basis)
+    && Array.isArray(item.fact_ids) && item.fact_ids.every(id => Number.isSafeInteger(id))
+    && (item.period === undefined || financialPeriod(item.period));
+  const observation = (item: unknown): boolean => record(item) && item.metric === metric && item.unit === expectedUnit && status(item.status)
+    && (item.status === "available" ? decimal(item.value) : item.value === null) && nullableText(item.reason) && nullableText(item.formula)
+    && optionalText(item.revenue_basis) && (item.period === null ? item.status !== "available"
+      : record(item.period) && item.period.kind === period && financialPeriod(item.period))
+    && Array.isArray(item.provenance) && item.provenance.every(source)
+    && Array.isArray(item.alternatives) && item.alternatives.every(source)
+    && Array.isArray(item.inputs) && item.inputs.every(input);
+  if (!record(value) || value.ticker !== company.ticker || value.company_cik !== company.cik
+      || value.metric !== metric || value.requested_period !== period || !Object.hasOwn(normalizedUnits, metric) || value.unit !== expectedUnit
+      || !status(value.status) || !nullableText(value.reason)
+      || !Array.isArray(value.history) || value.history.length > 12 || !value.history.every(observation)
+      // history() uses any available observation, with a bank gross-profit/
+      // gross-margin override whose observations are all not_applicable.
+      || (value.status === "not_applicable"
+        ? !["gross_profit", "gross_margin"].includes(metric) || !value.history.every(point => point.status === "not_applicable")
+        : value.history.some(point => point.status === "not_applicable")
+          || (value.status === "available") !== value.history.some(point => point.status === "available"))
+      || (value.comparability !== undefined && (!record(value.comparability)
+        || value.comparability.value_basis !== "reported_as_filed" || value.comparability.status !== "unverified"
+        || typeof value.comparability.reason !== "string"))) {
+    throw new FinLensApiError("Financial history could not be verified for this company, metric and period. Please retry history.", 502, "INVALID_RESPONSE");
+  }
+}
+
 function MetricHistoryPanel({ company }: { company: Company }) {
   const { version, changed } = useResearchVersion();
   const [loadedVersion, setLoadedVersion] = useState(-1);
@@ -137,9 +203,7 @@ function MetricHistoryPanel({ company }: { company: Company }) {
     historyPending.current = attempt;
     getMetricHistory(company.ticker, metric, period, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
-      if (result.ticker !== company.ticker || result.company_cik !== company.cik || result.metric !== metric || result.requested_period !== period) {
-        throw new Error("Financial history does not match this company, metric and period.");
-      }
+      validateHistoryResponse(result, { ticker: company.ticker, cik: company.cik }, metric, period);
       if (!controller.signal.aborted) { setData(result); setLoadedVersion(version); }
     }).catch((failure) => { if (!controller.signal.aborted) setError(describeApiError(failure)); })
       .finally(() => {
