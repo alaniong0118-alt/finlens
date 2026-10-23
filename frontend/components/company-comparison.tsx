@@ -5,6 +5,7 @@ import { describeApiError, FinLensApiError, getAnnualFinancials, getFreshness, v
 import { COMPARISON_METRICS, comparisonYears, reportingWindowsDiffer, validCompanySelection, validateAnnualResponse } from "@/lib/company-comparison";
 import { formatMetric, METRIC_LABELS, periodLabel } from "@/lib/research";
 import { MetricProvenance } from "@/components/financial-research";
+import { serializeResearchNote } from "@/lib/research-note";
 
 type CompanyScope = { company: Company; version: number | null; years: number[]; error?: string };
 type Column = CompanyScope & { result?: AnnualFinancialComparison };
@@ -48,6 +49,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
   const [selection, setSelection] = useState<string[]>(["", ""]);
   const [refresh, setRefresh] = useState(0);
   const [requestedYear, setRequestedYear] = useState<number | null>(null);
+  const [annualGeneration, setAnnualGeneration] = useState(0);
   const [discovery, setDiscovery] = useState<{ key: string; scopes: CompanyScope[]; cancelled?: boolean } | null>(null);
   const [data, setData] = useState<{ key: string; columns: Column[]; cancelled?: boolean } | null>(null);
   const controllers = useRef<AbortController[]>([]);
@@ -58,10 +60,67 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
   const scopes = valid && discovery?.key === key ? discovery.scopes : null;
   const { years, preferred } = comparisonYears(scopes?.map(s => s.years) ?? []);
   const year = requestedYear !== null && years.includes(requestedYear) ? requestedYear : preferred;
-  const requestKey = `${key}:${scopes?.map(s => s.version).join("|")}:${year}`;
+  const requestKey = `${key}:${scopes?.map(s => s.version).join("|")}:${year}:${annualGeneration}`;
   const columns = data?.key === requestKey ? data.columns : null;
   const cancelled = !!(discovery?.key === key && discovery.cancelled) || !!(data?.key === requestKey && data.cancelled);
   const loading = valid && !cancelled && (!scopes || (year !== null && !columns));
+  const copyEligible = valid && !loading && !cancelled && year !== null
+    && scopes?.length === selected.length && columns?.length === selected.length
+    && columns.every((column, i) => {
+      const scope = scopes[i];
+      return !scope.error && !column.error && column.result && scope.version !== null
+        && Number.isSafeInteger(scope.version) && scope.version >= 0 && column.version === scope.version
+        && column.company.ticker === selected[i].ticker && column.company.cik === selected[i].cik
+        && scope.company.ticker === selected[i].ticker && scope.company.cik === selected[i].cik;
+    });
+  const copyOwner = useMemo(() => ({ requestKey, data, discovery, cancelled, loading, valid }), [requestKey, data, discovery, cancelled, loading, valid]);
+  const liveCopyOwner = useRef<typeof copyOwner | null>(copyOwner);
+  liveCopyOwner.current = copyOwner; // Render ownership precedes passive-effect cancellation.
+  const copySequence = useRef(0);
+  const copyPending = useRef<object | null>(null);
+  const mounted = useRef(false);
+  const [copyFeedback, setCopyFeedback] = useState<{ owner: object; metric: string; message: string; pending: boolean } | null>(null);
+  useEffect(() => {
+    const sequence = copySequence;
+    mounted.current = true;
+    return () => { mounted.current = false; sequence.current++; copyPending.current = null; };
+  }, []);
+  function invalidateCopy() {
+    liveCopyOwner.current = null;
+    copySequence.current++; copyPending.current = null; setCopyFeedback(null);
+  }
+  function changeSelection(next: string[]) {
+    invalidateCopy();
+    // A -> B -> A must not reuse discovery/data from an earlier selection visit.
+    setRefresh(value => value + 1); setSelection(next);
+  }
+  function copyNote(metric: string) {
+    if (!mounted.current || liveCopyOwner.current !== copyOwner || !copyEligible || !columns || year === null || copyPending.current === copyOwner) return;
+    const owner = copyOwner;
+    const sequence = ++copySequence.current;
+    const current = () => mounted.current && liveCopyOwner.current === owner && copySequence.current === sequence;
+    const feedback = (message: string, pending = false) => {
+      if (current()) setCopyFeedback({ owner, metric, message, pending });
+    };
+    try {
+      // The immutable Markdown string captures this eligible scope synchronously.
+      // No await/request precedes clipboard access: preserve user activation.
+      const note = serializeResearchNote(metric, year, columns.map(column => ({
+        company: column.company, version: column.version!, result: column.result!,
+      })));
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      copyPending.current = owner;
+      feedback("Copying research note…", true);
+      const write = navigator.clipboard.writeText(note);
+      void write.then(() => {
+        if (current()) { copyPending.current = null; feedback("Research note copied."); }
+      }, () => {
+        if (current()) { copyPending.current = null; feedback("Could not copy research note. Check clipboard permissions and try again."); }
+      });
+    } catch {
+      if (current()) { copyPending.current = null; feedback("Could not copy research note. Clipboard access or verified export data is unavailable."); }
+    }
+  }
 
   useEffect(() => {
     if (!valid) return;
@@ -114,6 +173,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
   }, [requestKey, valid]);
 
   function cancel() {
+    invalidateCopy();
     controllers.current.forEach(c => c.abort());
     if (!scopes) setDiscovery({ key, scopes: [], cancelled: true });
     else setData({ key: requestKey, columns: [], cancelled: true });
@@ -129,20 +189,20 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
         <label htmlFor={`comparison-company-${i}`}>Company {i + 1}</label>
         <select id={`comparison-company-${i}`} value={ticker} onChange={e => {
           const next = selection.map((item, index) => index === i ? e.target.value : item);
-          if (new Set(next.filter(Boolean)).size === next.filter(Boolean).length) setSelection(next);
+          if (new Set(next.filter(Boolean)).size === next.filter(Boolean).length) changeSelection(next);
         }}><option value="">Select a company</option>{companies.map(c => <option key={c.cik} value={c.ticker} disabled={selection.some((t, index) => index !== i && t === c.ticker)}>{c.ticker} · {c.name}</option>)}</select>
         {selection.length > 2 && <button className="comparison-remove" type="button" aria-label={`Remove company ${i + 1}`} onClick={() => {
-          setSelection(selection.filter((_, index) => index !== i));
+          changeSelection(selection.filter((_, index) => index !== i));
           document.getElementById(`comparison-company-${Math.max(0, i - 1)}`)?.focus();
         }}>Remove</button>}
       </div>)}
     </div>
     <div className="comparison-actions">
-      <button className="secondary-button" type="button" disabled={selection.length === 4 || companies.length <= selection.length} onClick={() => setSelection([...selection, ""])}>Add company</button>
-      <label htmlFor="comparison-year">Annual fiscal end-year<select id="comparison-year" value={year ?? ""} disabled={!valid || loading && !scopes || !years.length} onChange={e => setRequestedYear(Number(e.target.value))}>
+      <button className="secondary-button" type="button" disabled={selection.length === 4 || companies.length <= selection.length} onClick={() => changeSelection([...selection, ""])}>Add company</button>
+      <label htmlFor="comparison-year">Annual fiscal end-year<select id="comparison-year" value={year ?? ""} disabled={!valid || loading && !scopes || !years.length} onChange={e => { invalidateCopy(); setAnnualGeneration(value => value + 1); setRequestedYear(Number(e.target.value)); }}>
         {!years.length && <option value="">No observed years</option>}{years.map(y => <option value={y} key={y}>FY{y} · annual end-year</option>)}
       </select></label>
-      <button className="secondary-button" type="button" disabled={!valid || loading} onClick={() => setRefresh(value => value + 1)}>Refresh comparison</button>
+      <button className="secondary-button" type="button" disabled={!valid || loading} onClick={() => { invalidateCopy(); setRefresh(value => value + 1); }}>Refresh comparison</button>
       {loading && <button className="secondary-button" type="button" onClick={cancel}>Cancel comparison</button>}
     </div>
     <div aria-live="polite" role="status">{!valid ? <div className="empty-state"><strong>Select 2–4 distinct companies</strong><p>Annual metrics use existing SEC observations. No missing values are estimated.</p></div>
@@ -165,7 +225,11 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
             {column.result?.period_reason && <span>{column.result.period_reason}</span>}
             {column.version !== null && <span>Publication {column.version}</span>}
           </th>)}</tr></thead>
-          <tbody>{COMPARISON_METRICS.map(metric => <tr key={metric}><th scope="row">{METRIC_LABELS[metric]}</th>{columns.map(column => {
+          <tbody>{COMPARISON_METRICS.map(metric => <tr key={metric}><th scope="row">{METRIC_LABELS[metric]}
+            <button type="button" className="secondary-button" aria-label={`Copy research note for ${METRIC_LABELS[metric]}`}
+              disabled={!copyEligible || copyFeedback?.owner === copyOwner && copyFeedback.pending} onClick={() => copyNote(metric)}>Copy Research Note</button>
+            <span role="status" aria-live="polite">{copyFeedback?.owner === copyOwner && copyFeedback.metric === metric ? copyFeedback.message : ""}</span>
+          </th>{columns.map(column => {
             const point = column.result?.metrics[metric];
             return <td key={column.company.cik}>{point ? <>
               <p className={`metric-value ${point.status !== "available" ? "missing-value" : ""}`}>{formatMetric(point)}</p>
