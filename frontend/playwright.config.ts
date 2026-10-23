@@ -22,8 +22,9 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
   projects: [
-    { name: 'desktop-chromium', use: { viewport: { width: 1440, height: 1000 } } },
-    { name: 'mobile-width-chromium', testMatch: '**/experience.spec.ts', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    { name: 'desktop-chromium', grepInvert: /@mobile-only/, use: { viewport: { width: 1440, height: 1000 } } },
+    { name: 'mobile-width-chromium', testMatch: ['**/experience.spec.ts', '**/comparison.spec.ts'], grepInvert: /@desktop-only/,
+      use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
   webServer: {
     command: 'node scripts/e2e-server.mjs',
