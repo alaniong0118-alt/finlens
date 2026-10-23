@@ -1275,6 +1275,168 @@ const latestRequest = (app, path) => app.requests.filter(item => !item.released 
 
 const dependentRequests = app => app.requests.filter(item => item.path.startsWith('/companies/') && !item.path.endsWith('/freshness'));
 
+const filingPanel = app => app.host.querySelector('[aria-labelledby="filing-title"]');
+const filingSourceRequests = app => app.requests.filter(item => item.path.endsWith('/sources'));
+function assertUnverifiedFilings(app) {
+  const panel = filingPanel(app);
+  assert.equal(panel.querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+  assert.match(panel.querySelector('[role="status"]').textContent, /Publication not yet verified/);
+  assert.match(app.select('Indexed SEC filing').textContent, /Publication not yet verified/);
+  assert.equal(app.select('Indexed SEC filing').disabled, true);
+  assert.doesNotMatch(panel.textContent, /Loading filings|Checking indexed SEC evidence|Indexed searchable SEC evidence \(0\)|No recorded filings|No indexed filing available|Not indexed for filing research|Could not load the filing list/);
+  assert.equal(panel.querySelector('.search-form button.primary-button').disabled, true);
+}
+function assertFilingRequestPending(app) {
+  const panel = filingPanel(app);
+  assert.equal(panel.querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'true');
+  assert.match(app.select('Indexed SEC filing').textContent, /Loading filings/);
+  assert.match(panel.textContent, /Checking indexed SEC evidence/);
+  assert.doesNotMatch(panel.textContent, /No recorded filings|Not indexed for filing research|Indexed searchable SEC evidence \(0\)/);
+}
+
+for (const strict of [false, true]) {
+  test(`REL-LIVE-01B initial and unresolved null pin never loads filings strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { initialVersion: null, strict });
+    assertUnverifiedFilings(app);
+    assert.equal(filingSourceRequests(app).length, 0);
+    await app.release(app.request(companyPath('AAPL', 'freshness')), {}, 503);
+    assertUnverifiedFilings(app);
+    await app.click('Retry data check');
+    assertUnverifiedFilings(app); // Checking and unavailable share a null pin.
+    await app.release(app.request(companyPath('AAPL', 'freshness')), {}, 503);
+    await app.change(app.host.querySelector('textarea'), 'revenue');
+    assertUnverifiedFilings(app);
+    assert.equal(filingSourceRequests(app).length, 0);
+  });
+
+  for (const version of [0, 3]) test(`REL-LIVE-01B null to verified pin ${version} loads once strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { initialVersion: null, strict });
+    assertUnverifiedFilings(app);
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', version));
+    assertFilingRequestPending(app);
+    const request = app.request(companyPath('AAPL', 'sources'));
+    assert.equal(request.init.headers['X-FinLens-Data-Version'], String(version));
+    assert.equal(filingSourceRequests(app).length, 1);
+    await app.release(request, [filing('AAPL')]);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+    assert.match(filingPanel(app).textContent, /Indexed searchable SEC evidence \(1\)/);
+    await app.change(app.host.querySelector('textarea'), 'new query');
+    await focusCheck();
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', version));
+    assert.equal(filingSourceRequests(app).length, 1, 'Query edits and same-pin checks do not reload sources');
+  });
+
+  for (const outcome of ['success', 'failure']) test(`REL-LIVE-01B pending verified to null rejects late ${outcome} strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const old = app.request(companyPath('AAPL', 'sources'));
+    assertFilingRequestPending(app);
+    await app.release(app.request(companyPath('AAPL', 'financials/summary')), {}, 409, 1);
+    assert.equal(old.init.signal.aborted, true);
+    assertUnverifiedFilings(app);
+    await app.release(old, outcome === 'success' ? [filing('AAPL')] : {}, outcome === 'success' ? 200 : 503);
+    assertUnverifiedFilings(app);
+    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    assert.equal(filingSourceRequests(app).length, 1);
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+    const replacement = app.request(companyPath('AAPL', 'sources'));
+    assertFilingRequestPending(app);
+    await app.release(replacement, []);
+    assert.match(filingPanel(app).textContent, /No recorded filings were returned for this publication/);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingSourceRequests(app).length, 2);
+  });
+
+  test(`REL-LIVE-01B newer pin hides loaded inventory and old finalizers cannot settle replacement strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+    await focusCheck();
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+    const old = app.request(companyPath('AAPL', 'sources'));
+    assertFilingRequestPending(app);
+    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    await focusCheck();
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 2));
+    const replacement = app.request(companyPath('AAPL', 'sources'));
+    assert.equal(old.init.signal.aborted, true);
+    await app.release(old, [filing('AAPL')]);
+    assertFilingRequestPending(app);
+    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    await app.release(replacement, [filing('AAPL')]);
+    assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingSourceRequests(app).length, 3);
+  });
+
+  test(`REL-LIVE-01B company switch aborts pending inventory and rejects late source strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const old = app.request(companyPath('AAPL', 'sources'));
+    await app.change(app.host.querySelector('#company'), 'JPM');
+    assert.equal(old.init.signal.aborted, true);
+    assertUnverifiedFilings(app);
+    await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 0));
+    const replacement = app.request(companyPath('JPM', 'sources'));
+    await app.release(old, [filing('AAPL')]);
+    assertFilingRequestPending(app);
+    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    await app.release(replacement, [filing('JPM')]);
+    assert.equal(app.select('Indexed SEC filing').value, filing('JPM').accession_number);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+  });
+
+  test(`REL-LIVE-01B genuine source failure permits one explicit keyboard retry strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    await app.release(app.request(companyPath('AAPL', 'sources')), {}, 503);
+    assert.match(filingPanel(app).textContent, /Could not load the filing list/);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    const count = filingSourceRequests(app).length;
+    await act(async () => {});
+    assert.equal(filingSourceRequests(app).length, count, 'Failure never retries automatically');
+    const retry = [...filingPanel(app).querySelectorAll('button')].find(button => button.textContent === 'Retry filing list');
+    retry.focus();
+    await retryTwice(app, 'Retry filing list');
+    assert.equal(filingSourceRequests(app).length, count + 1);
+    assertFilingRequestPending(app);
+    await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+    assert.equal(app.select('Indexed SEC filing').disabled, false);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+  });
+
+  test(`REL-LIVE-01B source 409 reconciles without retrying the rejected pin strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const checks = app.requests.filter(item => item.path.endsWith('/freshness')).length;
+    await app.release(app.request(companyPath('AAPL', 'sources')), {}, 409, 1);
+    assertUnverifiedFilings(app);
+    assert.equal(app.requests.filter(item => item.path.endsWith('/freshness')).length, checks + 1);
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0));
+    assertUnverifiedFilings(app);
+    assert.equal(filingSourceRequests(app).length, 1);
+    await app.click('Retry data check');
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+    assertFilingRequestPending(app);
+    assert.equal(filingSourceRequests(app).length, 2);
+    await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+    assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+  });
+
+  test(`REL-LIVE-01B same-ticker identity change replaces pending source ownership strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const old = app.request(companyPath('AAPL', 'sources'));
+    await focusCheck();
+    await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 0, 1));
+    await app.release(app.request('/companies'), [{ ...companies[0], cik: '0000000001' }, companies[1]]);
+    assert.equal(old.init.signal.aborted, true);
+    const replacement = app.request(companyPath('AAPL', 'sources'));
+    await app.release(old, [filing('AAPL')]);
+    assertFilingRequestPending(app);
+    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    await app.release(replacement, []);
+    assert.match(filingPanel(app).textContent, /No recorded filings were returned for this publication/);
+    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingSourceRequests(app).length, 2);
+  });
+}
+
 for (const strict of [false, true]) for (const version of [1, 0]) {
   test(`mounted initialization waits for actual version ${version}${strict ? ' under StrictMode' : ''}`, async ctx => {
     const app = await mount(ctx, false, companies, { initialVersion: null, strict });

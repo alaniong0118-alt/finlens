@@ -460,41 +460,52 @@ function RecordedFilings({ filings, unknown = false }: { filings: FilingSource[]
 export default function FilingResearch({ company, configured }: { company: Company; configured: boolean }) {
   const { version, changed } = useResearchVersion();
   const [query, setQuery] = useState("");
-  const [sourceVersion, setSourceVersion] = useState(-1);
-  const [filings, setFilings] = useState<FilingSource[]>([]);
   const [accession, setAccession] = useState("");
   const [retrievalScope, setRetrievalScope] = useState<"filing" | "company">("filing");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [sourceAttempt, setSourceAttempt] = useState(0);
+  const sourceOwner = JSON.stringify([company.ticker, company.cik, version, sourceAttempt]);
+  const liveSourceOwner = useRef(sourceOwner);
+  liveSourceOwner.current = sourceOwner;
+  const [sources, setSources] = useState<{
+    owner: string; status: "loading" | "ready" | "error"; data: FilingSource[];
+    error: string | null; errorCode: string | null;
+  } | null>(null);
   const sourcePending = useRef(false);
   const cancelKeyword = useRef<KeywordCancellation | null>(null);
   useEffect(() => {
-    setLoading(true); setError(null); setErrorCode(null);
-    if (version === null) return;
+    // A missing pin does not mean a filing request is running or returned empty.
+    if (version === null) { setSources(null); return; }
     sourcePending.current = true;
     const controller = versionedController(version, changed);
+    const current = () => !controller.signal.aborted && liveSourceOwner.current === sourceOwner;
+    setSources({ owner: sourceOwner, status: "loading", data: [], error: null, errorCode: null });
     getFilingSources(company.ticker, controller.signal).then((data) => {
-      if (controller.signal.aborted) return;
+      if (!current()) return;
       if (!Array.isArray(data) || data.some(item => !item || typeof item.accession_number !== "string" || !item.accession_number.trim())) throw new Error("Invalid filing list response.");
-      const indexed = searchableFilings(data); setFilings(data); setSourceVersion(version);
+      const indexed = searchableFilings(data);
+      setSources({ owner: sourceOwner, status: "ready", data, error: null, errorCode: null });
       setAccession(previous => indexed.some(item => item.accession_number === previous) ? previous : indexed[0]?.accession_number ?? "");
     }).catch((failure) => {
-      if (!controller.signal.aborted) {
-        setError(describeApiError(failure));
-        setErrorCode(failure instanceof FinLensApiError ? failure.code : null);
+      if (current()) {
+        setSources({ owner: sourceOwner, status: "error", data: [], error: describeApiError(failure),
+          errorCode: failure instanceof FinLensApiError ? failure.code : null });
       }
-    }).finally(() => { if (!controller.signal.aborted) { sourcePending.current = false; setLoading(false); } });
+    }).finally(() => { if (current()) sourcePending.current = false; });
     return () => { controller.abort(); sourcePending.current = false; };
-  }, [company.ticker, company.cik, version, changed, sourceAttempt]);
+  }, [company.ticker, version, changed, sourceOwner]);
+  // Hide a previous company/pin/attempt immediately, before passive cleanup.
+  const currentSource = version !== null && sources?.owner === sourceOwner ? sources : null;
+  const loading = currentSource?.status === "loading";
+  const sourceReady = currentSource?.status === "ready";
+  const error = currentSource?.error;
+  const errorCode = currentSource?.errorCode;
   function retrySources() {
     if (version === null || sourcePending.current) return;
     if (errorCode === "DATA_VERSION_CHANGED") { changed(); return; }
     sourcePending.current = true;
     setSourceAttempt(attempt => attempt + 1);
   }
-  const currentSources = sourceVersion === version ? filings : [];
+  const currentSources = sourceReady ? currentSource.data : [];
   const indexed = searchableFilings(currentSources);
   const filing = indexed.find((item) => item.accession_number === accession);
   return <section className="panel filing-panel" aria-labelledby="filing-title">
@@ -503,22 +514,24 @@ export default function FilingResearch({ company, configured }: { company: Compa
     <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => { cancelKeyword.current?.(true); setRetrievalScope(event.target.value as "filing" | "company"); }}>
       <option value="filing">Selected filing</option><option value="company">Company-wide</option>
     </select></label>
-    <p className="muted small">{loading ? "Checking indexed SEC evidence…" : error ? "Indexed evidence list unavailable." : `Indexed searchable SEC evidence (${indexed.length}).`} Searchable passages do not guarantee complete filing text or sufficient evidence for AI analysis.</p>
-    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={accession} onChange={(event) => { cancelKeyword.current?.(); setAccession(event.target.value); }} disabled={loading || !indexed.length || !company.has_indexed_filing}>
+    <p className="muted small">{version === null ? "Indexed SEC evidence awaits publication verification." : loading ? "Checking indexed SEC evidence…" : error ? "Indexed evidence list unavailable." : sourceReady ? `Indexed searchable SEC evidence (${indexed.length}).` : "Indexed evidence list not loaded."} Searchable passages do not guarantee complete filing text or sufficient evidence for AI analysis.</p>
+    {retrievalScope === "filing" && <label className="filing-select">Indexed SEC filing<select value={sourceReady ? accession : ""} onChange={(event) => { cancelKeyword.current?.(); setAccession(event.target.value); }} disabled={!sourceReady || !indexed.length || !company.has_indexed_filing}>
+      {version === null && <option value="">Publication not yet verified</option>}
       {loading && <option value="">Loading filings…</option>}
-      {!loading && !indexed.length && <option value="">{error ? "Filing list unavailable" : "No indexed filing available"}</option>}
+      {version !== null && !loading && !indexed.length && <option value="">{error ? "Filing list unavailable" : sourceReady ? "No indexed filing available" : "Filing list not loaded"}</option>}
       {indexed.map((item) => <option key={item.accession_number} value={item.accession_number}>{item.form ?? "SEC filing"} · {formatDate(item.filed)} · {item.accession_number}</option>)}
     </select></label>}
     <div aria-live="polite" aria-busy={loading}>
+      {version === null && <p role="status">Publication not yet verified. Filing research waits for a verified data version.</p>}
       {error && <><p role="alert" className="error-state">Could not load the filing list. {error}</p>
         <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retrySources}>{errorCode === "DATA_VERSION_CHANGED" ? "Retry data check" : "Retry filing list"}</button></>}
     </div>
-    {retrievalScope === "filing" && !loading && !error && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
-    {!loading && !error && currentSources.length === 0 && <p className="muted small">No recorded filings were returned for this publication.</p>}
-    {!loading && !error && <>
-      <RecordedFilings key={`${company.ticker}-${company.cik}-${sourceVersion}-metadata`} filings={currentSources.filter(item => filingReadiness(item) === "metadata_only")} />
-      <RecordedFilings key={`${company.ticker}-${company.cik}-${sourceVersion}-unknown`} unknown filings={currentSources.filter(item => filingReadiness(item) === "unknown")} />
+    {retrievalScope === "filing" && sourceReady && (!company.has_indexed_filing || !filing) && <div className="empty-state"><h3>Not indexed for filing research</h3><p>Financial research remains available. Choose a Ready company to search stored filing evidence.</p></div>}
+    {sourceReady && currentSources.length === 0 && <p className="muted small">No recorded filings were returned for this publication.</p>}
+    {sourceReady && <>
+      <RecordedFilings key={`${company.ticker}-${company.cik}-${version}-metadata`} filings={currentSources.filter(item => filingReadiness(item) === "metadata_only")} />
+      <RecordedFilings key={`${company.ticker}-${company.cik}-${version}-unknown`} unknown filings={currentSources.filter(item => filingReadiness(item) === "unknown")} />
     </>}
-    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceVersion === version && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceVersion === version && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} />
+    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceReady && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceReady && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} />
   </section>;
 }
