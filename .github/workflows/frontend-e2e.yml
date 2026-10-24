@@ -1,6 +1,17 @@
 name: Frontend browser E2E
 on:
   workflow_dispatch:
+    inputs:
+      capture_walkthrough:
+        description: 'Separately authorized synthetic walkthrough capture (default OFF)'
+        type: boolean
+        required: false
+        default: false
+      capture_revision:
+        description: 'Full reviewed commit SHA authorized for capture; must equal dispatch SHA'
+        type: string
+        required: false
+        default: ''
   pull_request:
     paths:
       - 'frontend/**'
@@ -45,3 +56,36 @@ jobs:
             frontend/test-results/
           retention-days: 7
           if-no-files-found: ignore
+  synthetic_capture:
+    needs: chromium
+    if: ${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.capture_walkthrough) == 'true' && inputs.capture_revision == github.sha && needs.chromium.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      FINLENS_CAPTURE_AUTHORIZED: 'true'
+      FINLENS_CAPTURE_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test:qa01
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:isolation
+      - run: npx playwright test --config=playwright.capture.config.ts
+      - run: node scripts/package-research-walkthrough.mjs --package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-research-walkthrough-${{ github.sha }}-${{ github.run_attempt }}
+          path: frontend/test-results/research-walkthrough/package/
+          retention-days: 30
+          if-no-files-found: error
