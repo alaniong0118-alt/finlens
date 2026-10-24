@@ -73,7 +73,7 @@ export function formatMetric(point: Pick<NormalizedMetric, "status" | "value" | 
 export function officialSecUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === "https:" && ["www.sec.gov", "sec.gov"].includes(parsed.hostname) && !parsed.username && !parsed.password) return url;
+    if (parsed.protocol === "https:" && ["www.sec.gov", "sec.gov"].includes(parsed.hostname) && !parsed.username && !parsed.password) return parsed.href;
   } catch { /* Invalid source links are not displayed. */ }
   return undefined;
 }

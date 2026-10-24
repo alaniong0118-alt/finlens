@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, parseTheme, periodLabel, persistTheme, resolveTheme, METRIC_CATALOG, METRIC_GROUPS, METRIC_LABELS, SNAPSHOT_METRICS, guidedQuestion } from '../lib/research.ts';
+import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, officialSecUrl, parseTheme, periodLabel, persistTheme, resolveTheme, METRIC_CATALOG, METRIC_GROUPS, METRIC_LABELS, SNAPSHOT_METRICS, guidedQuestion } from '../lib/research.ts';
 import { describeApiError, getAnswer, getCapabilities, getFinancialSummary, getFilingContext, getMetricHistory } from '../lib/finlens-api.ts';
 
 // Compile the actual TSX components with the existing TypeScript dependency.
@@ -34,6 +34,71 @@ const period = {kind:'quarter',start:'2025-01-01',end:'2025-03-31',fiscal_year:2
 const source = {fact_id:1, original_concept:'Revenues',value:'1000000000',unit:'USD',period_start:period.start,period_end:period.end,form:'10-Q',filed:'2025-05-01',accession_number:'0000000001-25-000001',sec_url:'https://www.sec.gov/Archives/fixture',source_fiscal_year:2025,source_fiscal_period:'Q1'};
 const point = {metric:'revenue',unit:'USD',status:'available',value:'1000000000',reason:null,period,formula:null,provenance:[source],alternatives:[],inputs:[],revenue_basis:'total_revenue'};
 const context = {ticker:'TEST',query:'revenue',evidence_status:'sufficient',accession_number:source.accession_number,context:'[SOURCE source_1]\nchunk_id: chunk_0001\ntext: |-\n  Actual fixture excerpt <script> is untrusted text.\n[END SOURCE source_1]',citations:[{citation_id:'source_1',chunk_id:'chunk_0001',form:'10-Q',filed:source.filed,sec_url:source.sec_url,accession_number:source.accession_number,start_char:0,end_char:60,filename:'fixture.htm',evidence_reason:'lexical_support'}]};
+
+test('SEC-LINK-01 returns absolute SEC destinations independent of the document base', () => {
+ const cases = [
+  ['https:sec.gov/Archives/filing.htm', 'https://sec.gov/Archives/filing.htm'],
+  ['https:/www.sec.gov/Archives/filing.htm', 'https://www.sec.gov/Archives/filing.htm'],
+  ['https://sec.gov/Archives/filing.htm', 'https://sec.gov/Archives/filing.htm'],
+  ['https://www.sec.gov/Archives/filing.htm', 'https://www.sec.gov/Archives/filing.htm'],
+  ['https://WWW.SEC.GOV/Archives/filing.htm', 'https://www.sec.gov/Archives/filing.htm'],
+ ];
+ for (const [supplied, expected] of cases) {
+  const actual = officialSecUrl(supplied);
+  assert.equal(actual, expected);
+  for (const base of ['https://finlens.test/research/company/', 'http://127.0.0.1:3000/research/company/']) {
+   assert.equal(new URL(actual, base).href, expected);
+  }
+ }
+});
+
+test('SEC-LINK-01 preserves query and fragment semantics when canonicalizing', () => {
+ const expected = 'https://www.sec.gov/Archives/filing.htm?view=inline&doc=a%26b&doc=c+d#section%202';
+ for (const supplied of [expected, 'https:/www.sec.gov/Archives/filing.htm?view=inline&doc=a%26b&doc=c+d#section%202']) {
+  const actual = officialSecUrl(supplied);
+  assert.equal(actual, expected);
+  const destination = new URL(actual, 'https://finlens.test/research/');
+  assert.equal(destination.href, expected);
+  assert.deepEqual([...destination.searchParams], [['view', 'inline'], ['doc', 'a&b'], ['doc', 'c d']]);
+  assert.equal(destination.hash, '#section%202');
+ }
+});
+
+test('SEC-LINK-01 retains HTTPS, exact hostname and credential rejection rules', () => {
+ for (const supplied of [
+  'https.gov/Archives/filing.htm', 'not a url', '',
+  'https://sec.gov.evil.test/filing.htm', 'https://www.sec.gov.evil.test/filing.htm',
+  'https://evil.test/sec.gov/filing.htm', 'https://evilsec.gov/filing.htm',
+  'javascript:alert(1)', 'http://sec.gov/filing.htm', 'http://www.sec.gov/filing.htm',
+  'https://user@sec.gov/filing.htm', 'https://:password@www.sec.gov/filing.htm',
+  'https://user:password@www.sec.gov/filing.htm',
+ ]) assert.equal(officialSecUrl(supplied), undefined, supplied);
+});
+
+test('SEC-LINK-01 financial provenance and filing evidence render canonical anchor destinations', () => {
+ for (const [supplied, expected] of [
+  ['https:sec.gov/Archives/filing.htm', 'https://sec.gov/Archives/filing.htm'],
+  ['https:/www.sec.gov/Archives/filing.htm', 'https://www.sec.gov/Archives/filing.htm'],
+ ]) {
+  const provenance = { ...source, sec_url: supplied };
+  const metric = { ...point, provenance: [provenance], alternatives: [{ ...provenance, fact_id: 2 }] };
+  const evidence = { ...context, citations: [{ ...context.citations[0], sec_url: supplied }] };
+  const before = JSON.stringify({ metric, evidence });
+  const financialHtml = renderToStaticMarkup(React.createElement(finance.MetricProvenance, { point: metric }));
+  const evidenceHtml = renderToStaticMarkup(React.createElement(filing.EvidenceResults, { result: evidence }));
+  for (const [html, count] of [[financialHtml, 2], [evidenceHtml, 1]]) {
+   const destinations = [...html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map(match => match[1]);
+   assert.deepEqual(destinations, Array(count).fill(expected));
+   for (const destination of destinations) assert.equal(new URL(destination, 'https://finlens.test/research/').href, expected);
+  }
+  assert.match(financialHtml, /1000000000 USD/);
+  assert.match(financialHtml, /Revenues/);
+  assert.ok(financialHtml.includes(source.accession_number));
+  assert.match(evidenceHtml, /Actual fixture excerpt &lt;script&gt; is untrusted text\./);
+  assert.ok(evidenceHtml.includes(source.accession_number));
+  assert.equal(JSON.stringify({ metric, evidence }), before);
+ }
+});
 
 test('FD-01 catalog contains exactly the existing 15 metrics, grouped with correct display periods', () => {
  const expected=['revenue','gross_profit','operating_income','net_income','diluted_eps','cash_and_equivalents','total_assets','total_liabilities','operating_cash_flow','capital_expenditures','free_cash_flow','revenue_growth_yoy','gross_margin','operating_margin','net_margin'];
