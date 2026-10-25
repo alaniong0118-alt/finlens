@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync as executeFileSync, spawn, spawnSync } from 'node:child_process';
 import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +33,23 @@ const json = object => `${JSON.stringify(object, null, 2)}\n`;
 const escapeHtml = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const decode = bytes => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+const packagingStages = Object.freeze(['PRECONDITIONS', 'RAW_CUSTODY', 'METADATA_SCHEMA', 'NETWORK_LEDGER',
+  'PLAYWRIGHT_RESULT', 'CLEANUP_RECEIPT', 'RENDER_INVENTORY', 'NATIVE_NOTE',
+  'PNG_01', 'PNG_02', 'PNG_03', 'PNG_04', 'SOURCE_BINDINGS', 'CI_IDENTITY', 'MANIFEST_VALIDATION', 'PUBLICATION']);
+const pngStages = Object.freeze(['PNG_01', 'PNG_02', 'PNG_03', 'PNG_04']);
+let failureStage = 'UNKNOWN';
+function setFailureStage(stage) {
+  failureStage = packagingStages.includes(stage) ? stage : 'UNKNOWN';
+}
+function reportPackageFailure() {
+  console.error(`RW-PACKAGE-FAIL stage=${packagingStages.includes(failureStage) ? failureStage : 'UNKNOWN'}`);
+  process.exitCode = 1;
+}
+function execFileSync(file, args, options) {
+  // Node otherwise echoes child stderr before throwing. Package diagnostics must
+  // not forward Git error text; stdout, exit checks and other modes are unchanged.
+  return executeFileSync(file, args, process.argv[2] === '--package' ? { ...options, stdio: 'pipe' } : options);
+}
 
 function inside(base, target) {
   const rel = relative(base, target);
@@ -204,6 +221,7 @@ function validateMetadata(meta) {
   exactKeys(meta.clipboard, ['mechanism', 'encoding', 'sha256']);
   assert.equal(meta.clipboard.mechanism, 'native Chromium navigator.clipboard.readText');
   assert.equal(meta.clipboard.encoding, 'UTF-8'); assert(/^[a-f0-9]{64}$/.test(meta.clipboard.sha256));
+  setFailureStage('NETWORK_LEDGER');
   exactKeys(meta.network, ['requests', 'failures', 'violations']);
   assert.deepEqual(meta.network.failures, []); assert.deepEqual(meta.network.violations, []);
   assert(meta.network.requests.length > 0 && meta.network.requests.length <= 200);
@@ -223,6 +241,7 @@ function validateMetadata(meta) {
       if (match[2] === 'financials/annual') assert(query.length === 0 || json(query) === json([['fiscal_year', '2025']]));
     }
   }
+  setFailureStage('METADATA_SCHEMA');
   publicText(json(meta));
 }
 function validateNote(bytes) {
@@ -396,30 +415,41 @@ ${images.map((bytes, index) => `<figure><figcaption><span class="label">${label}
 }
 
 async function packageEvidence() {
+  setFailureStage('PRECONDITIONS');
   assert.equal(process.env.FINLENS_CAPTURE_AUTHORIZED, 'true', 'Execution authorization switch is OFF');
   assert.equal(process.platform, 'linux');
   const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim();
   assert.equal(revision, process.env.FINLENS_CAPTURE_REVISION);
   execFileSync('git', ['merge-base', '--is-ancestor', baseline, revision], { cwd: repository, stdio: 'pipe' });
+  setFailureStage('RAW_CUSTODY');
   const raw = inside(root, join(root, 'raw'));
   await noLinks(frontend, raw);
   assert.deepEqual((await readdir(raw)).sort(), [...rawNames].sort(), 'Exactly four PNGs, one note and metadata required');
   const bytes = Object.fromEntries(await Promise.all(rawNames.map(async name =>
     [name, await boundedRead(root, join(raw, name), name.endsWith('.png') ? 20_000_000 : 2_000_000)])));
+  setFailureStage('METADATA_SCHEMA');
   const metadata = JSON.parse(decode(bytes['capture.json'])); validateMetadata(metadata);
   assert.equal(metadata.source_revision, revision);
   assert.equal(metadata.runtime.node, process.version); assert.equal(metadata.runtime.arch, process.arch);
+  setFailureStage('PLAYWRIGHT_RESULT');
   const report = JSON.parse(decode(await boundedRead(root, join(root, 'result.json'), 2_000_000)));
   validateResult(report, metadata);
+  setFailureStage('CLEANUP_RECEIPT');
   const cleanup = JSON.parse(decode(await boundedRead(root, join(root, 'cleanup.json'), 20_000)));
   validateCleanup(cleanup, metadata);
+  setFailureStage('RENDER_INVENTORY');
   const admissionBytes = await boundedRead(root, join(root, 'source-admission.json'), 2_000_000);
   const admitted = JSON.parse(decode(admissionBytes)); validateInventory(admitted, revision);
   assert.equal(sha256(admissionBytes), metadata.admission_sha256);
   assert.deepEqual(admitted, metadata.render_inventory, 'Admission/capture inventory mismatch');
   assert.deepEqual(await collectRenderInventory(revision), admitted, 'Package-phase render inventory mismatch');
+  setFailureStage('NATIVE_NOTE');
   const note = validateNote(bytes[noteName]); assert.equal(sha256(bytes[noteName]), metadata.clipboard.sha256);
-  const pngValidation = Object.fromEntries(pngNames.map((name, index) => [name, validatePng(bytes[name], index)]));
+  const pngValidation = Object.fromEntries(pngNames.map((name, index) => {
+    setFailureStage(pngStages[index]);
+    return [name, validatePng(bytes[name], index)];
+  }));
+  setFailureStage('SOURCE_BINDINGS');
   const bindings = {};
   for (const name of sourceNames) {
     const content = await boundedRead(repository, join(repository, name), 2_000_000);
@@ -429,13 +459,17 @@ async function packageEvidence() {
   }
   for (const name of captureBindings) assert.equal(bindings[name], metadata.bindings[name], 'Source changed after capture');
   assert.equal(cleanup.launcher_sha256, bindings['frontend/scripts/e2e-server.mjs']);
+  setFailureStage('MANIFEST_VALIDATION');
   const files = new Map([...pngNames, noteName].map(name => [name, bytes[name]]));
   files.set('index.html', Buffer.from(viewer(pngNames.map(name => bytes[name]), note), 'utf8'));
+  setFailureStage('CI_IDENTITY');
+  const ci = ciIdentity(process.env);
+  setFailureStage('MANIFEST_VALIDATION');
   const manifest = { schema_version: 1, task: 'REL-PRODUCT-03', label,
     evidence_class: 'SYNTHETIC UI CAPTURE', live_database: 'NOT VERIFIED',
     historical_evidence: 'Separate historical manifests and classifications remain unchanged.',
     expected_repository_baseline: baseline, captured_repository_revision: revision,
-    source_sha256: bindings, capture: metadata, ci: ciIdentity(process.env), png_validation: pngValidation,
+    source_sha256: bindings, capture: metadata, ci, png_validation: pngValidation,
     render_input_checks: { prelaunch: admitted.sha256, execution_end: cleanup.render_inventory_sha256, packaging: admitted.sha256 },
     runner: { result: 'passed', cases: 1, retries: 0, includes_fixture_teardown: true }, cleanup,
     independent_artifact_acceptance: 'PENDING', human_rehearsal: 'NOT TESTED',
@@ -448,6 +482,7 @@ async function packageEvidence() {
 }
 const publishValidated = async (prepare, publish) => publish(await prepare());
 async function publishPackage({ files, manifest }) {
+  setFailureStage('PUBLICATION');
   // No arbitrary CLI paths, overwrite, recursive copy, deletion, credential access
   // or external requests. Fresh output only, after all validation has succeeded.
   const output = inside(root, join(root, 'package'));
@@ -571,7 +606,49 @@ async function checkPngInMemory() {
   assert.equal(published, false, 'Invalid PNG must never reach success-manifest publication');
   console.log(`PASS: 4 complete RGB/RGBA PNG probes (all filters, Paeth diagonal, split IDAT, exact decoded hash, original bytes); ${negatives.length + 1} malformed/decode/resource probes rejected, including 45-byte no-IDAT; publication blocked.`);
 }
+async function checkFailureDiagnosticsInMemory() {
+  // Execute only these serialized pure helpers in disposable Node processes.
+  // Never import/invoke packaging, read evidence, or print the hostile inputs.
+  const helpers = `const packagingStages=Object.freeze(${JSON.stringify(packagingStages)});
+    let failureStage='UNKNOWN';${setFailureStage.toString()};${reportPackageFailure.toString()};
+    const hostile=Object.defineProperties({}, {
+      message:{get(){throw new Error('message must not be read')}},
+      stack:{get(){throw new Error('stack must not be read')}},
+      toString:{value(){throw new Error('coercion must not occur')}}});`;
+  const invalid = ['UNKNOWN', 'PRIVATE-SENTINEL\nC:\\private\\fixture https://example.invalid/?token=fixture', null];
+  for (const stage of [...packagingStages, ...invalid]) {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `${helpers}
+      try {setFailureStage(${JSON.stringify(stage)});throw hostile;}catch{reportPackageFailure();}`],
+    { encoding: 'utf8', timeout: 5000, maxBuffer: 512, windowsHide: true });
+    assert.equal(child.status, 1); assert.equal(child.stdout, '');
+    const expected = packagingStages.includes(stage) ? stage : 'UNKNOWN';
+    assert.equal(child.stderr, `RW-PACKAGE-FAIL stage=${expected}\n`); assert(child.stderr.length < 80);
+  }
+  // An untrusted object is not coerced into a category, even on an unexpected failure.
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `${helpers}
+    try {setFailureStage(hostile);throw hostile;}catch{reportPackageFailure();}`],
+  { encoding: 'utf8', timeout: 5000, maxBuffer: 512, windowsHide: true });
+  assert.equal(child.status, 1); assert.equal(child.stdout, ''); assert.equal(child.stderr, 'RW-PACKAGE-FAIL stage=UNKNOWN\n');
+  const gitError = spawnSync(process.execPath, ['--input-type=module', '-e', `${helpers}
+    import {execFileSync as executeFileSync} from 'node:child_process';${execFileSync.toString()};
+    process.argv[2]='--package';setFailureStage('SOURCE_BINDINGS');
+    if(execFileSync(process.execPath,['-e',"process.stdout.write('CAPTURED-STDOUT')"],{}).toString()!=='CAPTURED-STDOUT')process.exit(99);
+    try {execFileSync(process.execPath,['-e',"process.stderr.write('PRIVATE-STDERR-SENTINEL');process.exit(23)"],{});}
+    catch {reportPackageFailure();}`], { encoding: 'utf8', timeout: 5000, maxBuffer: 512, windowsHide: true });
+  assert.equal(gitError.status, 1); assert.equal(gitError.stdout, '');
+  assert.equal(gitError.stderr, 'RW-PACKAGE-FAIL stage=SOURCE_BINDINGS\n');
+  let published = false;
+  setFailureStage('NATIVE_NOTE');
+  await assert.rejects(publishValidated(() => { throw new Error('in-memory rejection'); }, () => { published = true; }));
+  assert.equal(published, false); assert.equal(failureStage, 'NATIVE_NOTE');
+  await assert.rejects(publishValidated(() => ({}), () => { setFailureStage('PUBLICATION'); throw new Error('in-memory publication failure'); }));
+  assert.equal(failureStage, 'PUBLICATION');
+  const successful = { files: new Map([['in-memory', Buffer.from('unchanged bytes')]]), manifest: { marker: 'unchanged probe' } };
+  assert.equal(await publishValidated(() => successful, value => { assert.equal(value, successful); return value; }), successful);
+  setFailureStage('UNKNOWN');
+}
 async function checkInMemory() {
+  await checkFailureDiagnosticsInMemory();
   await checkRenderInventoryInMemory(); await checkPngInMemory();
   assert.throws(() => inside(root, resolve(root, '..', 'escape')));
   assert.throws(() => inside(root, root));
@@ -647,8 +724,11 @@ if (process.argv.length !== 3 || !['--check', '--admit-check', '--package', '--s
     else await publishValidated(packageEvidence, publishPackage);
   }
   catch (error) {
-    console.error(process.argv[2] === '--admit-check' && /^Render input differs from reviewed commit: frontend\//.test(error.message)
-      ? error.message.split('\n')[0] : 'Walkthrough validation failed; no publishable package is established.');
-    process.exitCode = 1;
+    if (process.argv[2] === '--package') reportPackageFailure();
+    else {
+      console.error(process.argv[2] === '--admit-check' && /^Render input differs from reviewed commit: frontend\//.test(error.message)
+        ? error.message.split('\n')[0] : 'Walkthrough validation failed; no publishable package is established.');
+      process.exitCode = 1;
+    }
   }
 }

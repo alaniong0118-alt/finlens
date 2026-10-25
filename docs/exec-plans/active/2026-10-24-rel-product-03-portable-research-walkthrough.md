@@ -1,6 +1,8 @@
 # REL-PRODUCT-03 portable synthetic research walkthrough
 
 Status: active; implementation/static verification only
+Current scope (2026-10-25): two-file diagnostic instrumentation only; separate
+independent Astra 6 High review required before Git Step 2 or further execution.
 Review state: Astra FAIL / NOT READY for Git Step 2 on the initial candidate;
 two P2 evidence-integrity corrections are authorized within the same six paths.
 Roadmap phase: bounded portfolio evidence preparation; no new product milestone
@@ -225,3 +227,93 @@ Git staging/commit/push or cleanup. Stop for coordinator review; no later milest
 
 Suggested future commit (not authorized now):
 `test(showcase): prepare gated synthetic research walkthrough capture`.
+
+## Bounded packaging diagnostics — 2026-10-25
+
+Baseline: main at `d2584fd8428da3c6764086d2992d5a7ce1f4f0b4`, empty index,
+three protected exceptions with the original hashes recorded above. Only this
+ExecPlan and `frontend/scripts/package-research-walkthrough.mjs` may change.
+
+Historical execution: run `40094271768`, attempt 1, captured revision d2584fd:
+ordinary Chromium 78/78 PASS; capture QA-01 22/22 PASS; isolation PASS; capture
+1/1 PASS; packaging FAIL; zero uploaded artifacts. This remains a failed package
+execution. Its exact rejection is UNKNOWN. Allowed native ERR_ABORTED entries
+versus the empty failure-ledger gate remain an unconfirmed hypothesis, not a fix.
+
+Objective: report the first rejecting stage through a constant prefix and fixed
+allowlist, without emitting exceptions, private paths, evidence or environment.
+Preserve all validation criteria/order, successful output and manifest schema.
+Distinguish preparation from filesystem publication. Preserve non-package command
+behavior, particularly the existing safe read-only admission diagnostic.
+
+Stages: PRECONDITIONS, RAW_CUSTODY, METADATA_SCHEMA, NETWORK_LEDGER,
+PLAYWRIGHT_RESULT, CLEANUP_RECEIPT, RENDER_INVENTORY, NATIVE_NOTE, PNG_01,
+PNG_02, PNG_03, PNG_04, SOURCE_BINDINGS, CI_IDENTITY, MANIFEST_VALIDATION,
+PUBLICATION; unexpected/unrecognized stage maps to UNKNOWN.
+
+Constraints: no other file edits, new dependencies, workflow changes, acceptance
+relaxation, diagnostic artifacts, real packaging, browser/services, CI, backend,
+database/Docker/SEC/provider, private .env access, Git publication or cleanup.
+
+Implementation/verification stages:
+
+- [x] Verify expected baseline, empty index and protected hashes.
+- [x] Add minimal stage markers and allowlisted package-only error reporter.
+- [x] In-memory negative probes for every category/nonzero exit and redaction;
+  preserve publication gating and successful result/manifest contracts.
+- [x] Compare original admission functions/order, run syntax/scoped static checks,
+  verify whitespace, two-file scope and protected preservation; report hashes.
+- [ ] Independent Astra 6 High review; no Git Step 2 or new capture authorized.
+
+Implementation: a frozen 16-stage allowlist, fixed UNKNOWN fallback and a package-only
+catch path emit exactly `RW-PACKAGE-FAIL stage=<allowed identifier>` plus newline,
+then retain exit code 1. No exception argument is passed to that reporter. Fixed
+markers follow the existing admission order, including NETWORK_LEDGER inside
+metadata validation and each PNG ordinal; metadata-wide checks restore the schema
+stage, and publication sets PUBLICATION before filesystem work. Preparation still
+must return successfully before the unchanged publication gate calls the writer.
+The CI identity temporary value preserves the same manifest key/value and order.
+
+Redaction bypass found during source inspection: Node's built-in execFileSync
+echoes child stderr when stdio is unspecified, before the outer catch can redact it.
+A small package-mode-only wrapper specifies piped stdio; captured stdout and the
+original rejection/error behavior are retained. Other command modes receive their
+original options unchanged. No subprocess stderr is added to diagnostics.
+
+Checks actually executed (2026-10-25, installed tools only):
+
+- `node --check scripts/package-research-walkthrough.mjs`: PASS.
+- `node scripts/package-research-walkthrough.mjs --check`: PASS; no evidence writes
+  or real packaging. Existing source/PNG/cleanup/schema probes still pass and its
+  three success-output lines remain unchanged. New diagnostic probes are silent.
+- Twenty-one isolated Node failure probes: all exit 1, stdout empty, stderr exactly
+  the constant prefix/expected stage, fewer than 80 characters. Includes all 16
+  stages, UNKNOWN, hostile path/URL/newline/category text, null, an untrusted object
+  with throwing message/stack/coercion getters, and actual synthetic child-stderr
+  failure. No actual private content is used. Child helpers do not import packaging
+  or read evidence; no synthetic exception text escapes.
+- In-memory validation rejection never calls publication. Publication rejection
+  has PUBLICATION, distinguishable from the preparation stage. Successful handoff
+  retains the same payload reference and bytes without diagnostic manifest fields.
+- Scoped ESLint for the changed .mjs: PASS.
+- In-memory TypeScript AST/source comparison against HEAD: 21 original admission,
+  receipt, PNG, viewer and probe functions byte-identical. Removing only stage
+  markers and the equivalent CI temporary/map callback yields the same metadata,
+  package and publication bodies, original validation order and manifest fields.
+  The non-package catch is unchanged. Static stage sequence has all 16 categories.
+- Pure wrapper checks across --check/--admit-check/--serve/--package: stdout and
+  thrown-error identity preserved; original options retained outside package mode;
+  package mode captures child stderr. Existing command/default-off switches remain
+  unchanged. Real --admit-check was not executed in this task; its source/catch and
+  non-package subprocess options are preserved. No local packaging was invoked.
+- Final Git whitespace, exact two-file scope, empty index, original protected
+  hashes and unchanged baseline are verified at handoff. Candidate SHA-256 values
+  are reported separately to avoid a self-referential plan hash.
+
+Outcome: READY FOR INDEPENDENT ASTRA 6 HIGH REVIEW, not permission for Git Step 2.
+Run 40094271768 remains packaging FAIL with UNKNOWN cause; these markers cannot
+retroactively reveal its rejected check. All historical PASS/FAIL/BLOCKED outcomes
+are preserved. No additional file, workflow/fixture/product/dependency change,
+installation, browser/service/backend/provider/database action, private .env access,
+diagnostic artifact, Git staging/commit/push/reset/restore or cleanup occurred.
+Separate review and coordinator approval are required for Git and any new execution.
