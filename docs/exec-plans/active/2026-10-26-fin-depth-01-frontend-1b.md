@@ -1,7 +1,13 @@
-# FIN-DEPTH-01 Frontend Increment 1B.1
+# FIN-DEPTH-01 Frontend Increment 1B
 
-Status: active; Astra implementation FAIL retained; scoped two-P2 correction verified offline, pending independent re-review.
-Roadmap phase: bounded enabling slice of Research Mode depth. No 1B.2 UI work.
+Status: active; corrected 1B.1 independently accepted per coordinator and committed;
+1B.2A Astra FAIL retained; scoped import-deadline P2 correction verified offline,
+pending focused independent re-review. Historical offline passes are scoped evidence.
+Roadmap phase: bounded enabling slice of Research Mode depth. Only 1B.2A is authorized.
+
+The original 1B.1 implementation and correction sections below retain historical
+FAIL/pending-review wording and their original baselines/results. The 1B.2A section
+and final handoff record describe the current task; no historical verdict is erased.
 
 ## Objective
 
@@ -165,6 +171,60 @@ subscribe to disposal and read only current handles; no rendered UX claim is mad
 Stop for coordinator/Astra review. Suggested later commit message:
 `feat: add bounded financial insights client contracts and worker transport`.
 
+## Frontend 1B.2A authorization and implementation — 2026-10-26
+
+Status: active candidate verification. Coordinator reports independent PASS for corrected
+1B.1 and authorizes only bounded UI integration. The earlier FAIL, correction and
+pending-review statements above are historical records, not current Git state.
+Entry: main at d368bba9308864b1977e61040e1877ec4548ad57, index empty, exactly the
+three original protected exceptions with all established hashes unchanged.
+
+### Objective and exact scope
+
+Add annual insights before the research grid inside ResearchFreshness, retaining
+existing research access. Exactly five candidate paths: new
+frontend/components/financial-insights.tsx and
+frontend/tests/financial-insights-interactions.test.mjs; modify
+frontend/app/page.tsx, frontend/app/globals.css and this plan. Committed 1B.1
+contracts, existing tests, dependencies and private configuration stay untouched.
+
+### Decisions and implementation stages
+
+1. Use type-only insights imports until Worker support is checked, then defer the
+   production module import. This preserves genuine unsupported-browser behavior
+   and the existing CommonJS Home harness. Supported paths retain the original
+   module Worker constructor. Guard import completion against current ownership.
+2. One component-owned panel; current company/CIK/publication, year and attempt
+   identities guard controllers, callbacks, disposal, pagination and focus. A
+   30-second UI deadline includes deferred import time; the committed request,
+   page, heartbeat, idle and absolute deadlines remain independently enforced.
+   View publication also checks the attempt generation, including queued React
+   updates after parsed-success/year-round-trip races.
+   Subscription consumers retain handles, never copied comparison graphs/pages.
+3. Render seven fixed metrics from F-admitted presentation values and server
+   statements. Completeness concerns five headline comparisons only. Discovery
+   years come only from the eleven-anchor endpoint. No financial recalculation.
+4. Use one F/D page viewport, bounded pending navigation metadata and Worker
+   targets/edges; disclose every flattened field, including hidden CapEx lineage.
+5. Add offline mounted React tests with controlled fetch/Worker runtime doubles,
+   then run targeted suites, existing Home regression, no-output TypeScript and
+   scoped ESLint. Record exact outcomes and preservation checks below.
+
+### Progress and validation strategy
+
+- [x] Baseline/index/exception inventory and protected hashes verified before writes.
+- [x] Implement the component, Home insertion and scoped responsive CSS.
+- [x] Implement and run mounted interactions, relevant contract tests and Home regression.
+- [x] TypeScript, scoped ESLint, diff/scope and protected-hash self-review.
+- [ ] Independent Astra implementation review (separate coordinator gate).
+
+No build, browser, Next/service, CI, Docker, database, SEC/provider/model, pilot or
+deployment operation is authorized. No staging, commit or push. Next Worker
+bundling, Playwright fixtures/configuration, real Chromium, screenshots,
+320px/390px/zoom visual acceptance and manual NVDA/Chrome remain 1B.2B gates.
+Final outcome and commands: recorded in the 1B.2A handoff below, after the
+historical 1B.1 correction record.
+
 ## Astra two-P2 correction — 2026-10-26
 
 Coordinator supplied independent Astra verdict: **FAIL — NO-GO for Git Step 1**.
@@ -249,3 +309,261 @@ No build, browser, service, Docker, database, SEC/provider/model operation or pr
 deployment acceptance remain NOT VERIFIED. No 1B.2 work began. No Git staging,
 commit or push occurred. Ready for coordinator and focused Astra re-review only;
 the historical Astra FAIL is not relabelled as an independent PASS.
+
+## Frontend 1B.2A final offline handoff — 2026-10-26
+
+Candidate complete for coordinator/independent Astra implementation review only.
+This is not browser, Next Worker bundling, accessibility, live-data or deployment
+acceptance. The coordinator supplied 1B.1 independent PASS and committed baseline;
+no new independent PASS for 1B.2A is claimed.
+
+### Implemented behavior and ownership
+
+Home inserts annual insights immediately before its research grid under the same
+selected-company ResearchFreshness provider and adds its navigation link. Snapshot,
+history, filing research and both comparison sections retain their existing links.
+The compact initial controls and collapsed seven-metric/evidence disclosures keep
+other research discoverable. Scoped CSS stacks at tablet/mobile widths and wraps
+long values, identifiers, fields and buttons; actual 320px/390px/200% zoom rendering
+is not verified by JSDOM.
+
+Discovery waits for a verified pin, including zero; years come only from the
+eleven-anchor endpoint. Earlier/later selectors never silently swap. Compare and
+retries are explicit. Seven fixed metric rows use only F-admitted formatted values;
+classification follows presentation metadata with fixed metric definitions for
+unavailable slots. Five-headline completeness, periods, publication identity and
+all server statements/limitations/precision notices are displayed without frontend
+financial recalculation. No admitted value is replaced by a D canonical value or zero.
+
+One panel owns each component's session. Base company/CIK/publication identity,
+selected-year invalidation, monotonically increasing attempt and controller
+identity protect deferred imports, initiation, results, errors, 409 callbacks,
+finalizers, subscriptions, pages and focus. Render publication checks the attempt
+as well as base owner. Subscription functional updates recheck ownership when
+React applies them. Company/pin changes detach subscriptions and dispose
+synchronously; year/cancel/retry handlers do likewise before state changes;
+layout cleanup covers unmount and StrictMode replay. A 30-second UI timer bounds
+the complete initial action including import. Worker request/page/idle/absolute
+and heartbeat policies are unchanged. Notifications reread nullable handles;
+expiry/failure removes the financial result. Background renders do not interact.
+
+Evidence uses separate F/D collection descriptions and one shared bounded page
+viewport, Previous/Next controls and statement/edge targets. No React graph copy,
+visited-page cache or unbounded navigation history exists. Identical navigation
+coalesces, different busy navigation waits without a queue. Full flattened field
+paths/values, raw source metadata, candidates/rejections and source/operand links
+remain disclosed, including FCF's CapEx chain. SEC URLs pass the existing helper;
+unsafe diagnostic URLs remain literal text. All backend text uses React text
+rendering. Focus follows a completed matching page/current generation and does
+not replace focus deliberately moved to another control.
+
+### Checks actually run
+
+Working directory: D:\Projects\finlens-foundation\frontend.
+
+```
+node --test tests/financial-insights-interactions.test.mjs tests/research-interactions.test.mjs
+node --test tests/financial-insights.test.mjs tests/finlens-api.test.mjs
+node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+node node_modules/eslint/bin/eslint.js components/financial-insights.tsx app/page.tsx tests/financial-insights-interactions.test.mjs
+```
+
+Final combined mounted run: **619 passed, 0 failed/cancelled/skipped/todo**,
+76.8765509 seconds: 49 new UI tests plus all 570 unchanged Home interaction tests.
+The Home suite also passed alone earlier: 570/570, 23.804424 seconds.
+Existing insights/API suites: **261 passed, 0 failed/cancelled/skipped/todo**,
+182.3589354 seconds. Their guarded synthetic Python serialization cases ran
+offline; no database, private configuration, SEC/provider/model operation ran.
+TypeScript and scoped ESLint exit 0 with no diagnostics. No Next build ran.
+
+The new harness uses real ReactDOM/act/JSDOM and the actual committed client and
+exported Worker runtime behind controlled fetch/Worker and import-promise seams.
+No real Worker process, browser or Next bundler was exercised. Both supported and
+unsupported Home branches are mounted; supported insights and empty sibling
+snapshot/history/filing outcomes settle independently. Tests cover zero/null pin,
+exact/empty/single-year discovery, invalid pairs, seven metrics, server text,
+partial conflict diagnostics, complete FCF/CapEx/source traversal across pages,
+bounded retention, same-tick duplicate/busy/coalesced pages/submissions, cancel/
+retry, A-B-A company/year races, parsed success before year edits, current and
+obsolete/pre-commit 409, old finalizers/focus, deferred import expiry/cancellation,
+idle/absolute/page expiry, Worker failure/pagehide, and StrictMode/unmount cleanup.
+Unsafe diagnostic URLs and literal script markup are also covered.
+
+Development failures were repaired, not hidden: the first harness attempted to
+mock an absent global Worker property; it now declares/restores the test property.
+After that setup fix, a complete new-suite run was 41/42 because the pre-commit freshness test
+left JSDOM's document hidden; the visible-document setup now exercises that
+callback. Focused reruns passed. Self-review added attempt-gated rendering,
+ownership checks inside queued subscription updates and the import-inclusive UI
+deadline; the final 619-test run includes these changes.
+
+### Preservation and independent review focus
+
+Exactly five candidate paths, the two new and three modified paths enumerated
+above, plus the three original protected exceptions. main and HEAD remain
+d368bba9308864b1977e61040e1877ec4548ad57; Git index empty. Protected SHA-256 values
+remain the established F4E8976C...1625C0 (next-env), A783517D...57844C (canary), and
+F8DF96C8...58BF7C (discovery), with full values preserved in the historical record.
+Reports were hashed only. Committed 1B.1 client/Worker/API, fixtures, existing tests,
+package/dependency files and private configuration were not modified.
+Tracked candidate git diff --check passed; all five candidates passed fatal UTF-8,
+no-NUL, trailing-whitespace and final-newline checks. Git's normal LF/CRLF notices
+do not indicate whitespace errors; no-index comparisons of new files return the
+ordinary difference status and were supplemented by explicit text hygiene checks.
+
+Independent Astra should examine: (1) deferred production import, supported/
+unsupported branching and combined UI deadline; (2) synchronous owner invalidation,
+attempt-gated React publication and stale 409/finalizer/subscription guards;
+(3) F-only displayed values, five-headline labeling and server-authored wording;
+(4) full F/D flattened disclosures and hidden CapEx lineage, single-page retention,
+coalescing/busy navigation and safe source links; (5) completion/ownership/focus
+ordering, expiry cleanup, StrictMode and the limitations of the offline harness.
+
+No blocking committed-interface gap was found. All 1B.2B gates remain deferred:
+Playwright config/routing, actual Next Worker bundling/browser execution, real
+Chromium, desktop/mobile screenshots, 320px/390px/zoom layout and manual
+NVDA/Chrome. Pilot, live/native and deployment remain unexecuted. No staging,
+commit or push. Stop for coordinator review; do not start 1B.2B.
+Suggested later commit: `feat: integrate bounded annual financial insights UI`.
+
+## 1B.2A import-deadline P2 correction — 2026-10-26
+
+Coordinator supplies independent Astra 6 High verdict: **FAIL — NO-GO for Git
+Step 1**, exactly one P2. The reviewed UI relied on dispatch of its timeout
+callback. Astra reproduced a 31,004 ms event-loop delay followed by import
+completion before the overdue callback: one Worker and an HTTP request started
+outside the 30-second UI initialization budget. Other bounded offline areas
+passed; the preceding 619/261 test results remain historical and do not negate
+this FAIL. No independent PASS for the correction is claimed.
+
+Entry verified: main/d368bba9308864b1977e61040e1877ec4548ad57, empty index, exactly
+the five existing UI candidates plus three protected exceptions; protected SHA-256
+matches all established values. Only the component, its new interaction test and
+this plan may change for this correction. Review-entry SHA-256 values:
+
+- frontend/components/financial-insights.tsx: 4820B4AB78155F3E7AB0B887B132E5946D3FAD5E154334B02F2DFA510023E316
+- frontend/tests/financial-insights-interactions.test.mjs: 4DCD8E9AE6DD3A046061AFBCD757B2EA7D9D269BC0EBD2C46168553E77265B6B
+- this plan: C5E69418AB58E24ED554B835348DC4E69FD37A1B437FB0689CD5EA156C893D66
+- frontend/app/page.tsx (must stay unchanged): ECB8884B99FB94A9DA5A763D0A1CD7CCD2068500E8A81C153D8114AB757CEBFD
+- frontend/app/globals.css (must stay unchanged): F20DB044911F483ECFEBD315970946BED008CEF2E0296D70969951DD3BDD7439
+
+Correction stages: first reproduce the ordering with tests against the reviewed
+component, then capture operation-start monotonic and wall times and enforce
+elapsed expiry independently of timer delivery. Preserve generation/controller
+ownership, pass the time guard through the existing request.current seam, and
+check import success/rejection, construction, initiation, async continuations and
+initial READY publication. Keep successful comparisons' later Worker lifetime
+unchanged. Rerun all bounded suites, no-output TypeScript, scoped ESLint and
+preservation/whitespace checks. No other defect or milestone is authorized.
+
+Entry progress: reproduction and correction pending. No browser/build/services, live
+data/provider/model, dependencies, staging/commit/push or 1B.2B work is authorized.
+
+### P2 reproduction, correction and offline evidence
+
+The new regressions were added before changing the reviewed component. All six
+selected import-ordering cases failed against that source (30,000 ms monotonic
+boundary, 31,004 ms monotonic delay, wall fallback, backward wall clock, late import
+rejection, and real delayed timer delivery). A second isolated real reproduction
+captured the original ordering explicitly: **31,005.6224 ms elapsed, one Worker,
+one insights HTTP request, timerFired=false**. Its expected-zero assertion failed.
+The import continuation ran before the overdue timeout callback; the timeout
+callback-only regression had not tested this condition.
+
+The component now captures performance.now() and Date.now() at operation entry,
+before invalidation/import/setup. Its initialization current guard first checks
+the unchanged company/CIK/version/generation/controller ownership, then rejects
+when monotonic elapsed time OR wall elapsed time reaches 30,000 ms. A frozen
+monotonic clock cannot bypass the wall bound; a backward wall change cannot extend
+the monotonic bound. Invalid/regressed monotonic readings fail closed.
+
+This guard runs after import resolution or rejection, before/after panel setup,
+through the existing request.current seam at asynchronous client continuations,
+and before publishing initial data. Guarded wrappers around the existing public
+environment.worker/fetch factories check directly before allocation/network work,
+including time spent inside synchronous listener setup. Original factories are
+retained once, so retries neither chain obsolete guards nor retain unbounded
+attempt histories. No committed 1B.1 file or interface changed.
+
+Successful promise settlement alone no longer ends the initialization budget.
+The guard remains active until a matching READY layout commit rechecks time and
+ownership, then clears the UI deadline and releases pending initialization. This
+also rejects a commit delayed past the budget after a timely promise resolution.
+After that commit, ordinary ownership remains active and the unchanged Worker
+5-second page / 5-minute idle / 15-minute absolute lifetimes govern the result.
+
+Elapsed expiry uses the same guarded invalidation/abort/disposal path as timer
+expiry: detach subscriptions, abort the originating controller, clear pending
+page/focus/init metadata and timers, dispose the owned session and remove result
+publication. Only a current focused Cancel may restore focus to an explicit retry;
+deliberately moved focus is preserved. Cleared or obsolete timeout callbacks cannot
+expire a completed/replacement attempt. Import completion/rejection cannot revive
+an expired attempt. Explicit retry captures fresh start clocks without extending
+the old attempt or weakening publication binding.
+
+Thirteen regressions were added; all 49 existing UI cases remain. New coverage
+includes exact boundary/delayed monotonic time, stopped monotonic/wall fallback,
+regressed clocks, late rejection, real event-loop stall, import + request combined
+budget, delayed initial comparison completion, synchronous panel/listener setup,
+delayed Worker STARTED before HTTP, and promise-settlement-to-React-commit delay.
+They check zero resource/network creation for expired imports, no discovery READY
+or financial UI, cleared timers/listeners/graph retention, controller aborts,
+preserved focus, and a successful explicit fresh retry.
+
+Final combined interaction/Home command from frontend/:
+
+```
+node --test tests/financial-insights-interactions.test.mjs tests/research-interactions.test.mjs
+```
+
+Result: **632 passed, 0 failed/cancelled/skipped/todo**, 115.0727946 seconds:
+62 UI tests (49 retained + 13 new) and all 570 unchanged Home interactions.
+The actual delayed-event-loop regression now observed **31,004.2958 ms elapsed,
+zero Workers, zero insights HTTP requests, timerFired=false**, then verified a
+fresh retry starts exactly one Worker and one insights HTTP request. No expired
+import constructed even an InsightsPanel. HTTP counts exclude the independently
+mocked prerequisite freshness check; no external HTTP operation ran.
+
+Additional final commands from frontend/:
+
+```
+node --test tests/financial-insights.test.mjs tests/finlens-api.test.mjs
+node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+node node_modules/eslint/bin/eslint.js components/financial-insights.tsx tests/financial-insights-interactions.test.mjs
+```
+
+Existing contract/API result: **261 passed, 0 failed/cancelled/skipped/todo**,
+183.1395473 seconds. Total final relevant coverage: **893 passed** across the two
+full commands; no deselection in either. Guarded offline serialization in the
+existing suites used no services/database/private configuration/provider calls.
+TypeScript and scoped ESLint exit 0 with no diagnostics. The final exact-inventory
+and SHA-256 assertion passed; candidate tracked git diff --check and fatal UTF-8,
+no-NUL, trailing-whitespace/final-newline checks on all five paths passed.
+
+Final inventory is exactly the existing five candidates: new component/test,
+modified Home/CSS/ExecPlan, plus the original three protected exceptions. Only the
+component/test/ExecPlan changed during this P2 correction. Home/CSS match their
+review-entry SHA-256 values above byte-for-byte. Branch remains main at
+d368bba9308864b1977e61040e1877ec4548ad57; index empty. Final protected SHA-256:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json: A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json: F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Self-review: financial presentation/F-D boundaries and pagination code unchanged;
+ownership checks precede elapsed-time checks, timeout cleanup is idempotent, the
+same operation-start budget follows import/request/commit without reset, and
+completed comparisons retain their separately enforced Worker lifetime. No new
+defect or committed-interface gap found. No source/test outside the three-path
+correction scope changed; existing Home/CSS and committed contracts are preserved.
+
+Progress: scoped correction and offline verification complete; **stop for
+coordinator and focused Astra re-review**. Prior Astra FAIL remains historical
+independent evidence; these self-run checks do not establish Astra PASS or Git
+Step 1 authorization. Review the timer-independent clock guard, existing environment
+resource wrappers, initialization-to-commit ordering, cancellation/focus cleanup,
+and before/after real event-loop reproduction. Actual browser/module-Worker/Next
+bundling and all 1B.2B/native/pilot/deployment gates remain NOT VERIFIED. No build,
+browser, services, Docker/PostgreSQL, SEC/provider/model, dependency installation,
+private .env access, staging, commit or push occurred.
+Suggested later correction commit: `fix: enforce elapsed annual insights initialization deadline`.
