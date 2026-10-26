@@ -529,7 +529,12 @@ def test_every_http_database_path_uses_bounded_factory(monkeypatch, method, path
     monkeypatch.setattr(embedding, "_get_model", bomb)
     monkeypatch.setattr(main, "answer_filing_question", bomb)
     actual = path.replace("{ticker}", "TEST").replace("{accession_number}", "fixture").replace("{metric}", "revenue")
-    response = TestClient(main.app).request(method, actual, params={"q": "revenue"}, json={"question": "revenue"})
+    if path.endswith("/financials/insights"):
+        monkeypatch.setattr(main, "InsightsSessionLocal", factory)
+        response = TestClient(main.app).request(method, actual, params={"mode": "discover"},
+            headers={"X-FinLens-Data-Version": "0"})
+    else:
+        response = TestClient(main.app).request(method, actual, params={"q": "revenue"}, json={"question": "revenue"})
     if profile == "sec_readonly" and path.endswith("/answer"):
         assert response.status_code == 403 and response.headers["X-FinLens-Error-Code"] == "RELEASE_MODE_BLOCKED"
         factory.assert_not_called()

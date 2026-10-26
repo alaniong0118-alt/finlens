@@ -164,6 +164,118 @@ def HttpSessionLocal():
     return http_session_factory()()
 
 
+_insights_factory = None
+_insights_factory_lock = Lock()
+
+
+def _insights_cursor_execution(query, connection=None):
+    from app.financial_insights_contract import current_budget, require
+    owner = current_budget.get()
+    require(owner is not None)
+    sql = query if isinstance(query, str) else query.as_string(connection)
+    statement = sql.lstrip().upper()
+    # psycopg dialect's checkout ping is the empty query ";".
+    transaction = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+    require(statement.strip() in {";", transaction} or statement.startswith(("SELECT", "SHOW")))
+    owner.cursor(research=bool(getattr(owner, "research_transaction", False)
+                              and statement.startswith("SELECT")))
+    if statement.strip() == transaction:
+        owner.research_transaction = True
+
+
+class InsightsCursor(psycopg.Cursor):
+    """Count client-cursor SQL, including raw checkout and initialization SQL."""
+    def execute(self, query, params=None, **kwargs):
+        _insights_cursor_execution(query, self.connection)
+        return super().execute(query, params, **kwargs)
+
+    def executemany(self, *args, **kwargs):
+        from app.financial_insights_contract import require
+        require(False)
+
+    def copy(self, *args, **kwargs):
+        from app.financial_insights_contract import require
+        require(False)
+
+    def stream(self, *args, **kwargs):
+        from app.financial_insights_contract import require
+        require(False)
+
+
+def insights_session_factory():
+    """One separate bounded pool; existing HTTP/operational options unchanged."""
+    global _insights_factory
+    from app.financial_insights_contract import current_budget, require
+
+    budget = current_budget.get()
+    require(budget is not None)
+    budget.deadline(1)
+    require(_insights_factory_lock.acquire(timeout=1), "INSIGHTS_DEADLINE_EXCEEDED")
+    try:
+        if _insights_factory is None:
+            profile = server_profile()
+            url, options = http_engine_options(DATABASE_URL, profile)
+            # TypeInfo.fetch explicitly constructs psycopg.Cursor, bypassing
+            # cursor_factory. Financial projections use no HSTORE; disable this
+            # otherwise unaccounted initialization probe on this pool only.
+            options.update(pool_size=1, max_overflow=0, pool_timeout=1, use_native_hstore=False)
+            options["connect_args"].update(connect_timeout=2,
+                options="-c statement_timeout=1500 -c lock_timeout=250", cursor_factory=InsightsCursor)
+            bounded_engine = create_engine(url, **options)
+
+            @event.listens_for(bounded_engine, "do_connect")
+            def bounded_connect(dialect, record, args, params):
+                owner = current_budget.get()
+                require(owner is not None)
+                owner.deadline(2)
+                http_engine_options(url, profile)
+                require(params.get("connect_timeout") == 2
+                        and params.get("options") == "-c statement_timeout=1500 -c lock_timeout=250"
+                        and params.get("cursor_factory") is InsightsCursor)
+                try:
+                    result = dialect.connect(*args, **params)
+                    try:
+                        owner.deadline()
+                    except BaseException:
+                        result.close()
+                        raise
+                    return result
+                except psycopg.Error as exc:
+                    raise HttpDatabaseConnectionError(None, None, exc) from None
+
+            @event.listens_for(bounded_engine, "do_execute")
+            def bounded_execute(cursor, sql, parameters, context):
+                owner = current_budget.get()
+                require(owner is not None)
+                # Client-side Cursor fetchmany performs no additional FETCH SQL.
+                # Named/server cursors would bypass this execution accounting.
+                require(not isinstance(cursor, psycopg.ServerCursor))
+                # Actual counting is in InsightsCursor.execute. The explicit
+                # native-HSTORE cursor bypass is disabled above.
+
+            @event.listens_for(bounded_engine, "do_executemany")
+            def forbid_many(*args):
+                require(False)
+
+            @event.listens_for(bounded_engine, "checkout")
+            def bounded_checkout(dbapi_connection, record, proxy):
+                owner = current_budget.get()
+                require(owner is not None)
+                # do_ping's raw cursor is the same InsightsCursor factory.
+                _checkout_probe(bounded_engine, dbapi_connection, record, proxy)
+                owner.deadline()
+
+            _insights_factory = sessionmaker(bind=bounded_engine, autoflush=False,
+                autocommit=False, close_resets_only=False)
+        return _insights_factory
+    finally:
+        _insights_factory_lock.release()
+
+
+def InsightsSessionLocal():
+    return insights_session_factory()()
+
+
 def database_failure(exc):
     """Typed dependency classification only; never inspect diagnostic messages."""
     if isinstance(exc, PoolTimeoutError):

@@ -69,32 +69,34 @@ class FinancialMetrics:
     """Normalize an already loaded company dataset; shared by API and coverage audit."""
 
     @financial_reader
-    def __init__(self, company, facts, *, authorization_evidence=()):
+    def __init__(self, company, facts, *, authorization_evidence=(), budget=None):
+        self._budget = budget
+        self._tick()
         self.company = company
-        self.facts = [f for f in facts if f.company_cik == company.cik]
+        self.facts = [f for f in self._walk(facts) if f.company_cik == company.cik]
         # Internal evidence comes from verified original markup, never inferred
         # from Company Facts frame/fiscal annotations or request parameters.
         self.authorization_evidence = tuple(authorization_evidence)
         self.selection_approvals = {}
         self.selection_rejections = {}
-        self.base = {name: [] for name, definition in METRICS.items() if definition.kind != "derived"}
+        self.base = {name: [] for name, definition in self._walk(METRICS.items()) if definition.kind != "derived"}
         # Dates of usable revenue observations establish reporting boundaries;
         # their economic scopes are resolved separately before selecting values.
-        revenue = [f for f in self.facts if usable(f, METRICS["revenue"])]
-        self.annual_bounds = sorted({(f.period_start, f.period_end) for f in revenue
+        revenue = [f for f in self._walk(self.facts) if usable(f, METRICS["revenue"])]
+        self.annual_bounds = sorted({(f.period_start, f.period_end) for f in self._walk(revenue)
                                      if period_kind(f, METRICS["revenue"]) == "annual"})
-        self.ytd_starts = {f.period_start for f in revenue
+        self.ytd_starts = {f.period_start for f in self._walk(revenue)
                            if period_kind(f, METRICS["revenue"]) in {"half_year", "nine_months"}}
-        self.bank_revenue = any(original_concept(f) == "RevenuesNetOfInterestExpense" for f in revenue)
-        for name, definition in METRICS.items():
+        self.bank_revenue = any(original_concept(f) == "RevenuesNetOfInterestExpense" for f in self._walk(revenue))
+        for name, definition in self._walk(METRICS.items()):
             if definition.kind == "derived":
                 continue
             groups = {}
-            for fact in self.facts:
+            for fact in self._walk(self.facts):
                 if usable(fact, definition):
                     key = (period_kind(fact, definition), fact.period_start, fact.period_end)
                     groups.setdefault(key, []).append(fact)
-            for key, candidates in groups.items():
+            for key, candidates in self._walk(groups.items()):
                 eligible = candidates
                 if name == "revenue":
                     eligible = self.revenue_candidates(candidates)
@@ -104,7 +106,7 @@ class FinancialMetrics:
                         if rejected:
                             point.reason = f"Revenue selection authorization rejected: {rejected}."
                             candidates = self.authorization_facts(("revenue",), key[0], key[2])
-                        point.alternatives = [self.source(name, f) for f in sorted(candidates, key=lambda f: f.id)]
+                        point.alternatives = [self.source(name, f) for f in self._walk(sorted(candidates, key=lambda f: f.id))]
                         self.base[name].append(point)
                         continue
                 ranked = sorted(eligible, key=lambda f: (
@@ -116,27 +118,39 @@ class FinancialMetrics:
                 self.base[name].append(NormalizedMetric(
                     metric=name, unit=definition.unit, status="available", value=chosen.value,
                     period=self.period(*key), provenance=[self.source(name, chosen)],
-                    alternatives=[self.source(name, f) for f in ranked[1:]],
+                    alternatives=[self.source(name, f) for f in self._walk(ranked[1:])],
                     revenue_basis=REVENUE_CONCEPTS[original_concept(chosen)].basis if name == "revenue" else None,
                 ))
                 if name == "revenue":
                     approval = self.selection_approvals.get((key[0], key[1], key[2]))
                     if approval:
                         self.base[name][-1].scope_authorization = self.approval_provenance(approval)
-                    self.base[name][-1].alternatives.extend(self.source(name, f) for f in sorted(candidates, key=lambda f: f.id) if f not in eligible)
+                    self.base[name][-1].alternatives.extend(self.source(name, f) for f in self._walk(sorted(candidates, key=lambda f: f.id)) if not self._contains(eligible, f))
             self.base[name].sort(key=lambda p: (p.period.end, p.period.start or date.min))
+
+    def _tick(self):
+        if self._budget is not None:
+            self._budget.visit()
+
+    def _walk(self, values):
+        return self._budget.walk(values) if self._budget is not None else values
+
+    def _contains(self, values, needle):
+        if self._budget is None:
+            return needle in values
+        return any(value is needle or value == needle for value in self._walk(values))
 
     @financial_reader
     def revenue_candidates(self, candidates):
-        bases = {REVENUE_CONCEPTS[original_concept(f)].basis for f in candidates}
-        if all(revenue_bases_compatible(left, right) for left in bases for right in bases):
+        bases = {REVENUE_CONCEPTS[original_concept(f)].basis for f in self._walk(candidates)}
+        if all(revenue_bases_compatible(left, right) for left in self._walk(bases) for right in self._walk(bases)):
             return candidates
         # Before/after interest expense are different canonical banking bases.
         # Neither recency nor a matching numeric value establishes equivalence.
         if "net_interest" in bases:
             return []
         if "total_revenue" in bases:
-            return [f for f in candidates if REVENUE_CONCEPTS[original_concept(f)].basis == "total_revenue"]
+            return [f for f in self._walk(candidates) if REVENUE_CONCEPTS[original_concept(f)].basis == "total_revenue"]
         if not scope_permissions.REVENUE_SELECTION_AUTHORIZATIONS:
             return []
         # Only this otherwise ambiguous component branch admits a new selection
@@ -151,37 +165,38 @@ class FinancialMetrics:
                 self.selection_rejections[(kind, first.period_start, first.period_end)] = decision.reason
             return []
         self.selection_approvals[(kind, first.period_start, first.period_end)] = decision.ref
-        return [f for f in candidates if scope_permissions.SourceIdentity.from_fact(f) == decision.selected]
+        return [f for f in self._walk(candidates) if scope_permissions.SourceIdentity.from_fact(f) == decision.selected]
 
     def authorization_sources(self, names, kind, end):
-        return tuple(scope_permissions.SourceIdentity.from_fact(f) for f in self.authorization_facts(names, kind, end))
+        return tuple(scope_permissions.SourceIdentity.from_fact(f) for f in self._walk(self.authorization_facts(names, kind, end)))
 
     def authorization_facts(self, names, kind, end):
         # Include same-end/kind observations with changed starts, not just the
         # already selected rows. New fiscal boundaries must invalidate review.
-        return [f for f in self.facts if any(usable(f, METRICS[n]) and period_kind(f, METRICS[n]) == kind
-                                            and f.period_end == end for n in names)]
+        return [f for f in self._walk(self.facts) if any(usable(f, METRICS[n]) and period_kind(f, METRICS[n]) == kind
+                                            and f.period_end == end for n in self._walk(names))]
 
     @staticmethod
     def approval_provenance(ref):
         return ScopeAuthorizationProvenance(permission=ref.permission, approval_id=ref.approval_id, version=ref.version)
 
     def period(self, kind, start, end):
+        self._tick()
         period = FinancialPeriod(kind=kind, start=start, end=end)
         if kind == "annual":
             return period.model_copy(update={"fiscal_year": end.year, "fiscal_period": "FY",
                                              "fiscal_label_basis": "annual_period_end_year"})
         if kind == "instant":
             return period
-        bounds = [(a, b) for a, b in self.annual_bounds if a <= start <= end <= b]
+        bounds = [(a, b) for a, b in self._walk(self.annual_bounds) if a <= start <= end <= b]
         if len(bounds) == 1:
             anchor, year = bounds[0][0], bounds[0][1].year
             basis = "observed_annual_boundary"
         elif bounds:
             return period  # Ambiguous overlapping fiscal boundaries.
         else:
-            anchors = [a for a in self.ytd_starts if a <= start <= end and (end-a).days < 390]
-            candidates = [a for a in anchors for _, b in self.annual_bounds
+            anchors = [a for a in self._walk(self.ytd_starts) if a <= start <= end and (end-a).days < 390]
+            candidates = [a for a in self._walk(anchors) for _, b in self._walk(self.annual_bounds)
                           if a == b + timedelta(days=1)]
             if len(set(candidates)) != 1:
                 return period
@@ -189,20 +204,20 @@ class FinancialMetrics:
             # A previous full 52/53-week or calendar year supports a 364–371
             # day projection; transition/stub calendars do not. Near Dec/Jan
             # even that range spans two end years, so preserve uncertainty.
-            prior_lengths = {(b-a).days+1 for a, b in self.annual_bounds if anchor == b + timedelta(days=1)}
-            end_years = {(anchor + timedelta(days=days-1)).year for days in range(364, 372)}
+            prior_lengths = {(b-a).days+1 for a, b in self._walk(self.annual_bounds) if anchor == b + timedelta(days=1)}
+            end_years = {(anchor + timedelta(days=days-1)).year for days in self._walk(range(364, 372))}
             year = (next(iter(end_years)) if len(end_years) == 1
-                    and all(364 <= days <= 371 for days in prior_lengths) else None)
+                    and all(364 <= days <= 371 for days in self._walk(prior_lengths)) else None)
             basis = "ytd_start_after_observed_annual_end"
             # Two consecutive full calendar years with the same month/day
             # boundaries distinguish a calendar schedule from a week calendar.
             # This retains Jan–Dec issuer labels without assuming every Jan
             # start ends in December or incrementing the previous end year.
             calendar_years = set()
-            for a, b in self.annual_bounds:
+            for a, b in self._walk(self.annual_bounds):
                 if anchor != b + timedelta(days=1) or (b-a).days+1 not in {365, 366}:
                     continue
-                for previous_start, previous_end in self.annual_bounds:
+                for previous_start, previous_end in self._walk(self.annual_bounds):
                     if (previous_end + timedelta(days=1) == a
                             and (previous_end-previous_start).days+1 in {365, 366}
                             and (previous_start.month, previous_start.day) == (a.month, a.day)
@@ -212,7 +227,7 @@ class FinancialMetrics:
                 year = calendar_years.pop()
                 basis = "ytd_start_with_observed_calendar_year_pattern"
         if kind == "quarter":
-            offsets = [i for i in range(4) if abs((start-anchor).days - 91*i) <= 14]
+            offsets = [i for i in self._walk(range(4)) if abs((start-anchor).days - 91*i) <= 14]
             label = f"Q{offsets[0]+1}" if len(offsets) == 1 else None
         else:
             label = {"half_year": "Q2", "nine_months": "Q3"}.get(kind) if start == anchor else None
@@ -222,6 +237,7 @@ class FinancialMetrics:
         return period
 
     def source(self, name, fact):
+        self._tick()
         return FactProvenance(
             fact_id=fact.id, canonical_metric=name, company_cik=fact.company_cik,
             stored_metric=fact.metric, original_concept=original_concept(fact), value=fact.value,
@@ -233,15 +249,17 @@ class FinancialMetrics:
         )
 
     def missing(self, name, reason, period=None, status="unavailable"):
+        self._tick()
         return NormalizedMetric(metric=name, unit=METRICS[name].unit, status=status,
                                 reason=reason, period=period, formula=METRICS[name].formula)
 
     @financial_reader
     def observation(self, name, period):
+        self._tick()
         if self.bank_revenue and name in {"gross_profit", "gross_margin"}:
             return self.missing(name, "Gross profit/margin is not applicable to the observed net-interest revenue basis.", period, "not_applicable")
         if name in self.base:
-            for point in self.base[name]:
+            for point in self._walk(self.base[name]):
                 if (point.period.start == period.start and point.period.end == period.end
                         and point.period.kind == period.kind):
                     if name == "capital_expenditures" and point.value < 0:
@@ -250,7 +268,7 @@ class FinancialMetrics:
             return self.missing(name, "No compatible stored SEC fact for this period, concept and unit.", period)
         if name == "revenue_growth_yoy":
             current = self.observation("revenue", period)
-            prior = [p for p in self.base["revenue"] if p.period.kind == period.kind
+            prior = [p for p in self._walk(self.base["revenue"]) if p.period.kind == period.kind
                      and p.period.start is not None and period.start is not None
                      and 357 <= (period.end-p.period.end).days <= 378
                      and 357 <= (period.start-p.period.start).days <= 378
@@ -267,14 +285,14 @@ class FinancialMetrics:
                     "operating_margin": ("operating_income", "revenue"),
                     "net_margin": ("net_income", "revenue"),
                     "free_cash_flow": ("operating_cash_flow", "capital_expenditures")}[name]
-        return self.calculate(name, [self.observation(n, period) for n in operands], period, list(operands))
+        return self.calculate(name, [self.observation(n, period) for n in self._walk(operands)], period, list(operands))
 
     def reviewed_gross_margin_scope(self, gross_profit, revenue):
         """Exact source-pair authorization; no ticker or global basis exception."""
         if len(gross_profit.provenance) != 1 or len(revenue.provenance) != 1:
             return False
         gp, rev = gross_profit.provenance[0], revenue.provenance[0]
-        for coverage in GROSS_MARGIN_COVERAGE:
+        for coverage in self._walk(GROSS_MARGIN_COVERAGE):
             if (self.company.cik == gp.company_cik == rev.company_cik == coverage.company_cik
                     and gp.accession_number == rev.accession_number == coverage.accession
                     and gp.period_start == rev.period_start == coverage.start
@@ -288,8 +306,8 @@ class FinancialMetrics:
                     and revenue.value == rev.value == coverage.revenue):
                 # Inspect raw eligible candidates, independently of row-ID ranking.
                 # Calendar frames/fiscal labels are annotations, not extra scopes.
-                for name, source in (("gross_profit", gp), ("revenue", rev)):
-                    values = {f.value for f in self.facts
+                for name, source in self._walk((("gross_profit", gp), ("revenue", rev))):
+                    values = {f.value for f in self._walk(self.facts)
                               if usable(f, METRICS[name])
                               and original_concept(f) == source.original_concept
                               and f.accession_number == source.accession_number
@@ -304,10 +322,11 @@ class FinancialMetrics:
 
     @financial_reader
     def calculate(self, name, operands, period, roles):
+        self._tick()
         denominator_approval = None
-        if any(p.status != "available" for p in operands):
+        if any(p.status != "available" for p in self._walk(operands)):
             failures = []
-            for role, operand in zip(roles, operands, strict=True):
+            for role, operand in self._walk(zip(roles, operands, strict=True)):
                 if operand.status != "available":
                     label = f"{role} {operand.metric}" if role in {"current", "prior"} else role
                     failures.append(f"{label.replace('_', ' ').capitalize()}: {operand.reason or 'No failure reason supplied.'}")
@@ -322,8 +341,8 @@ class FinancialMetrics:
             if name == "gross_margin" and not approved:
                 approved = self.reviewed_gross_margin_scope(first, second)
             if name == "net_margin" and not approved and scope_permissions.DENOMINATOR_AUTHORIZATIONS:
-                revenue = next((f for f in self.facts if f.id == second.provenance[0].fact_id), None)
-                numerator = next((f for f in self.facts if f.id == first.provenance[0].fact_id), None)
+                revenue = next((f for f in self._walk(self.facts) if f.id == second.provenance[0].fact_id), None)
+                numerator = next((f for f in self._walk(self.facts) if f.id == first.provenance[0].fact_id), None)
                 if revenue is not None and numerator is not None:
                     decision = scope_permissions.authorize_denominator(
                         name, scope_permissions.SourceIdentity.from_fact(revenue),
@@ -335,8 +354,8 @@ class FinancialMetrics:
                     elif decision.reason != "no_authorization":
                         rejected = self.missing(name, f"Revenue denominator authorization rejected: {decision.reason}.", period)
                         raw = self.authorization_facts(("revenue", "net_income"), period.kind, period.end)
-                        rejected.alternatives = [self.source(n, f) for f in sorted(raw, key=lambda f: f.id)
-                                                 for n in ("revenue", "net_income")
+                        rejected.alternatives = [self.source(n, f) for f in self._walk(sorted(raw, key=lambda f: f.id))
+                                                 for n in self._walk(("revenue", "net_income"))
                                                  if original_concept(f) in METRICS[n].concepts]
                         return rejected
             if not approved or (self.bank_revenue and second.revenue_basis != "net_interest"):
@@ -354,21 +373,21 @@ class FinancialMetrics:
         return NormalizedMetric(
             metric=name, unit=METRICS[name].unit, status="available", value=value,
             period=period, formula=METRICS[name].formula,
-            provenance=[source for p in operands for source in p.provenance],
+            provenance=[source for p in self._walk(operands) for source in self._walk(p.provenance)],
             inputs=[MetricInput(role=role, metric=p.metric, value=p.value, unit=p.unit,
-                                period=p.period, fact_ids=[s.fact_id for s in p.provenance], revenue_basis=p.revenue_basis)
-                    for role, p in zip(roles, operands, strict=True)],
+                                period=p.period, fact_ids=[s.fact_id for s in self._walk(p.provenance)], revenue_basis=p.revenue_basis)
+                    for role, p in self._walk(zip(roles, operands, strict=True))],
             scope_authorization=self.approval_provenance(denominator_approval) if denominator_approval else None,
         )
 
     def metric_periods(self, name, kind):
         """Shared normalized anchors; never infer a quarter from annual/YTD."""
         anchor_name = name if name in self.base else ("operating_cash_flow" if name == "free_cash_flow" else "revenue")
-        return [p.period for p in self.base[anchor_name] if p.period.kind == kind]
+        return [p.period for p in self._walk(self.base[anchor_name]) if p.period.kind == kind]
 
     def reporting_periods(self, kind):
         anchors = self.metric_periods("revenue", kind)
-        return anchors or [p.period for points in self.base.values() for p in points if p.period.kind == kind]
+        return anchors or [p.period for points in self._walk(self.base.values()) for p in self._walk(points) if p.period.kind == kind]
 
     @financial_reader
     def fiscal_observation(self, name, requested: FiscalPeriodRequest):
@@ -377,7 +396,7 @@ class FinancialMetrics:
         kind = "quarter" if requested.quarter else "annual"
         anchors = (self.reporting_periods(kind) if definition.kind == "instant"
                    else self.metric_periods(name, kind) or self.reporting_periods(kind))
-        matches = {(p.kind, p.start, p.end): p for p in anchors
+        matches = {(p.kind, p.start, p.end): p for p in self._walk(anchors)
                    if p.fiscal_year == requested.fiscal_year
                    and p.fiscal_period == (f"Q{requested.quarter}" if requested.quarter else "FY")}
         if len(matches) != 1:
@@ -397,7 +416,7 @@ class FinancialMetrics:
                                   earlier=left, later=right)
         if left.status != "available" or right.status != "available":
             result.status = "not_applicable" if "not_applicable" in {left.status, right.status} else "unavailable"
-            result.reason = "; ".join(f"{request.label}: {point.reason}" for request, point in [(earlier, left), (later, right)] if point.status != "available")
+            result.reason = "; ".join(f"{request.label}: {point.reason}" for request, point in self._walk([(earlier, left), (later, right)]) if point.status != "available")
             return result
         if (left.unit != right.unit or left.period.kind != right.period.kind
                 or earlier.quarter != later.quarter
@@ -409,7 +428,7 @@ class FinancialMetrics:
         gaps = [(right.period.end-left.period.end).days]
         if left.period.start is not None and right.period.start is not None:
             gaps.append((right.period.start-left.period.start).days)
-        if any(abs(gap - 365 * year_gap) > tolerance for gap in gaps):
+        if any(abs(gap - 365 * year_gap) > tolerance for gap in self._walk(gaps)):
             result.reason = "Fiscal reporting boundaries do not align across the requested years."
             return result
         if left.period.start is not None and right.period.start is not None:
@@ -419,11 +438,11 @@ class FinancialMetrics:
         if name == "revenue" and not revenue_bases_compatible(left.revenue_basis, right.revenue_basis):
             result.reason = "Earlier/later revenue economic bases are not explicitly comparable."
             return result
-        left_inputs = {(i.role, i.metric, i.unit): i for i in left.inputs}
-        right_inputs = {(i.role, i.metric, i.unit): i for i in right.inputs}
+        left_inputs = {(i.role, i.metric, i.unit): i for i in self._walk(left.inputs)}
+        right_inputs = {(i.role, i.metric, i.unit): i for i in self._walk(right.inputs)}
         if left_inputs.keys() != right_inputs.keys() or any(
             i.metric == "revenue" and not revenue_bases_compatible(i.revenue_basis, right_inputs[key].revenue_basis)
-            for key, i in left_inputs.items()
+            for key, i in self._walk(left_inputs.items())
         ):
             result.reason = "Derived input economic bases or roles are not explicitly comparable."
             return result
@@ -450,9 +469,9 @@ class FinancialMetrics:
         if name not in METRICS:
             raise UnknownMetric(name)
         anchors = self.metric_periods(name, kind)
-        observations = [self.observation(name, period) for period in anchors]
+        observations = [self.observation(name, period) for period in self._walk(anchors)]
         history = observations[-limit:]
-        status = "available" if any(p.status == "available" for p in history) else "unavailable"
+        status = "available" if any(p.status == "available" for p in self._walk(history)) else "unavailable"
         reason = None if status == "available" else "No compatible stored SEC observations or inputs."
         if self.bank_revenue and name in {"gross_profit", "gross_margin"}:
             status, reason = "not_applicable", "Observed net-interest revenue basis."
@@ -471,21 +490,21 @@ class FinancialMetrics:
         """
         # Comparison coverage is the union of its metrics' existing annual anchors.
         # Revenue-first reporting_periods remains unchanged for other endpoints.
-        anchors = [p for name in ANNUAL_COMPARISON_METRICS
-                   for p in self.metric_periods(name, "annual")]
-        years = sorted({p.fiscal_year for p in anchors
+        anchors = [p for name in self._walk(ANNUAL_COMPARISON_METRICS)
+                   for p in self._walk(self.metric_periods(name, "annual"))]
+        years = sorted({p.fiscal_year for p in self._walk(anchors)
                         if p.fiscal_year is not None and 1900 <= p.fiscal_year <= 2099}, reverse=True)
         anchor, reason, metrics = None, None, {}
         if fiscal_year is not None:
-            matches = {(p.start, p.end): p for p in anchors
+            matches = {(p.start, p.end): p for p in self._walk(anchors)
                        if p.fiscal_year == fiscal_year and p.fiscal_period == "FY"}
             if len(matches) == 1:
                 anchor = next(iter(matches.values()))
-                metrics = {name: self.observation(name, anchor) for name in ANNUAL_COMPARISON_METRICS}
+                metrics = {name: self.observation(name, anchor) for name in self._walk(ANNUAL_COMPARISON_METRICS)}
             else:
                 reason = ("Multiple stored annual reporting windows have this fiscal end-year; selection is ambiguous."
                           if matches else "No stored annual reporting window for the requested fiscal end-year. Other years, quarterly and YTD observations are not substituted.")
-                metrics = {name: self.missing(name, reason) for name in ANNUAL_COMPARISON_METRICS}
+                metrics = {name: self.missing(name, reason) for name in self._walk(ANNUAL_COMPARISON_METRICS)}
         return AnnualFinancialComparison(
             ticker=self.company.ticker, company_name=self.company.name, company_cik=self.company.cik,
             period=anchor, selection_policy=SELECTION_POLICY, metrics=metrics,
@@ -497,7 +516,7 @@ class FinancialMetrics:
         anchors = self.reporting_periods(kind)
         anchor = max(anchors, key=lambda p: (p.end, p.start or date.min)) if anchors else None
         metrics = {}
-        for name, definition in METRICS.items():
+        for name, definition in self._walk(METRICS.items()):
             if anchor is None:
                 metrics[name] = self.missing(name, "No compatible stored reporting period.")
             elif definition.kind == "instant":

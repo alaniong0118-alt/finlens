@@ -11,14 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from pydantic import BaseModel, BeforeValidator, Field
 from sqlalchemy import func, select, text
 from app.sec_client import (
     build_filing_url,
     build_filing_raw_url,
 )
-from app.database import HttpSessionLocal, database_failure
+from app.database import HttpSessionLocal, InsightsSessionLocal, database_failure
+from app.financial_insights_contract import Budget, InsightsFailure, budget_scope, current_budget
+from app.financial_insights_service import build_insights, registry_guard
+from app.activation_lifecycle import _financial_read
 from app.embedding_service import EncoderDependencyError
 from app.financial_analysis import (
     get_financial_history,
@@ -97,8 +100,7 @@ ResearchLimit = Annotated[int, BeforeValidator(_http_result_count), Query(ge=1, 
 class VersionedRoute(APIRoute):
     def get_route_handler(self):
         original = super().get_route_handler()
-        @latency.route
-        async def handle(request):
+        async def versioned(request):
             ticker = request.path_params.get("ticker")
             scope = {"ticker": ticker.upper() if ticker else None,
                      "expected": request.headers.get("X-FinLens-Data-Version"), "version": None}
@@ -112,11 +114,23 @@ class VersionedRoute(APIRoute):
                 except RequestValidationError as exc:
                     response = await request_validation_exception_handler(request, exc)
                 except Exception as exc:
+                    if isinstance(exc, InsightsFailure):
+                        response = insights_error(exc)
+                        failure = None
+                    else:
+                        response = None
                     failure = database_failure(exc)
+                    if self.path == "/companies/{ticker}/financials/insights" and response is None:
+                        if failure and failure[1] == "DATABASE_TIMEOUT":
+                            response = insights_error(InsightsFailure("INSIGHTS_DEADLINE_EXCEEDED"))
+                        elif failure is None:
+                            response = insights_error(InsightsFailure())
                     if isinstance(exc, EncoderDependencyError):
                         failure = (503, "RETRIEVAL_UNAVAILABLE",
                                    "Filing evidence search is unavailable. Try again later.")
-                    if failure:
+                    if response is not None:
+                        pass
+                    elif failure:
                         status, code, message = failure
                         response = JSONResponse({"detail": message}, status_code=status,
                                                 headers={"X-FinLens-Error-Code": code})
@@ -128,7 +142,57 @@ class VersionedRoute(APIRoute):
                 return response
             finally:
                 request_scope.reset(token)
+
+        @latency.route
+        async def handle(request):
+            if self.path != "/companies/{ticker}/financials/insights":
+                return await versioned(request)
+            budget = Budget()
+            try:
+                with budget_scope(budget), _financial_read():
+                    registry_guard()
+                    response = await versioned(request)
+                    if response.status_code < 400:
+                        registry_guard()
+                        budget.deadline()
+                return response
+            except InsightsFailure as exc:
+                return insights_error(exc)
+            except Exception:
+                return insights_error(InsightsFailure())
         return handle
+
+
+def insights_error(error):
+    return JSONResponse({"detail": error.public_message}, status_code=error.status,
+        headers={"X-FinLens-Error-Code": error.code, "Cache-Control": "no-store"})
+
+
+class PublishedInsightsResponse(Response):
+    """Hold financial admission again through ASGI publication, after DB cleanup."""
+    def __init__(self, body, budget, configuration):
+        super().__init__(body, media_type="application/json")
+        self.budget, self.configuration = budget, configuration
+
+    async def __call__(self, scope, receive, send):
+        started = False
+        async def guarded_send(message):
+            nonlocal started
+            self.budget.deadline()
+            registry_guard(self.configuration)
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+        try:
+            with budget_scope(self.budget), _financial_read():
+                registry_guard(self.configuration)
+                self.budget.deadline()
+                await super().__call__(scope, receive, guarded_send)
+        except Exception as exc:
+            if started:
+                raise
+            error = exc if isinstance(exc, InsightsFailure) else InsightsFailure()
+            await insights_error(error)(scope, receive, send)
 
 
 app = FastAPI(
@@ -264,6 +328,54 @@ def annual_financial_comparison(ticker: str, fiscal_year: int | None = Query(def
             return model.annual_comparison(fiscal_year)
         except UnknownCompany:
             raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
+
+
+@app.get("/companies/{ticker}/financials/insights")
+def annual_financial_insights(ticker: str, request: Request):
+    def invalid():
+        raise HTTPException(422, detail="Invalid financial insight selector or publication pin.")
+    if len(request.scope.get("query_string", b"")) > 256:
+        invalid()
+    pins = request.headers.getlist("X-FinLens-Data-Version")
+    if len(pins) != 1:
+        invalid()
+    raw_pin = pins[0]
+    if (len(raw_pin) > 16 or not raw_pin.isascii() or not raw_pin.isdecimal()
+            or str(int(raw_pin)) != raw_pin or int(raw_pin) > 9007199254740991):
+        invalid()
+    pairs = list(request.query_params.multi_items())
+    allowed = {"mode", "earlier_fiscal_year", "later_fiscal_year"}
+    if len(pairs) != len({k for k, v in pairs}) or any(k not in allowed for k, v in pairs):
+        invalid()
+    params = dict(pairs)
+    mode = params.get("mode", "compare")
+    earlier = later = None
+    if mode == "discover":
+        if set(params) != {"mode"}:
+            invalid()
+    elif mode == "compare":
+        values = [params.get(k, "") for k in ("earlier_fiscal_year", "later_fiscal_year")]
+        if any(len(v) != 4 or not v.isascii() or not v.isdecimal() or not 1900 <= int(v) <= 2099 for v in values):
+            invalid()
+        earlier, later = map(int, values)
+        if earlier >= later:
+            invalid()
+    else:
+        invalid()
+    if not ticker or len(ticker) > 10 or not ticker.isascii() or any(not (c.isalnum() or c in ".-") for c in ticker):
+        invalid()
+    budget = current_budget.get()
+    if budget is None:
+        raise InsightsFailure()
+    with read_session(InsightsSessionLocal) as session:
+        try:
+            body, configuration = build_insights(session, ticker.upper(), int(raw_pin), mode, earlier, later, budget)
+        except UnknownCompany:
+            raise HTTPException(404, detail="Unknown company.")
+    # read_session cleanup must succeed before a publishable response exists.
+    registry_guard(configuration)
+    budget.deadline()
+    return PublishedInsightsResponse(body, budget, configuration)
 
 
 @app.get("/companies/{ticker}/financials/metrics/{metric}", response_model=NormalizedMetricHistory)

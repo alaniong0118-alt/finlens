@@ -39,6 +39,7 @@ READONLY_ROUTES = frozenset({
     ("POST", "/companies/{ticker}/research-answer"),
     ("GET", "/companies/{ticker}/financials/summary"),
     ("GET", "/companies/{ticker}/financials/annual"),
+    ("GET", "/companies/{ticker}/financials/insights"),
     ("GET", "/companies/{ticker}/financials/metrics/{metric}"),
     ("GET", "/companies/{ticker}/financial-summary"),
     ("GET", "/companies/{ticker}/financial-snapshot"),
