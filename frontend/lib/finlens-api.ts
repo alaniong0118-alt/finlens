@@ -1,7 +1,30 @@
 import type { ToneIdentity } from "./filing-tone";
+import type { InsightsPanel, InsightSelection, InsightsDelivery, InsightsPresentation } from "./financial-insights";
 
 const API_PREFIX = "/api/finlens";
 const versionScopes = new WeakMap<AbortSignal, { version: number; changed: () => void }>();
+
+/** Opt-in insights transport; requestJson and all sibling endpoint behavior are unchanged. */
+export function getFinancialInsights(company: Pick<Company, "ticker" | "cik">, selection: InsightSelection,
+  signal: AbortSignal, panel: InsightsPanel, current: () => boolean, discovery?: InsightsPresentation): Promise<InsightsDelivery> {
+  const scope = versionScopes.get(signal);
+  if (!scope || !Number.isSafeInteger(scope.version) || scope.version < 0 || Object.is(scope.version, -0)) {
+    return Promise.reject(new FinLensApiError("A verified publication version is required.", 502, "INVALID_RESPONSE"));
+  }
+  if (selection.mode === "compare" && (!discovery || discovery.mode !== "discover" || discovery.ticker !== company.ticker
+    || discovery.company_cik !== company.cik || discovery.data_version !== scope.version
+    || !discovery.fiscal_years.includes(selection.earlier) || !discovery.fiscal_years.includes(selection.later))) {
+    return Promise.reject(new FinLensApiError("Discover supported years for this publication first.", 502, "INVALID_RESPONSE"));
+  }
+  return panel.start({ ticker: company.ticker, cik: company.cik, pin: scope.version, selection, signal, current,
+    ...(selection.mode === "compare" && discovery ? { publication: { facts: discovery.facts_version, evidence: discovery.evidence_version } } : {}),
+    changed: () => { if (!signal.aborted && current()) scope.changed(); },
+  }).catch((error: unknown) => {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    const failure = error as { code?: string; status?: number };
+    throw new FinLensApiError("Financial insights could not be loaded. Please retry this selection.", failure?.status ?? 502, failure?.code ?? "INVALID_RESPONSE");
+  });
+}
 
 export function versionedController(version: number, changed: () => void): AbortController {
   const controller = new AbortController();
