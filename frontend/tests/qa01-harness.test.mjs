@@ -190,9 +190,51 @@ test('QA-01 request allowlist preserves independent pins and rejects provider/un
   assert.equal(scenario.versions.BBB, 1);
 });
 
-test('QA-01 insights rebasing preserves the committed fixture bytes and original graph', () => {
+function verifyInsightsFixtureChecksum(bytes) {
+  // Accept only LF or CRLF representation changes. Preserve every other byte;
+  // never decode/re-encode, trim, or derive the expected digest from this input.
+  const canonical = Buffer.alloc(bytes.length); let length = 0;
+  for (let index = 0; index < bytes.length; index++) {
+    if (bytes[index] === 13) {
+      assert.equal(bytes[index + 1], 10, 'Unexpected standalone carriage return in insights fixture');
+    } else canonical[length++] = bytes[index];
+  }
+  const lf = canonical.subarray(0, length);
+  assert.equal(createHash('sha256').update(lf).digest('hex'), 'afad566f1ee89ba285f51559bc60ce439d50d2580327ffe1776e2a02ef35b27b', 'Canonical LF insights fixture checksum');
+  return lf;
+}
+
+test('QA-01 insights checksum accepts the canonical LF representation', () => {
+  const lf = Buffer.from(readFileSync(resolve(frontend, 'e2e/fixtures/financial-insights.ts'), 'utf8').replaceAll('\r\n', '\n'));
+  assert.deepEqual(verifyInsightsFixtureChecksum(lf), lf);
+});
+
+test('QA-01 insights checksum accepts equivalent CRLF without changing content', () => {
+  const text = readFileSync(resolve(frontend, 'e2e/fixtures/financial-insights.ts'), 'utf8').replaceAll('\r\n', '\n');
+  const crlf = Buffer.from(text.replaceAll('\n', '\r\n')), before = Buffer.from(crlf);
+  assert.deepEqual(verifyInsightsFixtureChecksum(crlf), Buffer.from(text));
+  assert.deepEqual(crlf, before);
+});
+
+test('QA-01 insights checksum rejects a modified non-newline byte', () => {
+  const mutated = Buffer.from(readFileSync(resolve(frontend, 'e2e/fixtures/financial-insights.ts')));
+  mutated[0] ^= 1;
+  assert.throws(() => verifyInsightsFixtureChecksum(mutated), /Canonical LF insights fixture checksum/);
+});
+
+test('QA-01 insights checksum rejects standalone CR and malformed CRCRLF or LFCR', () => {
+  const lf = Buffer.from(readFileSync(resolve(frontend, 'e2e/fixtures/financial-insights.ts'), 'utf8').replaceAll('\r\n', '\n'));
+  const newline = lf.indexOf(10); assert.ok(newline >= 0);
+  for (const malformed of [
+    Buffer.concat([Buffer.from('\r'), lf]), Buffer.concat([lf, Buffer.from('\r')]),
+    Buffer.concat([lf.subarray(0, newline), Buffer.from('\r\r\n'), lf.subarray(newline + 1)]),
+    Buffer.concat([lf.subarray(0, newline), Buffer.from('\n\r'), lf.subarray(newline + 1)]),
+  ]) assert.throws(() => verifyInsightsFixtureChecksum(malformed), /Unexpected standalone carriage return/);
+});
+
+test('QA-01 insights rebasing preserves the committed fixture content and original graph', () => {
   const bytes = readFileSync(resolve(frontend, 'e2e/fixtures/financial-insights.ts'));
-  assert.equal(createHash('sha256').update(bytes).digest('hex'), '491733790cd78dc2a143295b196d41f2891aeb47f7293072c70cbb027d16b36a');
+  verifyInsightsFixtureChecksum(bytes);
   const original = financialInsightsFixture();
   for (const [ticker, pin] of [['AAA', 0], ['BBB', 1]]) {
     const body = browserFinancialInsights(ticker, pin, 'compare');

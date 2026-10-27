@@ -799,3 +799,93 @@ Use the existing QA-01 runbook's isolation precheck and runner-owned teardown;
 neither cleanup nor network rules are changed by this patch. Stop here for
 coordinator/Astra review. Suggested later commit message:
 `test: add isolated annual financial insights browser acceptance`.
+
+## QA-01 cross-platform fixture checksum correction — 2026-10-27
+
+Coordinator authorized exactly two candidate files: frontend/tests/qa01-harness.test.mjs
+and this appended ExecPlan. Before writes: main/HEAD ed718c2fcc781213d49812c1d746b0105df7244d,
+empty index, only the original three protected exceptions, and all protected
+SHA-256 fingerprints matched. The fixture's Windows checkout bytes remain
+491733790cd78dc2a143295b196d41f2891aeb47f7293072c70cbb027d16b36a.
+Ignored private backend/.env remains untouched and unread.
+
+Incident: push-triggered Frontend browser E2E run 40431066500, attempt 1,
+job 121948564760, SHA ed718c2fcc781213d49812c1d746b0105df7244d:
+https://github.com/alaniong0118-alt/finlens/actions/runs/40431066500
+Hosted Ubuntu 24.04.5/Node 24.21.0 completed npm ci, then QA-01 reported
+44 passed, 1 failed, 0 skipped. The sole failure was the raw-checkout fixture hash.
+Chromium installation, isolated launcher precheck and browser tests/teardown were
+skipped. Four Linux process-tree integration tests passed; synthetic capture was
+skipped. This is historical CI evidence, not a new run or browser acceptance.
+
+Root cause: the test pinned Windows CRLF SHA-256
+491733790cd78dc2a143295b196d41f2891aeb47f7293072c70cbb027d16b36a,
+while the committed Git/Linux LF SHA-256 is
+afad566f1ee89ba285f51559bc60ce439d50d2580327ffe1776e2a02ef35b27b.
+Read-only comparison showed exactly four CRLF-to-LF substitutions and otherwise
+identical bytes. The Windows digest remains historical preservation evidence;
+the independent canonical Git digest is the portable content expectation.
+
+Correction plan: verify every CR is followed by LF, remove only those CR bytes
+into a separate in-memory buffer, and require the fixed canonical LF checksum.
+No decoding/re-encoding or other content normalization is needed. Preserve all
+existing graph/reference/identity/admission assertions. Add bounded simulated
+LF/CRLF positives, a non-newline byte mutation negative, and malformed CR negatives.
+Do not edit the original fixture, production/browser/isolation code, Git settings,
+workflow or dependencies. Run only the specifically authorized offline commands;
+results and final preservation checks pending below. No browser/services/CI rerun,
+installation, staging, commit, push or external data request is authorized.
+
+Implemented in qa01-harness.test.mjs:193-237: a byte-oriented checksum helper
+asserts each CR byte is followed by LF, removes only that CR in a separate buffer,
+and compares SHA-256 against the fixed independently verified LF digest above.
+The original input buffer is never modified. Existing graph/reference/identity/
+admission assertions follow the helper call unchanged. No text trimming, UTF-8
+replacement, financial recomposition, dynamic expected hash, or fixture write is
+part of checksum verification.
+
+Four bounded regressions use memory buffers only: canonical LF acceptance,
+equivalent CRLF acceptance with input immutability, a single non-newline byte
+mutation rejected by the fixed digest, and malformed carriage returns rejected
+before hashing. The latter covers leading/trailing lone CR, CRCRLF, and LFCR.
+
+Actual commands from D:\Projects\finlens-foundation\frontend:
+
+```
+node --test tests/qa01-*.test.mjs
+node --test tests/financial-insights.test.mjs tests/finlens-api.test.mjs
+node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+node node_modules/eslint/bin/eslint.js tests/qa01-harness.test.mjs
+```
+
+QA-01: **45 passed, 0 failed/cancelled/todo, 4 explicit Linux-only skips**
+(49 total), 10.1080905 seconds, exit 0. The four new checksum cases and existing
+graph/admission/isolation/readiness/recovery checks all passed. Simulated LF/CRLF
+coverage is not a claim that Linux was launched. TypeScript noEmit/nonincremental
+and scoped ESLint: exit 0, no diagnostics. Existing financial/API regression:
+**261 passed, 0 failed/cancelled/skipped/todo**, 180.0927417 seconds, exit 0.
+Combined executed coverage: **306 passed, 0 failed, 4 explicit Linux-only skips**.
+No test deselection or browser execution occurred.
+
+Self-review: the checksum normalizes only valid CRLF representation, preserves all
+other bytes, and rejects every other content change against a literal Git digest.
+The test diff retains all previous graph checks. The plan diff is append-only;
+no historical finding, correction or approval is rewritten. No change outside the
+two-file scope is needed. git diff --check and exact two-candidate/three-exception
+inventory checks passed. Fixture, production/browser/configuration/dependency/
+workflow/Git-setting paths remain unchanged. Browser/Next module-Worker acceptance
+is still NOT VERIFIED; no CI rerun or browser/services were attempted.
+
+Final preservation: main remains ed718c2fcc781213d49812c1d746b0105df7244d, index
+empty, exactly the two authorized candidates plus the original three protected
+exceptions. The fixture's raw Windows SHA-256 and all three protected fingerprints
+match the established baselines above. Ignored backend/.env was not read or edited.
+Fatal UTF-8/no-NUL/trailing-whitespace/final-newline and final exact-scope/whitespace
+checks passed. No production/browser/Worker/isolation/config/workflow/dependency or
+Git line-ending setting changed. No remaining correction defect found offline.
+
+Ready for focused independent Astra review of byte-only normalization, rejection
+before hashing, fixed canonical digest, positive/negative regressions, preserved
+graph assertions and exact scope. Stop for coordinator review; no staging, commit,
+push or rerun. Suggested later commit:
+`test: make insights fixture checksum portable`.
