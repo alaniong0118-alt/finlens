@@ -329,10 +329,39 @@ function insightsFocusAdversarialChecks() {
   expect(cancelInset.focalVisible).toBe(true); expect(cancelInset.indicatorVisible).toBe(true);
   expect(cancelInset.outer).toEqual({ left: 256.421875, top: 958.203125, right: 426.015625, bottom: 997 });
   expect(cancelInset.segments).toHaveLength(4);
-  return { cases: 11, hiddenAncestorRejected: !clipped.indicatorVisible, tallDestinationAccepted: tall.indicatorVisible,
+  // Third CI: native reverse Tab reached the right control but put its border
+  // fractionally above the viewport. Inset styling alone cannot repair that.
+  const recordedFinancial = { ...boundaryControl,
+    target: { left: 72, right: 275.09375, top: -0.0625, bottom: 44.734375 },
+    focal: { left: 72, right: 275.09375, top: -0.0625, bottom: 44.734375 } };
+  const financialOutward = assessInsightsFocus(recordedFinancial);
+  expect(financialOutward.focalVisible).toBe(false); expect(financialOutward.indicatorVisible).toBe(false);
+  expect(financialOutward.outer.top).toBe(-6.0625);
+  const financialInset = assessInsightsFocus({ ...recordedFinancial, outlineOffset: -6 });
+  expect(financialInset.focalVisible).toBe(false); expect(financialInset.indicatorVisible).toBe(true);
+  // Mathematical clearance cases, NOT evidence that a browser applied CSS.
+  // Include the recorded 1/16px rounding residue at both viewport boundaries.
+  for (const [width, height] of [[1440, 1000], [720, 500]]) {
+    for (const edge of ['top', 'bottom']) {
+      const top = edge === 'top' ? 8 - 0.0625 : height - (8 - 0.0625) - 44.796875;
+      const target = { ...recordedFinancial.target, top, bottom: top + 44.796875 };
+      const clearance = assessInsightsFocus({ ...recordedFinancial, target, focal: target,
+        viewport: { left: 0, right: width, top: 0, bottom: height } });
+      expect(clearance.focalVisible).toBe(true); expect(clearance.indicatorVisible).toBe(true);
+      expect(clearance.segments).toHaveLength(4);
+      if (edge === 'top') expect(clearance.outer.top).toBe(1.9375);
+      else expect(clearance.outer.bottom).toBe(height - 1.9375);
+    }
+  }
+  return { cases: 17, hiddenAncestorRejected: !clipped.indicatorVisible, tallDestinationAccepted: tall.indicatorVisible,
     insetBoundaryAccepted: inset.indicatorVisible, outwardBoundaryRejected: !boundaryClipped.indicatorVisible,
-    fractionalCancelOutwardRejected: !cancelOutward.indicatorVisible, fractionalCancelInsetAccepted: cancelInset.indicatorVisible };
+    fractionalCancelOutwardRejected: !cancelOutward.indicatorVisible, fractionalCancelInsetAccepted: cancelInset.indicatorVisible,
+    fractionalFinancialRejected: !financialOutward.focalVisible && !financialOutward.indicatorVisible,
+    insetAloneInsufficient: !financialInset.focalVisible, clearanceCases: 4 };
 }
+
+const insightsScrollTargets = '.financial-insights :is(button, select, summary, a[href], [tabindex="-1"]), '
+  + 'section[aria-labelledby="snapshot-title"] .compact-label > select';
 
 async function insightsFocus(target: Locator, keyboard = false, destination = false) {
   await expect(target).toBeFocused();
@@ -357,7 +386,10 @@ async function insightsFocus(target: Locator, keyboard = false, destination = fa
     return { sample: { target: bounds(element), focal: rect, viewport: { left: 0, right: innerWidth, top: 0, bottom: innerHeight },
       focalClips: clips(focal), indicatorClips: clips(element), destination: options.destination,
       outlineWidth: parseFloat(style.outlineWidth), outlineOffset: parseFloat(style.outlineOffset), outline: style.outlineStyle },
-      usable: hit === focal || focal.contains(hit), focusVisible: element.matches(':focus-visible') };
+      usable: hit === focal || focal.contains(hit), focusVisible: element.matches(':focus-visible'),
+      target: { tag: element.tagName, text: element.textContent?.trim().slice(0, 160),
+        key: element.getAttribute('data-insight-key') }, scroll: { x: scrollX, y: scrollY },
+      scrollMargins: [style.scrollMarginTop, style.scrollMarginRight, style.scrollMarginBottom, style.scrollMarginLeft] };
   }, { destination });
   const geometry = { ...measured, ...assessInsightsFocus(measured.sample) };
   await test.info().attach('insights-natural-focus', { contentType: 'application/json', body: JSON.stringify(geometry) });
@@ -366,6 +398,7 @@ async function insightsFocus(target: Locator, keyboard = false, destination = fa
   // Also validate a visible indicator after pointer activation if the browser
   // preserves keyboard modality; absence of pointer-only focus styling is valid.
   if (keyboard || geometry.focusVisible) expect(geometry.indicatorVisible).toBe(true);
+  if (keyboard) expect(geometry.scrollMargins).toEqual(['8px', '8px', '8px', '8px']);
 }
 
 async function insightsTabTo(page: Page, target: Locator, direction: 'Tab' | 'Shift+Tab' = 'Tab') {
@@ -373,6 +406,11 @@ async function insightsTabTo(page: Page, target: Locator, direction: 'Tab' | 'Sh
   for (let step = 0; step < 120; step++) {
     if (await target.evaluate(element => element === document.activeElement)) return;
     await page.keyboard.press(direction);
+    // Observe each native stop in the approved scope; never move focus/scroll.
+    const stop = page.locator(':focus');
+    if (await stop.count() === 1 && await stop.evaluate((element, selector) => element.matches(selector), insightsScrollTargets)) {
+      await insightsFocus(stop, true, await stop.evaluate(element => element.matches('.insights-record,.insights-viewport')));
+    }
   }
   await expect(target, `Reach target within 120 native ${direction} steps`).toBeFocused();
 }
@@ -401,7 +439,7 @@ async function insightsLineage(page: Page, panel: Locator, keyboard: boolean, re
   const statement = panel.locator('[data-insight-metric="free_cash_flow"] .insights-statement').filter({
     has: page.getByText('Free cash flow: 15 USD, later FY2025 2025-01-01/2025-12-31/annual; calculated.', { exact: true }),
   });
-  // On the second reflow pass, walk backwards from the snapshot into Insights.
+  // The explicit return leg walks backwards from Snapshot into Insights.
   await activate(statement.getByRole('button', { name: 'Financial evidence 1', exact: true }), 'Enter', reverseStart);
   const arrive = async (key: string) => {
     const record = panel.locator(`[data-insight-key="${key}"]`);
@@ -492,25 +530,31 @@ test.describe('FIN-DEPTH-01 1B.3 mobile layout', () => {
   });
 });
 
-test('FIN-DEPTH-01 1B.3 B native keyboard and 720px reflow (NOT actual 200% browser zoom)', async ({ page, scenario }) => {
+for (const { name, width, height } of [
+  { name: 'B-desktop', width: 1440, height: 1000 },
+  { name: 'B-reflow', width: 720, height: 500 },
+])
+test(`FIN-DEPTH-01 1B.3 ${name} native keyboard ${width}x${height} (NOT actual 200% browser zoom)`, async ({ page, scenario }) => {
   test.setTimeout(90_000);
   const adversarial = insightsFocusAdversarialChecks();
   await test.info().attach('insights-focus-adversarial', { contentType: 'application/json', body: JSON.stringify(adversarial) });
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width, height });
   await scenario.open(); await scenario.ready();
   const panel = insightsPanel(page), earlier = panel.getByRole('combobox', { name: 'Earlier fiscal year', exact: true });
   const later = panel.getByRole('combobox', { name: 'Later fiscal year', exact: true });
   const compare = panel.getByRole('button', { name: 'Compare annual periods', exact: true });
   // Explicit starting points only. Neither seed is an evidence destination.
-  await earlier.focus(); await page.keyboard.press('Tab'); await insightsFocus(later, true);
+  await earlier.focus(); await insightsFocus(earlier, true);
+  await page.keyboard.press('Tab'); await insightsFocus(later, true);
   await page.keyboard.press('Tab'); await insightsFocus(compare, true);
   await expect(compare).toHaveCSS('outline-width', '3px');
   await expect(compare).toHaveCSS('outline-style', 'solid');
   await expect(compare).toHaveCSS('outline-offset', '-6px');
   await expect(compare).toHaveCSS('outline-color', await compare.evaluate(element => getComputedStyle(element).color));
-  await page.keyboard.press('Shift+Tab'); await expect(later).toBeFocused();
-  await page.keyboard.press('Shift+Tab'); await expect(earlier).toBeFocused();
-  await page.keyboard.press('Tab'); await page.keyboard.press('Tab'); await expect(compare).toBeFocused();
+  await page.keyboard.press('Shift+Tab'); await insightsFocus(later, true);
+  await page.keyboard.press('Shift+Tab'); await insightsFocus(earlier, true);
+  await page.keyboard.press('Tab'); await insightsFocus(later, true);
+  await page.keyboard.press('Tab'); await insightsFocus(compare, true);
   const held = scenario.hold(request => request.path === insightsPath && request.query.get('mode') === 'compare');
   try {
     await page.keyboard.press('Enter');
@@ -529,22 +573,45 @@ test('FIN-DEPTH-01 1B.3 B native keyboard and 720px reflow (NOT actual 200% brow
     await expect(panel.locator('.insights-status')).toHaveText('Annual comparison ready. Evidence can be examined below.', { timeout: 35_000 });
     await insightsFocus(later, true);
     const fetches = insightsRequests(scenario).length;
+    const snapshot = page.getByRole('region', { name: 'Financial snapshot', exact: true });
+    const snapshotText = await snapshot.innerText();
     const policy = panel.locator('.insights-policy');
-    await insightsTabTo(page, policy.locator('summary')); await page.keyboard.press('Enter'); await expect(policy).toHaveAttribute('open', '');
+    await insightsTabTo(page, policy.locator('summary')); await insightsFocus(policy.locator('summary'), true);
+    await page.keyboard.press('Enter'); await expect(policy).toHaveAttribute('open', '');
+    await insightsFocus(policy.locator('summary'), true);
     await page.keyboard.press('Space'); await expect(policy).not.toHaveAttribute('open');
-    for (const width of [1440, 720]) {
-      if (width === 720) await page.setViewportSize({ width, height: 500 });
-      await insightsLineage(page, panel, true, width === 720);
+    await insightsFocus(policy.locator('summary'), true);
+    // Each independently scheduled width covers forward arrival and a second
+    // reverse arrival from Snapshot. Failure at one width cannot skip the other.
+    for (const reverseStart of [false, true]) {
+      await insightsLineage(page, panel, true, reverseStart);
       const financial = panel.getByRole('button', { name: 'Examine financial evidence', exact: true });
       await insightsTabTo(page, financial, 'Shift+Tab'); await insightsFocus(financial, true); await page.keyboard.press('Enter');
       const viewport = panel.locator('.insights-viewport'); await insightsFocus(viewport, true, true);
       const first = await insightsPage(panel, 'F');
+      await expect(panel.locator('.insights-pagination span')).toHaveText('F · page 1 of 8');
+      expect(first).toHaveLength(insightsFPageSizes[0]);
       const next = panel.getByRole('button', { name: 'Next evidence page', exact: true });
       await insightsTabTo(page, next, 'Shift+Tab'); await insightsFocus(next, true); await page.keyboard.press('Space');
-      await insightsFocus(viewport, true, true); expect(await insightsPage(panel, 'F')).not.toEqual(first);
+      await insightsFocus(viewport, true, true);
+      const second = await insightsPage(panel, 'F'); expect(second).not.toEqual(first);
+      expect(second).toHaveLength(insightsFPageSizes[1]); expect(second.some(key => first.includes(key))).toBe(false);
+      await expect(panel.locator('.insights-pagination span')).toHaveText('F · page 2 of 8');
       const previous = panel.getByRole('button', { name: 'Previous evidence page', exact: true });
       await insightsTabTo(page, previous, 'Shift+Tab'); await insightsFocus(previous, true); await page.keyboard.press('Enter');
       await insightsFocus(viewport, true, true); expect(await insightsPage(panel, 'F')).toEqual(first);
+      await expect(previous).toBeDisabled();
+      const diagnostic = panel.getByRole('button', { name: 'Examine diagnostic inputs', exact: true });
+      await insightsTabTo(page, diagnostic, 'Shift+Tab'); await insightsFocus(diagnostic, true); await page.keyboard.press('Space');
+      await insightsFocus(viewport, true, true); await insightsPage(panel, 'D');
+      await expect(viewport.getByRole('heading', { level: 3 })).toHaveText('Inputs examined and reasons not used — D');
+      await expect(panel.getByText('Diagnostic values are not admitted financial results.', { exact: false })).toBeVisible();
+      await expect(diagnostic).toHaveAttribute('aria-pressed', 'true');
+      await expect(financial).toHaveAttribute('aria-pressed', 'false');
+      await insightsTabTo(page, financial, 'Shift+Tab'); await insightsFocus(financial, true); await page.keyboard.press('Enter');
+      await insightsFocus(viewport, true, true); expect(await insightsPage(panel, 'F')).toEqual(first);
+      await expect(panel.locator('.insights-pagination span')).toHaveText('F · page 1 of 8');
+      await expect(financial).toHaveAttribute('aria-pressed', 'true');
       // Escape backwards to the evidence disclosure and forwards into the next
       // product panel. Native Tab must cross the boundary without a focus trap.
       await insightsTabTo(page, panel.locator('.insights-evidence > summary'), 'Shift+Tab');
@@ -552,6 +619,7 @@ test('FIN-DEPTH-01 1B.3 B native keyboard and 720px reflow (NOT actual 200% brow
       const snapshotPeriod = page.getByRole('combobox', { name: 'Snapshot period', exact: true });
       await insightsTabTo(page, snapshotPeriod); await insightsFocus(snapshotPeriod, true);
       if (width === 720) await insightsLayout(panel, width);
+      expect(await snapshot.innerText()).toEqual(snapshotText);
       expect(insightsRequests(scenario)).toHaveLength(fetches);
     }
     expect(scenario.violations).toEqual([]);

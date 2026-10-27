@@ -62,6 +62,10 @@ select:hover,textarea:hover { border-color:var(--accent); } summary { cursor:poi
 .financial-insights .insights-controls label { min-width:0; }
 .financial-insights .insights-actions,.financial-insights .insights-links,.financial-insights .insights-pagination { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0; }
 .financial-insights button { width:auto; max-width:100%; white-space:normal; overflow-wrap:anywhere; min-height:44px; margin:0; }
+.financial-insights :is(button, select, summary, a[href], [tabindex="-1"]),
+section[aria-labelledby="snapshot-title"] .compact-label > select {
+  scroll-margin:8px;
+}
 .financial-insights .insights-actions > button:focus-visible {
   outline-color:currentColor;
   outline-offset:-6px;

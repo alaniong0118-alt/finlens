@@ -1572,3 +1572,168 @@ Outcome: unified action repair, bounded offline checks and self-review complete;
 stop for coordinator and targeted Astra review. No staging, commit/amend, push,
 merge or CI rerun is authorized. Suggested later commit message:
 fix: unify annual insights action focus outlines
+
+## Frontend 1B.3 Astra-owned native scroll clearance — 2026-10-27
+
+Status: implementation authorized; browser acceptance and Git delivery pending.
+Owner: Astra. Entry branch test/fin-depth-01-1b3-chromium, HEAD
+e8549b70c2c3c3a0d3c5581a4dab0c12ced6b0c4, empty index; only the three original
+protected exceptions exist. Authorized edits are globals.css, the existing
+financial-insights.spec.ts and this plan. No browser, services, CI, provider,
+database, backend/.env access or Git writes are authorized.
+
+### Evidence and decision
+
+Third run 40495640230 / artifact 12730239025 is bound to this HEAD. In-memory
+download SHA-256 e4565df9ab340aa071ccd1f15a779751799965555aa49b4a2a6123789e57ac5d
+matches GitHub. The report records 80/81 Chromium tests, Scenario A PASS and B
+FAIL; QA-01 and isolation succeeded. All 20 focus attachments, screenshot, error
+context and trace were inspected during the preceding read-only investigation.
+The trace spec matches this baseline. Compare and Cancel pass with inset rings.
+Shift+Tab reaches Examine financial evidence, but its bounds are
+(72,-0.0625,275.09375,44.734375), viewport 1440x1000. Focus and hit testing pass;
+focal visibility fails and the outward outline starts at -6.0625. Eight ancestors
+have visible overflow. Inset alone fixes the indicator but not focal visibility.
+The 720x500 route was never reached. Preserve all previous failure evidence.
+
+Implement the approved scoped scroll-margin:8px policy for Insights buttons,
+selects, summaries, links and tabindex=-1 destinations, plus the Snapshot period
+select. This reserves room for the 6px outward ring and subpixel rounding during
+native focus scrolling. Keep the validated action inset rule and global focus
+policy unchanged. No event-handler scrolling, focus mutation, layout-spacing
+change, epsilon, retries or test-injected styles are permitted.
+
+### Implementation and validation plan
+
+- [x] Add scoped CSS and verify actual DOM selector coverage and exclusions.
+- [x] Preserve 11 adversarial cases; add the exact third-run failure, inset-only
+  insufficiency, and bounded top/bottom clearance cases.
+- [x] Split B into independently scheduled desktop and reflow cases; inspect
+  intermediate native stops, computed margins, diagnostic activation, return
+  identities and reverse traversal from Snapshot without changing Scenario A.
+- [x] Run noEmit TypeScript, scoped ESLint, deterministic geometry/policy checks,
+  list-only discovery, whitespace/scope and protected-hash verification.
+- [x] Prepare independent review handoff; no Git or browser acceptance implied.
+
+The light-secondary normal-text contrast gap remains a separate P2 (4.4373:1
+normal, 4.3215:1 modeled hover). No WCAG AA text-compliance claim or color repair.
+Actual browser scrolling/painting, wrapped links, 200% browser zoom, assistive
+technology, forced colors and Worker-local pending-page focus remain unaccepted.
+
+### Implemented route and scope
+
+The only production change is the four-line approved scroll-margin rule.
+Selector specificity is (0,2,1) for the Insights branch (the a[href] argument
+sets :is specificity), and (0,2,2) for the Snapshot branch. No existing rule sets
+scroll-margin. Removing this block restores baseline CSS exactly after newline
+normalization, including global focus, action inset styling, colors and spacing.
+The selector includes the real action/statement/lineage/collection/pagination
+buttons, year selects, summaries, SEC/navigation anchors, record/viewport
+destinations and the direct Snapshot select. It excludes headings, paragraphs,
+other panels' controls and a select nested below the Snapshot label's direct child.
+
+B-desktop (1440x1000) and B-reflow (720x500) are separate default-scheduled tests,
+each with its own scenario/context, 90s timeout and no retries. Both start at their
+own viewport before loading the page. Reflow is CSS viewport coverage, not actual
+browser zoom. Each case performs the original native comparison sequence and held
+HTTP Cancel/Later traversal, then policy Enter/Space and two evidence route legs:
+
+1. Forward native traversal to the FCF statement, exact 15 USD -> CapEx 5 USD ->
+   source fact 10 lineage, fields disclosure and official SEC link focus (no link
+   activation).
+2. Shift+Tab to financial collection, F page 1 -> Next via Space -> page 2 ->
+   Previous via Enter -> identical page 1. Check fixed page sizes, disjoint keys,
+   category/scope, <=25 records and first-page Previous disabled.
+3. Shift+Tab to diagnostic collection, Space activation, D heading/category/warning
+   and pressed states; reverse to financial, Enter and identical F page 1.
+4. Reverse to evidence summary, forward out to Snapshot period; then repeat the
+   route with reverse traversal from Snapshot to the original FCF statement.
+   Snapshot text and Insights request counts remain invariant after each leg.
+
+Only the two pre-existing year-control seeds use programmatic focus. Evidence
+destinations are focused solely by production behavior. Every native stop visited
+by insightsTabTo within the approved selector is measured, including summaries,
+links and controls between named targets. The 120-step limit remains. Measurements
+add target identity, scroll position and four computed margin longhands; keyboard
+checks require all four to equal 8px. Existing focal, hit-test, focus-visible and
+indicator assertions remain strict. No scrolling/style/focus mutation occurs in
+the observer. The pure geometry assessor is identical to HEAD. Original E2E and
+the complete Scenario A test block are preserved. Lineage helper behavior is
+unchanged (only its reverse-leg comment changed). Worker/API/fixtures/cleanup and
+global retries=0 remain untouched; finally still releases the held response.
+
+### Offline verification actually executed
+
+From frontend/, all final checks below passed:
+
+- node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+- node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts
+- node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list
+  — four tests: original Worker E2E, A, B-desktop and B-reflow. List-only starts
+  neither a browser nor the configured webServer. Independent width cases use
+  the unchanged default scheduling, not a serial describe group.
+- TypeScript AST/VM extraction of the actual assessInsightsFocus and
+  insightsFocusAdversarialChecks, using local Playwright expect: 17/17 cases.
+  All prior 11 assertions remain as an exact prefix. Six additions cover the
+  recorded top clipping, inset-only insufficiency, and top/bottom clearance at
+  both viewport sizes with the recorded 1/16px rounding residue. Four clearance
+  cases are mathematical examples, explicitly not native-scroll acceptance.
+- PostCSS verifies the sole scroll-margin rule and exact 8px value; deleting
+  only that block reproduces HEAD CSS. An AST-built DOM uses the real component
+  JSX templates, including EvidenceRecord, both statement call sites and Snapshot.
+  All 22 representative template targets across 14 control/destination families
+  match; negative controls do not. JSDOM computes the shorthand as 8px. Browser
+  longhand expectations are authored/type-checked, not browser-executed. JSX map
+  templates are represented once, not mistaken for a live record inventory.
+  The initial offline probe incorrectly assumed 23 nodes and omitted statement
+  call sites (observed 20); the corrected probe includes those sites and checks
+  actual family membership (22), without any production-code change for it.
+- Source comparisons verify original E2E, Scenario A, all prior geometry cases,
+  pure assessor and strict assertion lines are preserved. Full candidate diff
+  was inspected against the complete keyboard route and unchanged production DOM.
+- git diff --check: PASS; only the existing globals.css LF/CRLF policy warning.
+  Exact scope/index and protected hashes verified, with reports hashed only.
+
+The geometry extraction is reproducible as a PowerShell single-quoted here-string
+piped to node from frontend/ (no output files):
+
+```javascript
+const fs = require('node:fs'), ts = require('typescript'), vm = require('node:vm');
+const source = fs.readFileSync('e2e/financial-insights.spec.ts', 'utf8');
+const tree = ts.createSourceFile('spec.ts', source, ts.ScriptTarget.Latest, true);
+const code = ['assessInsightsFocus', 'insightsFocusAdversarialChecks'].map(name =>
+  tree.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).getText(tree)).join('\n');
+const context = vm.createContext({ expect: require('@playwright/test').expect });
+vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+console.log(vm.runInContext('insightsFocusAdversarialChecks()', context));
+```
+
+### Integrity and independent review handoff
+
+Branch/HEAD remain test/fin-depth-01-1b3-chromium /
+e8549b70c2c3c3a0d3c5581a4dab0c12ced6b0c4, index empty. Candidate scope is exactly
+the three authorized paths, plus the original protected worktree exceptions.
+Protected SHA-256 matches the established baselines:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Independent reviewer: review only these three files against the stated HEAD.
+Check the exact margin selector, unchanged action/global outlines, actual DOM
+coverage and exclusions; replay all 17 cases; inspect independent width discovery,
+native intermediate checks, reverse route, D/F return identity, request counts
+and failure cleanup. Check that no geometry tolerance or browser mutation was
+introduced. Reconfirm protected hashes and empty index. Return a bounded verdict
+to the coordinator; do not stage, execute Chromium, rerun CI or modify files.
+
+Native scrolling with the added margins, full B routes, rounded outlines, narrow
+inline-link fragments and runtime cost of intermediate observations still require
+separately authorized Chromium evidence. Static probes cannot establish those.
+No structural insufficiency requiring a broader production change was found.
+Prior CI remains failed evidence, not acceptance of this candidate. No new browser,
+services, CI, providers, database operations, backend/.env access or Git writes
+occurred. Stop for independent review/coordinator approval before Git operations.
+Suggested later commit: fix: reserve native focus clearance across annual insights
