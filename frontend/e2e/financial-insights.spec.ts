@@ -26,6 +26,59 @@ test('FIN-DEPTH-01 real Worker annual discovery comparison and evidence navigati
     ['free_cash_flow', 'Free cash flow', '10 USD', '15 USD', 'Calculated'],
   ]; // Independent fixed expectations; never derived through the fixture adapter.
 
+  // Passive, bounded diagnostics only. Never replace Worker/focus or fetch, and
+  // never record editor values or arbitrary typed keys. Cleanup also runs on fail.
+  await page.addInitScript(() => {
+    let trigger: HTMLElement | null = null, activatedWhileFocused = false, intentRevoked = false, publication = '';
+    const samples: unknown[] = [];
+    const describe = (node: EventTarget | null) => node instanceof HTMLElement ? {
+      tag: node.tagName, id: node.id.slice(0, 80), key: node.dataset.insightKey?.slice(0, 192),
+      control: node.matches('button,summary') ? node.textContent?.trim().slice(0, 96) : node.getAttribute('aria-label')?.slice(0, 96),
+      record: node.closest<HTMLElement>('[data-insight-key]')?.dataset.insightKey?.slice(0, 192),
+      metric: node.closest<HTMLElement>('[data-insight-metric]')?.dataset.insightMetric?.slice(0, 64),
+      connected: node.isConnected, disabled: node.matches(':disabled'),
+    } : null;
+    const sample = (event: string, target: EventTarget | null) => {
+      if (samples.length === 64) samples.shift();
+      samples.push({ event, target: describe(target), active: describe(document.activeElement), trigger: describe(trigger), intentRevoked });
+    };
+    const observer = new MutationObserver(() => sample('trigger-disabled-change', trigger));
+    const listener = (event: Event) => {
+      const element = event.target instanceof Element ? event.target : null;
+      const button = element?.closest<HTMLElement>('.financial-insights button');
+      if (event.type === 'click' && button?.closest('.insights-links,.insights-collections,.insights-pagination')) {
+        observer.disconnect(); trigger = button; activatedWhileFocused = document.activeElement === trigger; intentRevoked = false;
+        publication = document.querySelector('.insights-result > .mono')?.textContent?.slice(0, 192) ?? '';
+        observer.observe(trigger, { attributes: true, attributeFilter: ['disabled'] });
+      } else if (trigger) {
+        const atTrigger = event.target instanceof Node && trigger.contains(event.target);
+        if (event.type === 'focusin' && !atTrigger || event.type === 'pointerdown' && !atTrigger
+          || event.type === 'keydown' && (!atTrigger || !['Enter', ' '].includes((event as KeyboardEvent).key))) intentRevoked = true;
+      }
+      if (trigger) sample(event.type, event.target);
+    };
+    const types = ['click', 'pointerdown', 'keydown', 'focusin', 'focusout'];
+    types.forEach(type => document.addEventListener(type, listener, true));
+    const api = {
+      snapshot(key: string | null) {
+        const target = key ? Array.from(document.querySelectorAll<HTMLElement>('[data-insight-key]')).find(n => n.dataset.insightKey === key)
+          : document.querySelector<HTMLElement>('.insights-viewport');
+        const box = target?.getBoundingClientRect(), style = target ? getComputedStyle(target) : null;
+        const currentPublication = document.querySelector('.insights-result > .mono')?.textContent?.slice(0, 192) ?? '';
+        return { active: describe(document.activeElement), documentFocused: document.hasFocus(), trigger: describe(trigger), target: describe(target ?? null),
+          targetRendered: Boolean(box && box.width && box.height && style?.display !== 'none' && style?.visibility !== 'hidden'),
+          targetInViewport: Boolean(box && box.top < innerHeight && box.bottom > 0),
+          page: document.querySelector('.insights-pagination span')?.textContent,
+          busy: document.querySelector('.insights-status')?.getAttribute('aria-busy'),
+          observedOwnership: { activatedWhileFocused, intentRevoked, publicationUnchanged: publication === currentPublication,
+            note: 'DOM observations only; internal generation/handle are not exposed.' }, samples };
+      },
+      dispose() { observer.disconnect(); types.forEach(type => document.removeEventListener(type, listener, true)); },
+    };
+    Object.assign(window, { qaInsightsFocus: api });
+  });
+  let requestedFocusKey: string | null = null;
+  try {
   await scenario.open(); await scenario.ready();
   await expect(panel.getByRole('combobox', { name: 'Earlier fiscal year', exact: true })).toHaveValue('2024');
   await expect(panel.getByRole('combobox', { name: 'Later fiscal year', exact: true })).toHaveValue('2025');
@@ -84,6 +137,7 @@ test('FIN-DEPTH-01 real Worker annual discovery comparison and evidence navigati
     return keys;
   }
   async function destination(key: string) {
+    requestedFocusKey = key;
     const record = viewport.locator(`[data-insight-key="${key}"]`);
     await expect(record).toBeFocused(); await ownerAndPage('F'); visited.push(key);
     await record.getByText('Exact fields and source metadata', { exact: true }).click();
@@ -118,6 +172,7 @@ test('FIN-DEPTH-01 real Worker annual discovery comparison and evidence navigati
   await expect(link).toHaveAttribute('href', 'https://www.sec.gov/Archives/edgar/data/900001/000090000126100001/0000900001-26-100001-index.html');
   await expect(link).toHaveAttribute('target', '_blank'); await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   // Inspect source attributes only; never navigate to SEC.
+  requestedFocusKey = null;
   await panel.getByRole('button', { name: 'Examine financial evidence', exact: true }).click();
   await expect(viewport).toBeFocused(); const first = await ownerAndPage('F');
   await expect(panel.getByRole('button', { name: 'Previous evidence page', exact: true })).toBeDisabled();
@@ -140,4 +195,13 @@ test('FIN-DEPTH-01 real Worker annual discovery comparison and evidence navigati
     requests: requests().map(r => ({ method: r.method, path: r.path, pin: r.pin, query: r.query.toString() })),
     failures: scenario.failures, violations: scenario.violations,
   }) });
+  } catch (error) {
+    const diagnostics = await page.evaluate(key => (window as unknown as {
+      qaInsightsFocus?: { snapshot(key: string | null): unknown };
+    }).qaInsightsFocus?.snapshot(key), requestedFocusKey).catch(() => ({ unavailable: true }));
+    await info.attach('financial-insights-focus-failure', { contentType: 'application/json', body: JSON.stringify(diagnostics ?? { unavailable: true }) });
+    throw error;
+  } finally {
+    await page.evaluate(() => (window as unknown as { qaInsightsFocus?: { dispose(): void } }).qaInsightsFocus?.dispose()).catch(() => {});
+  }
 });

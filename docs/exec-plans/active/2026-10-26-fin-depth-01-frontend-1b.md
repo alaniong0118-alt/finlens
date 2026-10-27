@@ -889,3 +889,125 @@ before hashing, fixed canonical digest, positive/negative regressions, preserved
 graph assertions and exact scope. Stop for coordinator review; no staging, commit,
 push or rerun. Suggested later commit:
 `test: make insights fixture checksum portable`.
+
+## Native evidence focus ownership P2 repair — 2026-10-27
+
+Coordinator authorizes exactly four candidates: components/financial-insights.tsx,
+tests/financial-insights-interactions.test.mjs, e2e/financial-insights.spec.ts (all
+under frontend/), and this appended ExecPlan. Before writes: main/HEAD
+ec20b628d861994813105bed1eff764e1b1a40d1, empty index, only the original three
+protected exceptions; their hashes and the original fixture's Windows byte hash
+491733790CD78DC2A143295B196D41F2891AEB47F7293072C70CBB027D16B36A match.
+No private configuration was read. No browser, services, build, CI, dependencies,
+database/provider operation, staging, commit, push or deployment is authorized.
+
+Historical evidence: run 40435559542 / job 121963274546 at this SHA reported
+49 QA-01 passes and Chromium 78 passes / 1 failure; capture skipped. Artifact
+12703662394 and its trace confirm DedicatedWorkerGlobalScope, comparison and seven
+metrics passed. Later FCF appeared on F page 5 of 8 by click completion, but the
+article remained inactive for five seconds. Neither the transient activeElement
+nor disabled interval was captured. Native loss of focused-trigger ownership when
+paging disables it remains the supported explanation, not a proven body-focus log.
+The old guard rejects any connected trigger after it loses focus and consumes the
+pending request before returning. Historical reviews and incidents remain intact.
+
+Repair plan: capture a per-navigation focus ticket before request/pending UI work;
+retain it through Worker completion and React commit. A ticket begins owned only
+when its trigger owns focus at activation. Capture-phase focusin/pointerdown/keydown
+listeners revoke on later intent elsewhere, including a move away then back to
+body. Capture phase avoids consuming the original activation's bubbling event.
+Completion can recover application-caused body focus loss only with the original,
+unrevoked ticket and all existing generation/owner/handle/target checks. Duplicate
+and busy navigation must not replace tickets. Clear listeners/tickets on completion,
+failure, invalidation, expiry, cancellation, replacement and StrictMode cleanup.
+
+Add explicit offline disabled-blur simulation, pointer/keyboard activation,
+lineage/page focus, genuine intent/body return and lifecycle/stale/listener tests.
+Keep native-browser assertions; add bounded failure diagnostics without focusing
+targets or changing Worker/network/deadline behavior. Planned gates: complete
+interaction, contract/API and QA-01 offline suites, noEmit, scoped lint and exact
+scope/hash/whitespace review. Implementation and actual results pending below.
+
+Implementation completed in the four-file scope. PageFocus now holds activation
+ownership, completion state and an idempotent listener release function. Capture
+listeners revoke ownership on later outside pointerdown, focusin or keyboard
+navigation; revocation survives a subsequent return to body. The layout effect
+consumes only a completed ticket with the original generation, owner, handle,
+collection, page and exact record validation. An owned ticket can recover focus
+from body after the trigger is disabled or removed. Merely observing body never
+grants ownership. Existing coalesced/busy guards run before ticket creation.
+All completion/error/lifecycle paths release listeners, including synchronous
+request failure, disposal, expiry, generation changes and StrictMode unmount.
+
+Regressions explicitly model JSDOM's missing native disabled-control blur by
+momentarily enabling the disabled trigger, blurring it, then restoring disabled
+before held Worker completion. They never focus the expected destination. This
+is simulation of the native gap, not proof of repaired Chromium behavior.
+Coverage includes pointer/Enter/Space activation, connected and naturally removed
+triggers, FCF-to-CapEx-to-source lineage, Previous/Next viewport focus, deliberately
+moved focus, return to body, outside pointer intent, Tab/other keyboard intent,
+unowned body activation, duplicate/coalesced/busy calls, and strict/non-strict
+year/company/publication/cancel/expiry/page-timeout/Worker-failure/unmount cleanup
+with stale delivery. Each mount also checks zero remaining document navigation
+listeners alongside existing Worker, timer and retained-byte cleanup assertions.
+
+The Chromium spec retains the original toBeFocused assertions and five-second
+focus wait. Passive diagnostics use a 64-event ring and one disabled-attribute
+observer; failure attachments record active/trigger/target identity, bounded
+control labels, connected/disabled/rendered state, viewport/page/busy status and
+observed activation/intent/publication ownership. Internal generation/handle are
+explicitly not exposed. Listeners and observer are released in finally. No editor
+values/typed keys, new requests, fake Workers, manual destination focus, retries
+or extended deadlines were introduced.
+
+Offline execution from frontend/: initial full interaction suite passed 94/94,
+zero failures/skips, 199750.9193 ms. The financial/API command
+`node --test tests/financial-insights.test.mjs tests/finlens-api.test.mjs` passed
+261/261, zero failures/skips, 183568.8499 ms. The QA-01 command
+`node --test tests/qa01-*.test.mjs` passed 45/49 with four explicit Linux-only
+process-tree integration skips, zero failures, 9862.3299 ms. No test deselection
+was used. TypeScript `node node_modules/typescript/bin/tsc --noEmit --incremental
+false --pretty false` and scoped ESLint over the component, interaction test and
+browser spec both exited 0 without diagnostics, including after final diagnostic
+label and regression refinements. The final interaction rerun additionally
+covers Tab dispatched at the original trigger and the component's rejected busy
+navigation, rather than only the underlying handle's busy rejection; result and
+final preservation checks follow below.
+
+Final interaction command `node --test tests/financial-insights-interactions.test.mjs`
+passed **95/95**, zero failed/cancelled/skipped/todo, 189175.9597 ms, exit 0.
+All 62 original cases remain; 33 focused cases were added. Final distinct suite
+coverage is **401 passed, 0 failed, 4 Linux-only skips** (405 total cases).
+TypeScript and scoped ESLint both passed again after the final source/test edits.
+Git whitespace, fatal UTF-8/no-NUL/newline hygiene, exact four-candidate plus
+three-exception inventory, original focus-assertion count and append-only plan
+history checks passed. Main/HEAD remain ec20b628d861994813105bed1eff764e1b1a40d1;
+index is empty. All three protected SHA-256 baselines and fixture raw Windows
+digest 491733790CD78DC2A143295B196D41F2891AEB47F7293072C70CBB027D16B36A
+remain unchanged. Ignored backend/.env exists and was never read or written.
+
+Final source candidate SHA-256 fingerprints:
+
+- frontend/components/financial-insights.tsx:
+  C44C7E6CBA952030C6FF028B91FCD1E3DD4A7D6835C6510C2FC2628B97462420
+- frontend/tests/financial-insights-interactions.test.mjs:
+  82E9E8E9E00D51698BE9BBCFE5E06EA36113B4B423CBB0BE4FA7F4E3EE2ACDCC
+- frontend/e2e/financial-insights.spec.ts:
+  8E8CDF221CC8B486D885661EC9FF19B6528D332B1EE11186D2DF4775724874E4
+
+Self-review found no outstanding offline correction defect. The historical
+connected-trigger rejection is corrected; the native disabled-trigger cause
+remains an evidence-supported hypothesis because the failed trace omitted the
+transient active element. No repaired Chromium or Linux process cleanup result
+is claimed. Browser diagnostics are type/lint checked but have not run in a
+browser. Worker construction, financial/provenance contracts, QA-01 network rules,
+configuration, dependencies and workflows are untouched. No browser/build/services,
+CI rerun, staging, commit or push occurred.
+
+Ready for independent Astra review of activation ownership/event ordering,
+irreversible user-intent revocation (including body return), completed-ticket
+generation/handle checks, synchronous/asynchronous cleanup, busy/coalesced calls,
+StrictMode listener ownership, simulation limitations and passive diagnostics.
+Stop for coordinator review. A subsequent authorized Linux Chromium run remains
+necessary for native acceptance. Suggested later commit:
+`fix: preserve evidence navigation focus ownership`.

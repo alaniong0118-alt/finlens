@@ -130,6 +130,17 @@ function freshness(issuer = company, version = 0) {
     evidence: stream, latest_indexed_filing: null, migration_required: false, scope: 'Synthetic offline inventory' };
 }
 async function mount(ctx, { strict = false, home = false, supported = true, importFailure = false, importGate = null, constructFailure = false, pin = 0 } = {}) {
+  const focusListeners = new Map(['pointerdown', 'keydown', 'focusin'].map(type => [type, new Set()]));
+  const nativeAdd = document.addEventListener.bind(document), nativeRemove = document.removeEventListener.bind(document);
+  ctx.mock.method(document, 'addEventListener', (type, listener, options) => {
+    if (options === true) focusListeners.get(type)?.add(listener);
+    return nativeAdd(type, listener, options);
+  });
+  ctx.mock.method(document, 'removeEventListener', (type, listener, options) => {
+    if (options === true) focusListeners.get(type)?.delete(listener);
+    return nativeRemove(type, listener, options);
+  });
+  const focusListenerCount = () => [...focusListeners.values()].reduce((sum, group) => sum + group.size, 0);
   const state = { clock: new Clock(), workers: [], panels: [], handles: [], imports: 0, importFailure, importGate, constructFailure };
   active = state;
   ctx.mock.property(globalThis, 'Worker', supported ? class {} : undefined);
@@ -157,6 +168,7 @@ async function mount(ctx, { strict = false, home = false, supported = true, impo
   }
   ctx.after(async () => {
     await unmount(); await delay(5);
+    assert.equal(focusListenerCount(), 0, 'No document navigation-focus listeners survive cleanup');
     assert.ok(state.workers.every(worker => worker.terminated === 1), 'Every constructed Worker terminates exactly once');
     assert.equal(state.clock.timers.size, 0, 'No insights lifetime/request timers survive cleanup');
     for (const handle of state.handles) assert.equal(handle.inspect().parentBytes, 0);
@@ -205,7 +217,7 @@ async function mount(ctx, { strict = false, home = false, supported = true, impo
   }
   await render();
   if (!home && pin !== null) await release(freshRequest(), freshness(issuer, pin));
-  return { ...state, get imports() { return state.imports; }, state, host, panel, render, unmount, request, freshRequest, requests, release, until, button, click, select, change, discover, compare, page, checkVersion };
+  return { ...state, get imports() { return state.imports; }, state, host, panel, render, unmount, request, freshRequest, requests, release, until, button, click, select, change, discover, compare, page, checkVersion, focusListenerCount };
 }
 
 function initialTimers(ctx) {
@@ -636,6 +648,144 @@ test('1B.2A page completion never steals focus deliberately moved to another con
   const trigger = app.button('Examine financial evidence'); trigger.focus(); await app.click(trigger); await app.until(() => worker.held.length);
   const other = app.host.querySelector('#other-focus'); other.focus(); await act(async () => worker.flush());
   await app.until(() => app.panel().querySelector('.insights-viewport')); assert.equal(document.activeElement, other);
+});
+
+function disabledTriggerBlur(trigger) {
+  assert.equal(trigger.isConnected, true); assert.equal(trigger.disabled, true);
+  // JSDOM retains focus when disabled and refuses blur() on an already-disabled
+  // control. Release its remembered focus while momentarily enabled, then restore
+  // disabled before delivery. This models native loss only; never focus a target.
+  trigger.disabled = false; trigger.blur(); trigger.disabled = true;
+  assert.equal(document.activeElement, document.body);
+}
+async function focusPageSetup(ctx, strict = false) {
+  const app = await mount(ctx, { strict }); await app.discover(); await app.compare();
+  await act(async () => app.panel().querySelector('.insights-evidence > summary').click());
+  const worker = app.workers.at(-1); worker.hold = m => m.type === 'OP_COMPLETE' && m.operation > 0;
+  return { app, worker };
+}
+async function flushFocusPage(app, worker) {
+  await act(async () => worker.flush());
+  await app.until(() => !app.handles.at(-1).inspect().pendingPages && app.panel().querySelector('.insights-viewport')?.getAttribute('aria-busy') === 'false');
+  assert.equal(app.focusListenerCount(), 0);
+}
+
+for (const strict of [false, true]) for (const activation of ['pointer', 'Enter', ' ']) {
+  test(`1B.2B connected disabled-trigger blur recovers ${JSON.stringify(activation)} activation strict ${strict}`, async ctx => {
+    const { app, worker } = await focusPageSetup(ctx, strict);
+    const trigger = app.button('Examine financial evidence'); trigger.focus();
+    await act(async () => {
+      if (activation === 'pointer') {
+        trigger.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true })); trigger.click();
+      } else {
+        const type = activation === 'Enter' ? 'keydown' : 'keyup';
+        trigger.addEventListener(type, () => trigger.click(), { once: true });
+        trigger.dispatchEvent(new dom.window.KeyboardEvent(type, { key: activation, bubbles: true }));
+      }
+    });
+    await app.until(() => worker.held.length); assert.equal(app.focusListenerCount(), 3);
+    disabledTriggerBlur(trigger); assert.equal(app.focusListenerCount(), 3);
+    await flushFocusPage(app, worker);
+    assert.equal(document.activeElement, app.panel().querySelector('.insights-viewport'));
+    assert.equal(trigger.isConnected, true); assert.equal(trigger.disabled, false);
+  });
+}
+
+for (const intent of ['focus-other', 'focus-other-then-body', 'pointer-elsewhere', 'Tab', 'Tab-from-trigger', 'keyboard-elsewhere', 'focus-body']) {
+  test(`1B.2B genuine ${intent} permanently revokes page focus ownership`, async ctx => {
+    const { app, worker } = await focusPageSetup(ctx);
+    const trigger = app.button('Examine financial evidence'); trigger.focus(); await app.click(trigger);
+    await app.until(() => worker.held.length); disabledTriggerBlur(trigger);
+    const other = app.host.querySelector('#other-focus');
+    if (intent === 'focus-other' || intent === 'focus-other-then-body') {
+      other.focus(); if (intent.endsWith('then-body')) other.blur();
+    } else if (intent === 'pointer-elsewhere') {
+      document.body.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
+    } else if (intent === 'focus-body') {
+      document.body.tabIndex = -1; document.body.focus(); ctx.after(() => document.body.removeAttribute('tabindex'));
+    } else {
+      (intent === 'Tab-from-trigger' ? trigger : document.body).dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: intent.startsWith('Tab') ? 'Tab' : 'ArrowDown', bubbles: true }));
+    }
+    const active = document.activeElement; assert.equal(app.focusListenerCount(), 0);
+    await flushFocusPage(app, worker); assert.equal(document.activeElement, active);
+    assert.notEqual(document.activeElement, app.panel().querySelector('.insights-viewport'));
+  });
+}
+
+test('1B.2B body alone never grants a navigation focus ticket', async ctx => {
+  const { app, worker } = await focusPageSetup(ctx);
+  assert.equal(document.activeElement, document.body);
+  await app.click('Examine financial evidence'); await app.until(() => worker.held.length);
+  assert.equal(app.focusListenerCount(), 0); await flushFocusPage(app, worker);
+  assert.equal(document.activeElement, document.body);
+});
+
+test('1B.2B record lineage and Previous/Next retain focus ownership through page replacement', async ctx => {
+  const { app, worker } = await focusPageSetup(ctx);
+  await act(async () => app.panel().querySelector('.insights-metrics > summary').click());
+  const fcf = app.panel().querySelector('[data-insight-metric="free_cash_flow"]');
+  const statement = [...fcf.querySelectorAll('.insights-statement')].find(n => n.textContent.startsWith('Free cash flow: 15 USD,'));
+  const window = '2025-01-01/2025-12-31/annual'; let removed = false;
+  async function follow(trigger, key) {
+    trigger.focus(); await app.click(trigger); await app.until(() => worker.held.length);
+    disabledTriggerBlur(trigger); await flushFocusPage(app, worker);
+    const target = key ? [...app.panel().querySelectorAll('[data-insight-key]')].find(n => n.dataset.insightKey === key) : app.panel().querySelector('.insights-viewport');
+    assert.equal(document.activeElement, target); removed ||= !trigger.isConnected;
+    return target;
+  }
+  let record = await follow(statement.querySelector('button'), `F|observation|free_cash_flow|later||${window}|`);
+  record = await follow([...record.querySelectorAll('button')].find(n => n.textContent.includes('capital expenditures')), `F|operand|free_cash_flow|later|capital_expenditures|${window}|`);
+  record = await follow(record.querySelector('button'), `F|observation|capital_expenditures|later||${window}|`);
+  record = await follow(record.querySelector('button'), 'F|source|||||10');
+  assert.ok(record.querySelector('a[href^="https://www.sec.gov/"]')); assert.equal(removed, true);
+  await follow(app.button('Examine financial evidence'));
+  const first = app.handles.at(-1).page.records.map(r => r.ref.key);
+  await follow(app.button('Next evidence page')); assert.equal(app.handles.at(-1).page.page, 1);
+  await follow(app.button('Previous evidence page')); assert.equal(app.handles.at(-1).page.page, 0);
+  assert.deepEqual(app.handles.at(-1).page.records.map(r => r.ref.key), first);
+});
+
+test('1B.2B duplicate and busy page attempts cannot overwrite the original focus ticket', async ctx => {
+  const { app, worker } = await focusPageSetup(ctx);
+  const trigger = app.button('Examine financial evidence'); trigger.focus();
+  await act(async () => { trigger.click(); trigger.click(); app.button('Examine diagnostic inputs').click(); });
+  await app.until(() => worker.held.length); assert.equal(app.focusListenerCount(), 3);
+  assert.match(app.panel().textContent, /Another evidence page is loading/);
+  const handle = app.handles.at(-1), original = handle.requestPage('F', 0);
+  assert.equal(handle.requestPage('F', 0), original);
+  await assert.rejects(handle.requestPage('D', 0), error => error.code === 'PAGE_BUSY');
+  assert.equal(worker.received.filter(m => m.type === 'PAGE').length, 1);
+  disabledTriggerBlur(trigger); await flushFocusPage(app, worker); await original;
+  assert.equal(document.activeElement, app.panel().querySelector('.insights-viewport'));
+});
+
+for (const strict of [false, true]) for (const ending of ['year', 'company', 'publication', 'cancel', 'expiry', 'page-timeout', 'worker-failure', 'unmount']) {
+  test(`1B.2B ${ending} releases page focus listeners and rejects stale focus strict ${strict}`, async ctx => {
+    const { app, worker } = await focusPageSetup(ctx, strict);
+    const trigger = app.button('Examine financial evidence'); trigger.focus(); await app.click(trigger);
+    await app.until(() => worker.held.length); assert.equal(app.focusListenerCount(), 3);
+    disabledTriggerBlur(trigger);
+    if (ending === 'year') await app.change('Earlier fiscal year', '2025');
+    else if (ending === 'company') await app.render(otherCompany);
+    else if (ending === 'publication') await app.checkVersion(1);
+    else if (ending === 'unmount') await app.unmount();
+    else if (ending === 'page-timeout') await act(async () => app.clock.advance(5000));
+    else if (ending === 'expiry') await act(async () => { app.clock.time += 300001; void app.handles.at(-1).snapshot; });
+    else if (ending === 'worker-failure') await act(async () => worker.emit('error'));
+    else await act(async () => app.handles.at(-1).dispose('cancelled'));
+    await app.until(() => app.focusListenerCount() === 0, 'Focus listener cleanup');
+    const external = document.createElement('button'); document.body.append(external); external.focus(); ctx.after(() => external.remove());
+    await act(async () => worker.flush()); assert.equal(document.activeElement, external);
+    assert.equal(app.focusListenerCount(), 0); assert.equal(app.handles.at(-1).inspect().parentBytes, 0);
+  });
+}
+
+test('1B.2B synchronous paging failure releases focus ownership without moving focus', async ctx => {
+  const { app } = await focusPageSetup(ctx);
+  ctx.mock.method(app.handles.at(-1), 'requestPage', () => { throw new Error('Synthetic paging failure'); });
+  const trigger = app.button('Examine financial evidence'); trigger.focus(); await app.click(trigger);
+  assert.equal(app.focusListenerCount(), 0); assert.equal(document.activeElement, trigger);
+  assert.match(app.panel().textContent, /Evidence could not be loaded/);
 });
 
 for (const strict of [false, true]) test(`1B.2A parsed success before year round trip cannot publish or move focus strict ${strict}`, async ctx => {

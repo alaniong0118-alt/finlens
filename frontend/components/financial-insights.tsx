@@ -15,6 +15,8 @@ type View = { owner: string; generation: number; discovery: InsightsPresentation
   phase: "waiting" | "loading" | "ready" | "error" | "closed" | "unsupported";
   operation: "discover" | "compare"; message: string | null };
 type Flight = { collection: string; page: number; promise: Promise<void> };
+type PageFocus = { target: Target; trigger: HTMLElement; generation: number; handle: InsightsResultHandle;
+  owned: boolean; complete: boolean; release: () => void };
 const collectionLabel = (id: string) => id === "F" ? "Financial evidence used — F" : "Inputs examined and reasons not used — D";
 const words = (text: string) => text.replaceAll("_", " ");
 function periodText(value: unknown) {
@@ -61,12 +63,15 @@ export default function FinancialInsights({ company }: { company: Company }) {
     handle: null as InsightsResultHandle | null, unsubscribe: null as (() => void) | null, pending: false,
     deadline: null as ReturnType<typeof setTimeout> | null, completeInitialization: null as (() => boolean) | null });
   const flight = useRef<Flight | null>(null);
-  const pageFocus = useRef<{ target: Target; trigger: HTMLElement; generation: number; handle: InsightsResultHandle } | null>(null);
+  const pageFocus = useRef<PageFocus | null>(null);
   const returnFocus = useRef<{ trigger: HTMLElement; generation: number } | null>(null);
   const compareButton = useRef<HTMLButtonElement | null>(null), cancelButton = useRef<HTMLButtonElement | null>(null);
   const retryButton = useRef<HTMLButtonElement | null>(null), viewport = useRef<HTMLDivElement | null>(null);
   const evidenceDetails = useRef<HTMLDetailsElement | null>(null);
   const uid = useId();
+  const clearPageFocus = useCallback(() => {
+    const ticket = pageFocus.current; pageFocus.current = null; ticket?.release();
+  }, []);
   const invalidate = useCallback(() => {
     const state = live.current;
     state.generation++; state.pending = false;
@@ -75,8 +80,8 @@ export default function FinancialInsights({ company }: { company: Company }) {
     // Detach consumers before synchronous disposal, including render-time invalidation.
     state.unsubscribe?.(); state.unsubscribe = null; state.handle = null;
     state.controller?.abort(); state.controller = null; panel.current?.dispose();
-    flight.current = null; pageFocus.current = null; returnFocus.current = null;
-  }, []);
+    flight.current = null; clearPageFocus(); returnFocus.current = null;
+  }, [clearPageFocus]);
   if (live.current.owner !== owner) { invalidate(); live.current.owner = owner; }
   useLayoutEffect(() => {
     const lifecycle = live.current;
@@ -172,7 +177,7 @@ export default function FinancialInsights({ company }: { company: Company }) {
           queueMicrotask(() => {
             if (!current() || state.handle !== handle) return;
             if (!handle.snapshot) {
-              flight.current = null; pageFocus.current = null;
+              flight.current = null; clearPageFocus();
               setView(previous => current() && previous.handle === handle ? { ...previous, handle: null, phase: "closed", message: "Comparison closed or expired. Reload the comparison to continue." } : previous);
             }
             redraw(value => value + 1);
@@ -198,7 +203,7 @@ export default function FinancialInsights({ company }: { company: Company }) {
         if (state.deadline !== null) clearTimeout(state.deadline); state.deadline = null;
       }
     }
-  }, [company.ticker, company.cik, owner, version, changed, invalidate]);
+  }, [company.ticker, company.cik, owner, version, changed, invalidate, clearPageFocus]);
 
   useEffect(() => {
     if (version !== null) void begin("discover", null);
@@ -227,11 +232,14 @@ export default function FinancialInsights({ company }: { company: Company }) {
       }
     }
     const destination = pageFocus.current;
-    if (destination && handle === destination.handle && page?.collection === destination.target.collection && page.page === destination.target.page) {
-      pageFocus.current = null;
+    if (destination?.complete && handle === destination.handle && page?.collection === destination.target.collection && page.page === destination.target.page) {
+      clearPageFocus();
       if (destination.generation !== live.current.generation || !live.current.mounted || live.current.owner !== owner || !handle.snapshot) return;
       if (evidenceDetails.current) evidenceDetails.current.open = true;
-      if (document.activeElement !== destination.trigger && (destination.trigger.isConnected || document.activeElement !== document.body)) return;
+      // A native disabled/removed trigger can lose focus to body. Body alone is
+      // never ownership: activation must have owned focus and no later user
+      // focus/pointer/keyboard intent may have revoked this operation's ticket.
+      if (!destination.owned || document.activeElement !== destination.trigger && document.activeElement !== document.body) return;
       const target = destination.target.key ? Array.from(viewport.current?.querySelectorAll<HTMLElement>("[data-insight-key]") ?? [])
         .find(node => node.dataset.insightKey === destination.target.key) : viewport.current;
       target?.focus();
@@ -261,13 +269,40 @@ export default function FinancialInsights({ company }: { company: Company }) {
     const generation = live.current.generation;
     const current = () => live.current.mounted && live.current.owner === owner && live.current.generation === generation
       && live.current.handle === handle && !live.current.controller?.signal.aborted;
+    const ticket: PageFocus = { target, trigger, generation, handle, owned: document.activeElement === trigger, complete: false, release: () => {} };
+    clearPageFocus(); pageFocus.current = ticket;
+    if (ticket.owned) {
+      const atTrigger = (event: Event) => event.target instanceof Node && trigger.contains(event.target);
+      const revoke = () => { ticket.owned = false; ticket.release(); };
+      const pointer = (event: Event) => { if (!atTrigger(event)) revoke(); };
+      const keyboard = (event: Event) => {
+        if (!atTrigger(event) || !["Enter", " "].includes((event as KeyboardEvent).key)) revoke();
+      };
+      const focus = (event: Event) => { if (!atTrigger(event)) revoke(); };
+      ticket.release = () => {
+        document.removeEventListener("pointerdown", pointer, true);
+        document.removeEventListener("keydown", keyboard, true);
+        document.removeEventListener("focusin", focus, true);
+      };
+      // The initiating pointerdown/keydown capture phase has already passed by
+      // the time its click handler starts navigation. Observe only later intent.
+      document.addEventListener("pointerdown", pointer, true);
+      document.addEventListener("keydown", keyboard, true);
+      document.addEventListener("focusin", focus, true);
+    }
     setPageMessage(null); handle.interact();
-    const promise = handle.requestPage(target.collection, target.page).then(result => {
+    let request: ReturnType<InsightsResultHandle["requestPage"]>;
+    try { request = handle.requestPage(target.collection, target.page); }
+    catch { if (pageFocus.current === ticket) clearPageFocus(); if (current()) setPageMessage("Evidence could not be loaded. Reload the comparison to continue."); return; }
+    const promise = request.then(result => {
       if (!current() || !handle.snapshot || result.collection !== target.collection || result.page !== target.page) return;
       if (target.key && !result.records.some(record => record.ref.key === target.key)) { setPageMessage("The requested evidence reference is unavailable."); return; }
-      pageFocus.current = { target, trigger, generation, handle };
+      if (pageFocus.current === ticket) ticket.complete = true;
     }).catch(() => { if (current()) setPageMessage("Evidence could not be loaded. Reload the comparison to continue."); })
-      .finally(() => { if (current() && flight.current?.promise === promise) { flight.current = null; redraw(value => value + 1); } });
+      .finally(() => {
+        if (pageFocus.current === ticket && !ticket.complete) clearPageFocus();
+        if (current() && flight.current?.promise === promise) { flight.current = null; redraw(value => value + 1); }
+      });
     flight.current = { collection: target.collection, page: target.page, promise }; redraw(value => value + 1);
     return promise;
   }
