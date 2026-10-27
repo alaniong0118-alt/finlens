@@ -567,3 +567,235 @@ bundling and all 1B.2B/native/pilot/deployment gates remain NOT VERIFIED. No bui
 browser, services, Docker/PostgreSQL, SEC/provider/model, dependency installation,
 private .env access, staging, commit or push occurred.
 Suggested later correction commit: `fix: enforce elapsed annual insights initialization deadline`.
+
+## Frontend 1B.2B test-only authorization — 2026-10-26
+
+Coordinator accepted the read-only preflight and authorized implementation only.
+The coordinator supplies 1B.2A independent approval; current main and local
+origin/main are 28d14d29c34a5aee95778237659d70ab86eaaff6. Historical verdicts above
+remain unchanged. Real Chromium/Next Worker acceptance is NOT VERIFIED.
+
+Exactly five authorized candidate paths:
+
+- frontend/e2e/fixtures/financial-insights-browser.ts (new)
+- frontend/e2e/financial-insights.spec.ts (new; exactly one desktop case)
+- frontend/e2e/fixtures/browser.ts
+- frontend/tests/qa01-harness.test.mjs
+- this ExecPlan
+
+Step 0 passed before writes: main/exact HEAD, empty index, exactly the original
+three protected exceptions, and all three protected SHA-256 values match the
+preceding record. Committed component/client/Worker/fixture hashes match preflight;
+the original fixture remains 491733790CD78DC2A143295B196D41F2891AEB47F7293072C70CBB027D16B36A.
+No private configuration or report contents were read.
+
+Implementation stages: clone/rebase the complete fixture identity; admit only the
+two exact insights query forms; correct disabled-AI capabilities; synchronize
+automatic discovery without requiring comparison or changing existing assertions;
+author the native-Worker case; run targeted offline regressions/type/lint/listing;
+verify scope, preservation and self-review. No browser/service/build/container,
+installation, data/provider operation, staging, commit or push is authorized.
+
+Decision: successful insights fixtures support only AAA/0000900001 at 0 and
+BBB/0000900002 at 1, with FY2024/FY2025. Existing generic recovery scenarios move
+AAA to versions 1/2. Those versions must retain generic behavior and independent
+obsolete-pin 409 handling, but receive a bounded current-pin insights 503 rather
+than inventing an unauthorized successful publication. Shared readiness must
+permit this explicit terminal failure and never wait for comparison or unrelated
+held requests. The new browser case requires successful baseline discovery.
+
+Progress: preservation complete; implementation and offline validation pending.
+The overall plan stays active. Supported Linux runtime verification and separate
+execution authorization remain prerequisites; mobile/zoom/accessibility, native,
+pilot and deployment acceptance remain deferred.
+
+## Frontend 1B.2B implementation and resumed verification — 2026-10-27
+
+Resumed in the same conversation after a usage interruption; no implementation
+restart. Before additional writes, all five candidates existed, main/HEAD remained
+28d14d29c34a5aee95778237659d70ab86eaaff6, index was empty, and inventory was exactly
+five candidates plus the three original protected exceptions. All protected hashes
+matched. The prior log establishes an initial 26/26 harness pass, followed by an
+expanded QA-01 run with 38 passes and four Linux-only skips, successful noEmit and
+scoped lint, and listing of 79 project cases across six files (one new desktop
+case). The interrupted financial/API run had no recoverable final completion
+result; its session was unavailable, so it was restarted as an offline regression.
+No browser or service ran before or after interruption.
+
+### Implemented behavior and identity decisions
+
+The new browser adapter clones the unchanged committed fixture and rewrites only
+identity fields. AAA/0000900001 publication/facts/evidence 0 and BBB/0000900002
+publication/facts/evidence 1 are the only successful synthetic publications. Years
+remain FY2024/FY2025. Scope rebasing covers the root, every node, edge, and statement
+reference; source rebasing covers raw sources and nested canonical provenance and
+alternatives. Reserved accessions ending 100001 avoid conflicting with generic
+QA-01 filing metadata. Canonical SEC index URLs match each adapted CIK/accession.
+Fact IDs, graph keys/relationships, F/D categories, amounts, formulas, changes,
+percentages, statuses, and server-authored statement text are retained. This is an
+insights-only dataset, not a reconciliation with generic snapshot amounts.
+
+Interception admits only exact GET insights discovery or comparison 2024 -> 2025
+for known issuers, null/absent HTTP bodies, canonical safe-integer publication pins,
+and no duplicate/extra query parameters. Parameter order may vary; the production
+request spelling is asserted exactly in the browser case. Unknown modes/years/
+routes, malformed/future pins, unknown issuers, and non-GET methods fail closed.
+Even a literal JSON null or empty HTTP body is rejected. Existing obsolete-pin
+409 determination still precedes fixture generation. Existing external/HMR rules,
+limits, deny-all upstream and teardown remain intact. Capabilities now supply the
+complete disabled-AI sec_readonly contract without changing the API client.
+
+Shared ready() retains its original three assertions and adds only a terminal
+automatic-discovery wait before request-count baselines. Successful baseline
+publications must show the exact choose-compare status. Unprovided current AAA
+versions 1/2 must show the exact existing generic insights error status. Readiness
+does not request/wait for comparison, release held requests, call refresh, or
+change scenario versions. Four offline Locator-protocol tests exercise the real
+readiness method and installed assertion library, including a deliberately held
+unrelated gate. These are protocol stubs, not DOM or browser acceptance.
+
+### Recovery and 503 self-review
+
+Inspected every ready() call and relevant hold/count assertion in recovery.spec.ts,
+research.spec.ts, comparison.spec.ts, experience.spec.ts and sec-nlp-01b.spec.ts.
+Existing malformed/unverified pins remain request-free; held freshness is released
+before ready(); source retry and same-pin checks keep their existing assertions;
+obsolete 0 -> 1 / 1 -> 2 snapshot deliveries retain cancellation and freshness-count
+checks. No existing spec/assertion was edited.
+
+The unprovided-publication response is a pinned 503 with
+QA01_INSIGHTS_PUBLICATION_UNAVAILABLE, not DATA_VERSION_CHANGED. Two new offline
+regressions send that actual Scenario response through getFinancialInsights,
+InsightsPanel, and the committed Worker protocol runtime at AAA versions 1 and 2.
+Each rejects with the exact 503 code, makes exactly one insights fetch, terminates
+the session, leaves zero Worker listeners/retained nodes, triggers zero publication
+reconciliation callbacks, and permits the real pinned summary client both before
+and after failure. Old-pin 409s are independently checked before this branch.
+This establishes bounded transport isolation; actual React/Chromium transition
+ordering and original browser-suite counts remain unverified until authorized.
+
+### Authored desktop acceptance case
+
+Exactly one case has the authorized title and a 90-second runner timeout. It
+captures native page Worker events before navigation, verifies same-origin Next
+asset URLs and a live DedicatedWorkerGlobalScope, and requires discovery completion
+and an explicit comparison request with pin zero. Neither global Worker nor
+Worker JavaScript is replaced. All seven metric expectations are independent
+literals; five-headline completeness, reporting periods and F/D separation are
+asserted. Statement navigation follows later FCF -> CapEx operand -> CapEx
+observation -> source 10, checking focus, full reference/scope, exact flattened
+fields and safe SEC link attributes without external navigation. F pages are
+replaced on Next/Previous, D replaces F, each page has at most 25 records, the
+comparison Worker stays owned/live, and page operations add no insights HTTP fetch.
+A persistent offline test verifies these fixed amounts, target-page lookups and
+lineage fields against production admission/presentation; it does not claim UI
+focus or native Worker acceptance.
+
+### Offline verification actually completed
+
+Working directory for the following commands: D:\Projects\finlens-foundation\frontend.
+
+```
+node --test tests/qa01-*.test.mjs
+node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+node node_modules/eslint/bin/eslint.js e2e/fixtures/financial-insights-browser.ts e2e/fixtures/browser.ts e2e/financial-insights.spec.ts tests/qa01-harness.test.mjs
+node node_modules/@playwright/test/cli.js test --list --reporter=list
+```
+
+Final QA-01 result: **41 passed, 0 failed/cancelled/todo, 4 Linux-only skips**
+(45 total), 10.0686149 seconds. This contains all 18 prior portable cases and 23
+new cases; four genuine Linux process-tree cases remain explicitly skipped here.
+Both positive issuer/mode pairs pass actual lexical preflight, whole-response
+admission and presentation. Negative cases reject nested source CIK/URL, graph and
+statement scope corruption, publication mismatch, invalid request selectors and
+pins. In-memory installed-route tests retain external/API/3108 blocking and HMR-only
+WebSocket behavior. Original fixture byte hash and complete graph relationships
+are checked persistently. No real HTTP/network request occurs in these tests.
+
+TypeScript noEmit and scoped ESLint: exit 0, no diagnostics. Listing: exit 0,
+79 project cases in six files; exactly one new insights case in desktop-chromium,
+none in mobile-width-chromium. Listing does not launch the configured webServer.
+Tracked candidate git diff --check and fatal UTF-8/no-NUL/trailing-whitespace/
+final-newline checks across all five candidate files passed. The first draft's
+23-pass/3-fail result was corrected before interruption: two tests had wrongly
+expected absent rather than zero-page F/D discovery collections, and an undefined
+pin test had accidentally used its helper's default pin. These were test-expectation
+errors; final results above supersede that draft without changing production code.
+
+Additional offline regression completed:
+
+```
+node --test tests/financial-insights.test.mjs tests/finlens-api.test.mjs
+```
+
+Result: **261 passed, 0 failed/cancelled/skipped/todo**, 186.779079 seconds, exit 0.
+The guarded synthetic Backend 1A serialization ran through the existing test
+runner, not a backend service or database. Existing worker transport/lifetime,
+current/obsolete version guards, exact publication-tuple comparison binding and
+shared API regressions all passed. Node emitted the pre-existing typeless-package
+module warning; no package/dependency change was made. Combined final executed
+coverage: **302 passed, 0 failed, 4 explicit Linux-only skips** across the two
+commands. The earlier interrupted run is not counted.
+
+### Deferred gates and independent review
+
+Supported Linux runtime/checkout, Node 24 with Linux dependencies, installed pinned
+Chromium/system libraries, /proc ownership verification, temporary-directory access
+and free 3107/3108 ports must be independently established. No WSL/container,
+dependency or browser installation/startup was attempted. A separately authorized
+run must prove actual Next module-Worker emission/execution, all new browser
+assertions/focus, existing QA-01 browser regression and Linux lifecycle cleanup.
+390px/320px, actual browser zoom, manual keyboard/accessibility/NVDA, native/pilot
+and deployment acceptance remain deferred. No production build acceptance claimed.
+
+Astra High should review exact identity-only rebasing/source chronology, fixed
+publication limits and independent stale-pin handling, canonical request/body/query
+admission, shared terminal readiness under held/current/obsolete publications,
+503 cleanup/no-reconciliation evidence, and native-Worker/pagination/focus assertions.
+No file outside the five-path allowlist is needed or modified. No outstanding
+implementation defect was found in this self-review; runtime compatibility is an
+unresolved acceptance gate. No staging, commit, push or deployment is authorized.
+
+### Final preservation and handoff
+
+The only candidate source hashes (SHA-256) are:
+
+- frontend/e2e/fixtures/financial-insights-browser.ts: 39C7A7B10D789BBC521D2AAC8F817C4916D1B88EBA03C6B8918438868C59CC04
+- frontend/e2e/financial-insights.spec.ts: 4C05953A0F07464D280A4FB870D5911BB16AFB936ABBE3AEE3DC0092EC7DC9BD
+- frontend/e2e/fixtures/browser.ts: 7904258AA71C7462EE2A98C02E7D5E076210BCE0E3E1E795FBAB7E99178581D0
+- frontend/tests/qa01-harness.test.mjs: 8BB35AD8ACEBE27674E42443B1CBDA48942E5981E5434322BEBA084A6088AC5E
+
+The fifth candidate is this appended ExecPlan; its final byte hash belongs in the
+handoff report rather than a self-referential value here. The three protected
+fingerprints remain:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json: A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json: F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Committed component/client/Worker, original fixture, generic data, existing browser
+specs, Playwright config, launcher/process-group scripts, dependencies, workflow and
+runbook remain unchanged. Candidate inventory is exactly the five paths listed in
+the authorization; branch main/exact baseline and empty index retained. Protected
+reports were hashed only. Nothing was staged, committed or pushed.
+
+- [x] Preserve baseline and reconcile interrupted implementation/tests.
+- [x] Complete test-only adapter, exact routing/capabilities and shared readiness.
+- [x] Author one desktop case and persistent admission/recovery regressions.
+- [x] Finish authorized offline regression, noEmit, scoped lint, listing and text checks.
+- [x] Self-review and record exact scope, fingerprints and limitations.
+- [ ] Independent Astra High review and coordinator decision.
+- [ ] Independently verify supported Linux prerequisites and separately authorize execution.
+- [ ] Real Chromium/Next module-Worker and Linux cleanup acceptance; existing browser regression.
+- [ ] Separately scoped mobile/zoom/accessibility/native/pilot/deployment gates.
+
+Proposed later invocation, NOT RUN, from the approved Linux frontend directory:
+
+```
+npm run test:e2e -- e2e/financial-insights.spec.ts --project=desktop-chromium --grep '^FIN-DEPTH-01 real Worker annual discovery comparison and evidence navigation$'
+```
+
+Use the existing QA-01 runbook's isolation precheck and runner-owned teardown;
+neither cleanup nor network rules are changed by this patch. Stop here for
+coordinator/Astra review. Suggested later commit message:
+`test: add isolated annual financial insights browser acceptance`.

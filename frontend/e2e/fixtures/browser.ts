@@ -2,6 +2,7 @@ import { test as base, expect, type BrowserContext, type Page, type Request } fr
 import * as data from './data';
 import type { PeriodKind } from '../../lib/finlens-api';
 import { installIgnoredAbort, type IgnoredAbortDelivery } from './ignored-abort';
+import { browserFinancialInsights, supportsInsightsPublication } from './financial-insights-browser';
 
 export { expect };
 export const origin = 'http://127.0.0.1:3107';
@@ -54,6 +55,14 @@ export class Scenario {
     await expect(this.page.getByRole('combobox', { name: 'Company', exact: true })).toHaveValue(ticker);
     await expect(this.page.getByRole('region', { name: 'Financial snapshot', exact: true }).getByRole('heading', { name: 'Revenue', exact: true })).toBeVisible();
     await expect(this.page.getByRole('combobox', { name: 'Indexed SEC filing', exact: true })).toBeEnabled();
+    // Settle only automatic discovery before existing tests capture request-count
+    // baselines. No comparison is requested, and current-pin fixture-unavailable
+    // recovery scenarios may finish with the existing explicit error UI.
+    const discoveryTerminal = supportsInsightsPublication(ticker, this.versions[ticker])
+      ? 'Choose Compare annual periods to request this comparison.'
+      : 'Annual financial insights could not be loaded or verified. Retry explicitly.';
+    await expect(this.page.getByRole('region', { name: 'Annual financial insights', exact: true }).locator('.insights-status'))
+      .toHaveText(discoveryTerminal, { timeout: 35_000 });
   }
   async install() {
     await this.context.routeWebSocket('**/*', socket => {
@@ -119,6 +128,14 @@ export class Scenario {
       return;
     }
     if (method !== 'GET' || body !== null) throw new Error(`Invalid method/body ${path}`);
+    if (suffix === 'financials/insights') {
+      if (path !== `/companies/${ticker}/financials/insights` || !Number.isSafeInteger(Number(pin))
+        || String(Number(pin)) !== pin || (item.request.postData?.() ?? null) !== null) throw new Error('Invalid insights issuer path, publication pin or body');
+      if (params === 'mode' && query.get('mode') === 'discover') return;
+      if (params === 'earlier_fiscal_year,later_fiscal_year,mode' && query.get('mode') === 'compare'
+        && query.get('earlier_fiscal_year') === '2024' && query.get('later_fiscal_year') === '2025') return;
+      throw new Error(`Invalid insights query ${query}`);
+    }
     if (suffix === 'sources' && !params) return;
     if (suffix === 'financials/annual' && (!params || params === 'fiscal_year' && ['2025', '2024'].includes(query.get('fiscal_year')!))) return;
     const metric = suffix.match(/^financials\/metrics\/([^/]+)$/)?.[1];
@@ -132,11 +149,17 @@ export class Scenario {
   defaultReply(item: ApiRequest): Reply {
     const { path, ticker, query, pin, body } = item;
     if (path === '/companies') return { body: data.companies };
-    if (path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false } };
+    if (path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' } };
     const issuer = ticker!;
     const version = this.versions[issuer];
     if (path.endsWith('/freshness')) return { body: data.freshness(issuer, version), version: null };
     if (pin !== String(version)) return { status: 409, code: 'DATA_VERSION_CHANGED', version: String(version) };
+    if (path === `/companies/${issuer}/financials/insights`) {
+      // Existing generic recovery cases may advance publications; never manufacture
+      // successful insights for versions outside the two authorized fixture inputs.
+      if (!supportsInsightsPublication(issuer, version)) return { status: 503, code: 'QA01_INSIGHTS_PUBLICATION_UNAVAILABLE', version: String(version) };
+      return { body: browserFinancialInsights(issuer, version, query.get('mode') as 'discover' | 'compare'), version: String(version) };
+    }
     if (path.endsWith('/sources')) return { body: data.sources(issuer) };
     if (path.endsWith('/summary')) return { body: data.summary(issuer, query.get('period') as PeriodKind) };
     if (path.includes('/metrics/')) return { body: data.history(issuer, path.split('/').at(-1)!, query.get('period') as PeriodKind) };
