@@ -1405,3 +1405,170 @@ Outcome: bounded repair and offline self-review complete; stop for coordinator
 approval and independent targeted Astra review. Any later execution/publication
 needs separate authorization. Suggested later commit message:
 fix: keep annual insights Compare focus outline inside viewport
+
+## Frontend 1B.3 unified action focus repair — 2026-10-27
+
+Status: active; unified action repair and bounded offline verification complete;
+awaiting targeted Astra/coordinator review. This appended section is the current repair scope; all earlier evidence,
+verdicts and baselines remain historical. Entry branch
+test/fin-depth-01-1b3-chromium, HEAD 3b10eb098703fc015602f610e8494fe3bd17b6af,
+index empty. Exactly the three original protected exceptions exist; their hashes
+match the established values. Changes are restricted to globals.css, the existing
+financial-insights.spec.ts and this plan. No browser/CI execution or Git delivery.
+
+### Accepted second-run evidence and implementation decision
+
+The completed read-only triage established the following evidence; this repair
+uses it without repeating root-cause analysis or downloading/running CI again.
+Run https://github.com/alaniong0118-alt/finlens/actions/runs/40491981755 reports
+QA-01 49/49, isolation PASS and Chromium 80/81: Scenario A passes; B fails at Cancel
+(spec line 509 at that HEAD, strict indicatorVisible assertion line 356). Compare
+and its computed-style expectations pass. Diagnostic artifact 12728434315,
+chromium-failure-diagnostics, is bound to this exact run, branch and HEAD. Its ZIP
+SHA-256 matched GitHub: 2EB051418E66AF73F190ABE9209B7BE3A6B20D95974986A3B6AB3DCBA277DFC3.
+
+Recorded Cancel bounds (left,top,right,bottom) are
+(253.421875,955.203125,429.015625,1000), viewport (0,0,1440,1000). Its 3px solid
+outline with +3px offset extends to y=1006. Geometry JSON, screenshot, error
+context and trace agree: focused, focus-visible, focal-visible and hit-testable,
+but indicatorVisible=false. All six ancestors use visible overflow; the
+viewport clips the bottom band (y=1003..1006) and the lower side segments. The
+trace's spec matches the current source. This is a production indicator defect;
+the strict test is correct. No retry-specific runtime result is implied.
+
+Replace the Compare-only selector, without duplication, with
+.financial-insights .insights-actions > button:focus-visible. Keep only its existing
+outline-color:currentColor and outline-offset:-6px declarations, inheriting the
+unchanged global 3px solid outline. The direct action family includes Compare,
+Cancel and the conditional Retry button's Reload annual comparison / Retry year
+discovery labels. Do not broaden to other Insights controls or global buttons.
+
+Keep all nine original geometric cases. Add the exact fractional Cancel pair:
++3px rejects with outer bottom 1006; -6px accepts with outer bottom 997 and all
+four indicator bands. Add four read-only Cancel computed-style assertions after
+existing native Tab/focus validation: 3px, solid, -6px and computed currentColor.
+Keep strict measurement/assessment, native actions, scenario sequencing, held
+response release/finally cleanup, Worker, API and fixtures unchanged. Retry label
+coverage will be checked offline against the real component JSX and CSS selector;
+no fixture or request sequence is added to exercise a new runtime state.
+
+### Progress and validation strategy
+
+- [x] Verify expected branch/HEAD, empty index and original protected hashes.
+- [x] Replace only the action-family selector; add fractional geometry pair and
+  Cancel computed-style expectations in the existing scenario.
+- [x] TypeScript noEmit, spec ESLint, all geometry cases, CSS selector/specificity,
+  theme/hover contrast, list-only discovery, diff/scope/hash checks and self-review.
+- [ ] Independent targeted Astra/coordinator review; browser execution remains a
+  separate authorization gate.
+
+Do not read backend/.env or modify protected files. No browser, services/build,
+CI execution, Docker/PostgreSQL, providers, dependency installation, staging,
+commit/amend, push or merge. The separate light secondary TEXT contrast gap is
+explicitly excluded from this repair; no normal text compliance claim is made.
+
+### Bounded offline results and accessibility assessment
+
+Actually executed on 2026-10-27, from frontend/, all exit 0:
+
+- node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+  — no diagnostics or incremental output.
+- node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts
+  — no diagnostics.
+- node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list
+  — exactly three cases: original plus existing Scenario A and Scenario B. This
+  was list-only, without browser or configured webServer execution.
+- A bounded PowerShell single-quoted here-string piped to node used the existing
+  TypeScript AST/VM extraction pattern above, executing the actual
+  assessInsightsFocus and insightsFocusAdversarialChecks with local Playwright
+  expect. All 11 cases passed, including all nine prior cases and the exact
+  fractional Cancel pair. Outward +3 is rejected, bottom=1006; inset -6 is
+  accepted, bottom=997. Inset outer bounds are
+  (256.421875,958.203125,426.015625,997); all four bands fit.
+- The same inline harness parsed actual globals.css with local PostCSS and
+  postcss-selector-parser. It required exactly one new family rule, no old
+  Compare-only rule, exactly the two existing declarations, unchanged global
+  3px solid/+3px declarations, and specificity (0,3,1) versus global (0,1,0).
+  No !important, width/style override, text-color change or other CSS edit.
+- Actual component TSX was AST-parsed without executing React/Worker/API code.
+  The actions div contains three button elements (primary Compare, secondary
+  Cancel, conditional secondary Retry). JSX text/conditional string extraction
+  verified all four labels, including Reload annual comparison and Retry year
+  discovery. A JSDOM structural selector check used those actual extracted
+  classes/labels and matched all four action variants; negative controls outside
+  Insights, outside actions, and nested under another child did not match.
+  :focus-visible was parsed as part of the real selector; JSDOM checked only
+  its structural portion. No keyboard-modality or browser painting claim follows.
+- The real shared primary/secondary padding is 11px vertical and 16px horizontal,
+  with a 1px border. Geometry assertions confirm the inset band runs 3..6px
+  inside the border box, within existing padding and clear of the text content
+  box. Text, padding, min-height and wrapping rules are unchanged. This is a
+  static box/geometry assessment; actual wrapped-label painting is still pending.
+
+Theme variables, primary/secondary text/fill declarations and the real existing
+hover rule filter:brightness(.95) were read directly from CSS. Relative luminance
+uses sRGB linearization at 0.04045 with exponent 2.4, weights
+0.2126/0.7152/0.0722 and (Lmax+0.05)/(Lmin+0.05). Hover values model multiplication
+of each color channel by 0.95. Static text/currentColor-ring versus fill results:
+
+| Action appearance | Text / currentColor ring | Fill | Normal | Hover |
+|---|---|---|---|---|
+| Primary light | #ffffff | #087e78 | 4.9228:1 | 4.7899:1 |
+| Secondary light | #087e78 | #e9f6f2 | 4.4373:1 | 4.3215:1 |
+| Primary dark | #0c2627 | #57d3c0 | 8.6858:1 | 7.9891:1 |
+| Secondary dark | #57d3c0 | #1a3a3c | 6.6986:1 | 6.2783:1 |
+
+All proposed rings exceed 3:1 in both themes and modeled hover states. The
+existing light secondary 13px TEXT contrast is approximately 4.44:1 normally and
+4.32:1 on hover, below 4.5:1. This separate gap is retained intentionally under
+the explicit scope restriction; no normal text contrast compliance is claimed.
+currentColor changes only the focus outline, not the button text or background.
+
+From the repository root, git diff --check passed. Git emitted only the existing
+LF-to-CRLF policy warning for globals.css; original file newline conventions were
+preserved. An inline Node/TypeScript self-review restores the entire baseline CSS
+by reversing only the selector change and restores the entire baseline spec by
+removing only the new fractional pair/result flags and Cancel style checks/local
+locator. This proves all nine existing cases, Scenario A/B native actions,
+request sequencing and held-response cleanup are unchanged. The assessor, strict
+DOM focus helper, Tab traversal, lineage and page helpers also match HEAD exactly.
+The plan retains its complete historical prefix. Candidate UTF-8/no-BOM/no-NUL/
+terminal-newline checks passed. No component, fixture, Worker, API, calculation,
+other Insights control, global focus policy, isolation runner or workflow changed.
+
+### Integrity, remaining gates and targeted Astra handoff
+
+Final verification: branch test/fin-depth-01-1b3-chromium, HEAD
+3b10eb098703fc015602f610e8494fe3bd17b6af, index empty; exactly the three authorized
+candidates plus the three original protected exceptions. Protected SHA-256 values
+match entry; AAPL reports were hashed only:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Astra handoff: review only the three-file diff against this HEAD. Confirm the
+single direct-child family selector covers Compare/Cancel/both Retry labels,
+retains 3px solid thickness and correct currentColor contrast, and excludes other
+controls. Inspect exact fractional geometry and unchanged nine adversarial cases,
+strict indicatorVisible assertion and native navigation. Verify Cancel probes are
+read-only and preserve the registered hold, finally release and fixture ordering.
+Check static text clearance/hover calculations and explicit retained TEXT gap.
+Reconfirm no extra candidate, protected-file drift, index mutation or Git delivery.
+No independent Astra review was executed in this repair; it remains a gate.
+
+The failed second CI run remains historical evidence; no new Chromium or CI
+execution occurred. Runtime Cancel computed styles, Retry-state styles and the
+remaining Scenario B keyboard route at 1440x1000/720x500 remain unverified for this
+candidate. The earlier Scenario A touch/pointer PASS does not establish keyboard
+indicator visibility. Actual 200% browser zoom, assistive technology, forced-color
+painting, wrapped-label painting and native Worker-local pending-page focus
+preservation remain outside acceptance. No service/build, Docker/PostgreSQL,
+external provider, private backend/.env access or Git writes occurred.
+
+Outcome: unified action repair, bounded offline checks and self-review complete;
+stop for coordinator and targeted Astra review. No staging, commit/amend, push,
+merge or CI rerun is authorized. Suggested later commit message:
+fix: unify annual insights action focus outlines

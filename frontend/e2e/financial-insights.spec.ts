@@ -318,8 +318,20 @@ function insightsFocusAdversarialChecks() {
   const boundaryClipped = assessInsightsFocus(boundaryControl);
   expect(boundaryClipped.focalVisible).toBe(true); expect(boundaryClipped.indicatorVisible).toBe(false);
   expect(boundaryClipped.outer.bottom).toBe(1006);
-  return { cases: 9, hiddenAncestorRejected: !clipped.indicatorVisible, tallDestinationAccepted: tall.indicatorVisible,
-    insetBoundaryAccepted: inset.indicatorVisible, outwardBoundaryRejected: !boundaryClipped.indicatorVisible };
+  // Exact fractional Cancel geometry from run 40491981755 / artifact 12728434315.
+  const recordedCancel = { ...boundaryControl,
+    target: { left: 253.421875, top: 955.203125, right: 429.015625, bottom: 1000 },
+    focal: { left: 253.421875, top: 955.203125, right: 429.015625, bottom: 1000 } };
+  const cancelOutward = assessInsightsFocus(recordedCancel);
+  expect(cancelOutward.focalVisible).toBe(true); expect(cancelOutward.indicatorVisible).toBe(false);
+  expect(cancelOutward.outer.bottom).toBe(1006);
+  const cancelInset = assessInsightsFocus({ ...recordedCancel, outlineOffset: -6 });
+  expect(cancelInset.focalVisible).toBe(true); expect(cancelInset.indicatorVisible).toBe(true);
+  expect(cancelInset.outer).toEqual({ left: 256.421875, top: 958.203125, right: 426.015625, bottom: 997 });
+  expect(cancelInset.segments).toHaveLength(4);
+  return { cases: 11, hiddenAncestorRejected: !clipped.indicatorVisible, tallDestinationAccepted: tall.indicatorVisible,
+    insetBoundaryAccepted: inset.indicatorVisible, outwardBoundaryRejected: !boundaryClipped.indicatorVisible,
+    fractionalCancelOutwardRejected: !cancelOutward.indicatorVisible, fractionalCancelInsetAccepted: cancelInset.indicatorVisible };
 }
 
 async function insightsFocus(target: Locator, keyboard = false, destination = false) {
@@ -506,7 +518,12 @@ test('FIN-DEPTH-01 1B.3 B native keyboard and 720px reflow (NOT actual 200% brow
     await expect(panel.locator('.insights-status')).toHaveAttribute('aria-busy', 'true');
     await expect(compare).toBeDisabled();
     await later.focus(); await page.keyboard.press('Tab');
-    await insightsFocus(panel.getByRole('button', { name: 'Cancel annual insights', exact: true }), true);
+    const cancel = panel.getByRole('button', { name: 'Cancel annual insights', exact: true });
+    await insightsFocus(cancel, true);
+    await expect(cancel).toHaveCSS('outline-width', '3px');
+    await expect(cancel).toHaveCSS('outline-style', 'solid');
+    await expect(cancel).toHaveCSS('outline-offset', '-6px');
+    await expect(cancel).toHaveCSS('outline-color', await cancel.evaluate(element => getComputedStyle(element).color));
     await page.keyboard.press('Shift+Tab'); await insightsFocus(later, true);
     held.release();
     await expect(panel.locator('.insights-status')).toHaveText('Annual comparison ready. Evidence can be examined below.', { timeout: 35_000 });
