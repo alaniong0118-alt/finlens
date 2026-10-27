@@ -1275,3 +1275,133 @@ Stop for coordinator and targeted Astra
 re-review of the eight-page fixture binding, independent outline segments,
 client-box/axis clipping, tall-record policy and deterministic hidden-ancestor
 rejection. No browser execution, staging, commit or push is authorized.
+
+## Frontend 1B.3 scoped production focus repair — 2026-10-27
+
+Status: active; minimal production correction implemented and offline verification
+passed; awaiting coordinator approval and independent targeted Astra review. This section is the current scope; earlier authorization and verdicts
+remain historical. Entry branch test/fin-depth-01-1b3-chromium, HEAD
+478075e433d5759976c1961d1aad839792c2324c, empty index. Only the original modified
+frontend/next-env.d.ts and two untracked AAPL reports existed at entry; all three
+protected SHA-256 values match the established fingerprints above.
+
+### Failure evidence, root cause and exact repair
+
+Coordinator-confirmed failure in PR https://github.com/alaniong0118-alt/finlens/pull/1,
+CI run 40469254327: native Tab focuses Compare annual periods with its bottom at
+viewport y=1000. The global 3px solid outline with +3px outward offset extends to
+y=1006 and is clipped. The strict geometry assertion correctly rejects it. This
+failure evidence was supplied by the coordinator; this repair does not rerun CI
+or independently execute a browser.
+
+Allowed edits are exactly frontend/app/globals.css,
+frontend/e2e/financial-insights.spec.ts and this existing ExecPlan. Add only
+.financial-insights .insights-actions .primary-button:focus-visible with
+outline-color:currentColor and outline-offset:-6px. Keep the inherited 3px solid
+outline. The pure assessor, DOM measurements, strict clipping assertion, native
+keyboard actions and all seven existing adversarial cases remain unchanged.
+Add an inset positive and outward negative control at the exact 1000px boundary,
+and read-only computed-style assertions after native Tab focuses Compare.
+
+### Progress and validation strategy
+
+- [x] Verify expected branch/HEAD, empty index, entry inventory and protected hashes.
+- [x] Add the scoped CSS correction, two deterministic boundary cases and focused
+  computed-style expectations without changing existing strict assertions.
+- [x] Run bounded offline TypeScript, spec ESLint, geometry/CSS expectations,
+  Playwright list-only discovery, diff/scope/protected checks and self-review.
+- [ ] Coordinator approval and independent targeted Astra review; any subsequent
+  browser execution or Git delivery requires separate authorization.
+
+No Chromium, browser/services/build, CI execution, network/provider access,
+database/Docker, dependency installation or Git writes are authorized. Do not
+read backend/.env. Preserve next-env.d.ts and both original reports; hash reports
+only. Financial calculations, Worker, API, fixtures, components, global focus
+policy, isolation runner and workflow are outside this repair.
+
+### Offline verification and specificity/contrast assessment
+
+All following checks actually ran on 2026-10-27 and exited 0. From frontend/:
+
+- node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+  — no diagnostics; no incremental output.
+- node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts
+  — no diagnostics.
+- node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list
+  — exactly three cases discovered: original plus the two existing 1B.3 scenarios.
+  This was list-only; no browser or configured webServer was started.
+- The reproducible TypeScript AST/VM adversarial command in the preceding two-P2
+  section was run against the updated functions using local Playwright expect.
+  All nine deterministic cases passed: original seven unchanged, inset boundary
+  accepted and outward boundary rejected. At target [20,956,300,1000], viewport
+  [0,0,1440,1000], width=3 and offset=-6, the outer rectangle is
+  [23,959,297,997] and all four bands fit. With the original offset=+3, focal
+  visibility still passes but indicator visibility fails with outer bottom=1006.
+- Inline Node/PostCSS expectations parsed the real globals.css and required the
+  scoped rule to contain exactly outline-color:currentColor and offset:-6px;
+  the global focus rule still has exactly outline:3px solid var(--accent) and
+  offset:3px. The base primary-button background/text and dark text override were
+  checked directly. Local relative-luminance calculations linearized sRGB with
+  threshold 0.04045, exponent 2.4 and weights 0.2126/0.7152/0.0722, then used
+  (Lmax+0.05)/(Lmin+0.05). Both theme pairs exceed 4.5:1.
+
+The new selector has specificity (0,4,0): three classes and :focus-visible. It
+wins over global :focus-visible (0,1,0) for color and offset without setting width
+or style. Existing primary-button rules set background/text but no outline; no
+!important is needed. The production Insights actions contain one primary button,
+Compare. Cancel and buttons elsewhere do not match the scoped selector.
+
+Normal enabled light theme: background #087e78, text/currentColor ring #ffffff,
+contrast 4.9228:1. Dark theme: background #57d3c0, text/currentColor ring #0c2627,
+contrast 8.6858:1. Because the ring is inset, its adjacent fill is the button's
+accent background; reusing the accent outline color would conceal it. The band
+runs 3–6px inside the border box, within the existing padding. These are static
+CSS/theme assessments, not browser painting, forced-colors or visual acceptance.
+The four authored computed-style expectations check 3px/solid/-6px/current text
+color after existing native Tab; they were type/lint/discovery checked, not run.
+
+From the repository root, git diff --check passed (Git only warned of the existing
+LF-to-CRLF policy for globals.css). A bounded inline Node self-review compared
+HEAD contents: removing the exact new CSS block restores globals.css byte-content
+after newline normalization; removing only the new boundary block and four style
+assertions restores the entire baseline spec. The pure assessor, strict DOM focus
+helper and Tab traversal helper are identical to HEAD; all native keyboard actions
+and the original seven cases remain intact. The plan retains its complete original
+prefix. All three candidates pass UTF-8/no-BOM/no-NUL/terminal-newline checks.
+
+Exact candidate scope is the three allowed paths. The only other status entries
+are the original modified next-env.d.ts and two original untracked AAPL reports.
+Branch/HEAD remain test/fin-depth-01-1b3-chromium /
+478075e433d5759976c1961d1aad839792c2324c; index empty. Protected SHA-256 values
+were verified before and after implementation (reports hashed only):
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+### Targeted Astra handoff and remaining acceptance gaps
+
+Review exactly the three-file working-tree diff against
+478075e433d5759976c1961d1aad839792c2324c in PR 1. Check selector scope and cascade,
+inherited 3px thickness, signed -6px offset, currentColor contrast against both
+fills, the exact viewport-boundary positive/outward-negative pair, and preservation
+of every prior clipping rejection, native action and strict focus assertion. Check
+that style probes only read the focused Compare button and do not repair layout,
+focus or scrolling. Reconfirm the three protected fingerprints and empty index.
+No Astra review was executed during this repair; this is its review handoff.
+
+CI run 40469254327 remains failed historical evidence. The production repair's
+Chromium focus painting and computed styles, native Tab behavior at the viewport
+boundary and full 1B.3 acceptance remain NOT EXECUTED here. Actual 200% browser
+zoom, assistive technology and native Worker-local pending-page focus preservation
+remain outside acceptance. No financial calculations, Worker/API/fixtures,
+components, global focus policy, runner or workflow were changed. No browser,
+service/build, CI rerun, provider, database/Docker, dependency installation,
+backend/.env access, staging, commit/amend, push or merge occurred.
+
+Outcome: bounded repair and offline self-review complete; stop for coordinator
+approval and independent targeted Astra review. Any later execution/publication
+needs separate authorization. Suggested later commit message:
+fix: keep annual insights Compare focus outline inside viewport

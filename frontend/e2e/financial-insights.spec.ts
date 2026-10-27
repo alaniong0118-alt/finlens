@@ -307,7 +307,19 @@ function insightsFocusAdversarialChecks() {
   const control = { ...sample, destination: false, target: { ...sample.target, bottom: 100 }, focal: { ...sample.target, bottom: 100 } };
   expect(assessInsightsFocus(control).indicatorVisible).toBe(true);
   expect(assessInsightsFocus({ ...control, viewport: { ...sample.viewport, bottom: 104 } }).indicatorVisible).toBe(false);
-  return { cases: 7, hiddenAncestorRejected: !clipped.indicatorVisible, tallDestinationAccepted: tall.indicatorVisible };
+  // Native Tab can leave Compare flush with the viewport bottom. Signed inset
+  // geometry must pass there while the original outward outline still rejects.
+  const boundaryControl = { ...control, target: { left: 20, right: 300, top: 956, bottom: 1000 },
+    focal: { left: 20, right: 300, top: 956, bottom: 1000 }, viewport: { left: 0, right: 1440, top: 0, bottom: 1000 } };
+  const inset = assessInsightsFocus({ ...boundaryControl, outlineOffset: -6 });
+  expect(inset.focalVisible).toBe(true); expect(inset.indicatorVisible).toBe(true);
+  expect(inset.outer).toEqual({ left: 23, right: 297, top: 959, bottom: 997 });
+  expect(inset.segments).toHaveLength(4);
+  const boundaryClipped = assessInsightsFocus(boundaryControl);
+  expect(boundaryClipped.focalVisible).toBe(true); expect(boundaryClipped.indicatorVisible).toBe(false);
+  expect(boundaryClipped.outer.bottom).toBe(1006);
+  return { cases: 9, hiddenAncestorRejected: !clipped.indicatorVisible, tallDestinationAccepted: tall.indicatorVisible,
+    insetBoundaryAccepted: inset.indicatorVisible, outwardBoundaryRejected: !boundaryClipped.indicatorVisible };
 }
 
 async function insightsFocus(target: Locator, keyboard = false, destination = false) {
@@ -480,6 +492,10 @@ test('FIN-DEPTH-01 1B.3 B native keyboard and 720px reflow (NOT actual 200% brow
   // Explicit starting points only. Neither seed is an evidence destination.
   await earlier.focus(); await page.keyboard.press('Tab'); await insightsFocus(later, true);
   await page.keyboard.press('Tab'); await insightsFocus(compare, true);
+  await expect(compare).toHaveCSS('outline-width', '3px');
+  await expect(compare).toHaveCSS('outline-style', 'solid');
+  await expect(compare).toHaveCSS('outline-offset', '-6px');
+  await expect(compare).toHaveCSS('outline-color', await compare.evaluate(element => getComputedStyle(element).color));
   await page.keyboard.press('Shift+Tab'); await expect(later).toBeFocused();
   await page.keyboard.press('Shift+Tab'); await expect(earlier).toBeFocused();
   await page.keyboard.press('Tab'); await page.keyboard.press('Tab'); await expect(compare).toBeFocused();
