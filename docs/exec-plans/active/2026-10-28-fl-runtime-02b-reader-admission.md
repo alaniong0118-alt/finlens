@@ -1,6 +1,6 @@
 # FL-RUNTIME-02B.1 — Isolate ORM metadata from database bootstrap
 
-Status: active; 02B.1 accepted per coordinator, 02B.2 offline-verified/review pending
+Status: active; 02B.1/02B.2 accepted per coordinator, 02B.3A offline-verified/review pending
 Roadmap phase: bounded runtime foundation; no reader data admission
 
 ## Objective
@@ -355,3 +355,194 @@ deployment acceptance is not tested. The reader remains diagnostics-only.
 
 Suggested commit, only after separate authorization:
 `refactor(runtime): isolate SEC URL and vector validation helpers`.
+
+## FL-RUNTIME-02B.3A — Pure deterministic keyword ranking extraction
+
+### Objective and verified checkpoint
+
+The coordinator authorizes only the pure ranking extraction after the read-only
+02B.3 design recommended separate 3A/3B review. Coordinator attestation supersedes
+the historical pending-review status above for 02B.2. Preserve legacy keyword
+admission, normalization/validation/read order, outputs, exceptions and ORM identity.
+
+Read root AGENTS.md, ExecPlan rules and relevant roadmap context. Verified main,
+HEAD/local origin/main `002cb893ce312200416461f93cbbb22ab8458320`, empty index,
+only the three protected exceptions and their original hashes above. Both new
+paths are absent. Hashed 368 nonignored files before edits without environment
+file reads. Actual keyword function, its main.py caller and maintained bounded
+research/serialized keyword tests match design assumptions.
+
+### Exact scope and constraints
+
+Only backend/app/keyword_ranking.py (new), backend/app/filing_search_service.py,
+backend/tests/test_keyword_ranking_isolation.py (new), and this plan may change.
+No additional reads, changed SQL predicates, validation gates, result bounds,
+byte/work/deadline/cancellation policy, publication checks, financial/tone changes,
+semantic/hybrid changes, reader capabilities, schema/deployment or 02B.3B work.
+No private dotenv, real engines/SQL/connections, service, SEC/provider/network,
+model loading, installation or Git delivery. Preserve protected bytes/index.
+
+### Implementation decisions and stages
+
+- Move query term preparation into a stdlib-only helper called at the same point
+  after legacy validate_research_input and before research_chunks. Keeping term
+  preparation before the read preserves normalization/exception ordering and
+  avoids redoing normalization in the kernel after a database read.
+- Use frozen detached records (position, chunk_index, text); kernel returns
+  original positions. The bridge indexes the original list, preserving ORM object
+  identity and result types. No rank output attests complete-publication admission.
+- Preserve lower/split/strip/count, repeated terms, positive filtering, sort keys,
+  stable ties and slicing. No aliases, regex, casefold, weights or deduplication.
+
+1. Record checkpoint and add independent immutable-baseline/negative tests.
+2. Demonstrate pre-extraction failures, then implement only the approved bridge.
+3. Run focused and maintained synthetic keyword/import/capability regressions.
+4. Check syntax, source parity, exact four-path scope, whitespace and preservation.
+
+### Validation and completion criteria
+
+Independent fresh-process sentinels precede pure-module imports. Compare against
+immutable `002cb893ce312200416461f93cbbb22ab8458320`, including duplicate terms,
+ties, shuffled inputs, Unicode, substrings, empty queries, limits, exception/read
+ordering and original return identities. In-memory mutation controls must detect
+forbidden imports and altered duplicate/tie semantics. Use fake loaders and
+compiled query predicates, never SQL execution. Maintained serialized keyword
+tests must retain the intentionally malformed-digest legacy behavior. Full source
+AST outside search_filing_chunks must match the baseline apart from one import.
+
+### Progress and results
+
+- [x] Baseline, protected hashes, index and caller/test inspection.
+- [x] Add focused tests and pre-extraction evidence.
+- [x] Implement and run relevant offline regressions.
+- [x] Complete preservation/self-review and independent-review handoff.
+- [ ] Independent review/coordinator acceptance; no delivery or later increment.
+
+### Actual verification and outcome
+
+Working directory `D:\Projects\finlens-foundation\backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -I -S -B tests/test_keyword_ranking_isolation.py
+# Before production edits: 8 methods, 10 failing test/subtest cases and 2 errors;
+# 3.386s. Missing ranker module and absent delegation were detected.
+# After extraction: 8 passed; 3.715s.
+```
+
+The eight methods use 23 independent fresh processes: five pure imports across
+missing/development/sec_readonly/sec_reader/unknown profiles; twelve negative
+import/bootstrap controls, including an injected forbidden import; one immutable
+ranking matrix; one duplicate/tie mutation probe; two legacy profile parity
+probes; one normalization/detachment probe; one disabled-reader probe. The source
+AST/signature comparison runs in the parent. Pure-module import needs no config,
+database, SQLAlchemy, encoder/provider or SEC client. Sentinel attempts raise and
+are recorded even if application code tries to swallow them.
+
+Ranking parity uses the entire original function extracted from immutable
+`002cb893ce312200416461f93cbbb22ab8458320`. The pure matrix compares 432 cases:
+nine empty/permuted/duplicate-index/52-row/character-boundary datasets, sixteen
+query forms and three limits. Query forms include actual tabs/newlines/Unicode
+whitespace, combining marks, lower-vs-casefold differences, punctuation, repeated
+terms, zero matches and overlapping substrings. Empty-query arithmetic is tested
+with oracle boundary validation bypassed; separate bridge probes retain the real
+validator and verify empty/whitespace-only queries fail before reads.
+
+In-memory mutants deduplicate query terms or add position as a tie-breaker. Each
+fails the same immutable-oracle comparator that accepts the real kernel. Another
+probe injects app.database before the pure source and must fail its import guard.
+No mutant is written to disk. Bridge tests use actual mapped FilingChunk objects,
+compare identity/result types/exceptions, compile unchanged predicates, and verify
+one read for valid input and none for validation failures. A traced string proves
+validation and normalization precede the read. Kernel inputs contain only frozen
+position/index/text records. SQL is never executed.
+
+Relevant maintained regressions ran through a guarded stdin launcher under the
+same interpreter flags. The exact launcher is:
+
+```python
+import os
+import runpy
+from types import SimpleNamespace
+from urllib.parse import quote
+runpy.run_path('tests/run_sec_reader_offline.py', run_name='offline_probe')
+import sqlalchemy
+import sqlalchemy.engine.create
+def forbidden(*args, **kwargs):
+    raise AssertionError('Real engine forbidden in keyword extraction regressions')
+calls = []
+fake_engine = SimpleNamespace(connect=forbidden)
+def recording_engine(*args, **kwargs):
+    assert kwargs == {'pool_pre_ping': True}
+    calls.append((args, kwargs))
+    return fake_engine
+sqlalchemy.create_engine = recording_engine
+sqlalchemy.engine.create_engine = forbidden
+sqlalchemy.engine.create.create_engine = forbidden
+sqlalchemy.engine_from_config = forbidden
+node_guard = '''
+import net from 'node:net';
+import tls from 'node:tls';
+import http from 'node:http';
+import https from 'node:https';
+import dns from 'node:dns';
+const forbidden = () => { throw new Error('Forbidden live Node network'); };
+net.Socket.prototype.connect = forbidden;
+net.connect = net.createConnection = tls.connect = forbidden;
+http.request = http.get = https.request = https.get = forbidden;
+dns.lookup = forbidden;
+globalThis.fetch = forbidden;
+'''
+os.environ['NODE_OPTIONS'] = '--import=data:text/javascript,' + quote(node_guard, safe='')
+os.environ['NODE_DISABLE_COMPILE_CACHE'] = '1'
+import pytest
+result = pytest.main([
+    'tests/test_bounded_research.py',
+    'tests/test_sec_reader.py::test_reader_route_inventory_and_capabilities_fail_closed',
+    'tests/test_sec_reader.py::test_reader_import_and_requests_are_independent_of_data_and_provider_stack',
+    '-q', '--tb=short', '-p', 'no:cacheprovider',
+])
+assert len(calls) == 1
+raise SystemExit(result)
+```
+
+Result: 190 passed, 4.98s; one existing Starlette/httpx deprecation warning.
+Exactly one recording fake bootstrap and zero real engines/connections. Python
+network/drivers/providers/models/dotenv files are guarded before application
+imports; Node networking is guarded before its module imports, then maintained
+tests install their own synthetic fetch. The Windows stdlib-owned asyncio wakeup
+socketpair is the existing runner's sole socket exception, not a service/probe.
+
+This covers the entire bounded research suite, including the actual ASGI-to-TS
+keyword serialization contract with an intentionally incorrect manifest digest,
+validation before reads, query/result/chunk limits, body/inventory integrity and
+existing synthetic semantic/hybrid behavior. Reader import/capability checks
+still pass with only diagnostics and false research/AI fields. No live API,
+database performance, provider/model or deployment acceptance is claimed.
+
+All three changed Python files parsed/compiled in memory without application
+imports or bytecode. Scoped tracked git diff --check passed; new-file no-index
+checks found no whitespace errors (exit 1 denotes file additions). Source AST
+outside search_filing_chunks is identical to baseline after removing the single
+new helper import, including all semantic/hybrid functions. Service signature
+and return annotation are unchanged. No bound or lifecycle policy was added.
+
+### Preservation, risks and review handoff
+
+Verified exactly four authorized paths: two edits, two additions, 370 nonignored
+files versus 368 at entry. Every original snapshotted file outside the two edits
+is byte-identical, including all three protected exceptions and financial/tone/
+policy/database sources. main, HEAD/local origin/main remain
+`002cb893ce312200416461f93cbbb22ab8458320`; index empty. No staging, commit, push
+or merge. No private dotenv, real SQL/connection/engine, live service, SEC/provider
+call, model load, installation, reader activation or deployment occurred.
+
+The new helper owns no authority, ORM/session, clocks, request cancellation or
+resource-policy decisions. Existing filing_search_service still imports the
+encoder module for its unchanged semantic/hybrid functions; only the new kernel
+is independently isolated. No observable legacy behavior difference was found
+within tested valid ORM/read contracts. Complete-publication admission remains
+unimplemented; a keyword result does not prove manifest integrity. 02B.3B is
+unstarted. GO for independent review of 02B.3A only.
+
+Suggested commit, only after separate authorization:
+`refactor(runtime): isolate deterministic keyword ranking`.

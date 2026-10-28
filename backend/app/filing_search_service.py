@@ -5,6 +5,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.models import FilingChunk
+from app.keyword_ranking import KeywordChunk, keyword_terms, rank_keyword_positions
 from app.embedding_service import embed_texts, validate_embedding
 from app import evidence_latency as latency
 from app.freshness_service import (
@@ -163,13 +164,7 @@ def search_filing_chunks(
     Search filing chunks using simple keyword matching.
     """
     validate_research_input(query, limit)
-    query = query.strip()
-
-    search_terms = [
-        term.strip().lower()
-        for term in query.split()
-        if term.strip()
-    ]
+    search_terms = keyword_terms(query)
 
     if not search_terms:
         return []
@@ -177,32 +172,12 @@ def search_filing_chunks(
     chunks = research_chunks(session, FilingChunk.company_cik == company_cik,
                              FilingChunk.accession_number == accession_number)
 
-    scored = []
-
-    for chunk in chunks:
-        text_lower = chunk.text.lower()
-
-        score = sum(
-            text_lower.count(term)
-            for term in search_terms
-        )
-
-        if score > 0:
-            scored.append(
-                (score, chunk)
-            )
-
-    scored.sort(
-        key=lambda item: (
-            -item[0],
-            item[1].chunk_index,
-        )
+    detached = tuple(
+        KeywordChunk(position, chunk.chunk_index, chunk.text)
+        for position, chunk in enumerate(chunks)
     )
-
-    return [
-        chunk
-        for _, chunk in scored[:limit]
-    ]
+    positions = rank_keyword_positions(detached, search_terms, limit)
+    return [chunks[position] for position in positions]
 
 
 def search_filing_chunks_semantic(
