@@ -5,7 +5,7 @@ from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, 
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.orm_base import Base
 
 
 class Company(Base):

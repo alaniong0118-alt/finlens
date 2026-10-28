@@ -1,3 +1,4 @@
+from app.orm_base import Base
 from ipaddress import ip_address
 from threading import Lock
 
@@ -5,7 +6,7 @@ import psycopg
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, DBAPIError, TimeoutError as PoolTimeoutError
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 
 import os
@@ -16,10 +17,6 @@ load_backend_env()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if not DATABASE_URL:
     raise RuntimeError("Set DATABASE_URL privately in backend/.env or the process environment.")
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 engine = create_engine(

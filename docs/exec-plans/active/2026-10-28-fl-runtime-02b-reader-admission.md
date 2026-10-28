@@ -1,0 +1,192 @@
+# FL-RUNTIME-02B.1 — Isolate ORM metadata from database bootstrap
+
+Status: active; implementation/offline verification complete, independent review pending
+Roadmap phase: bounded runtime foundation; no reader data admission
+
+## Objective
+
+Import `app.orm_base` and `app.models` without database configuration, dotenv,
+engine construction, connections or operational imports. Preserve one shared
+SQLAlchemy Base, metadata registry and the existing model mappings.
+
+## Current architecture and context
+
+Read root AGENTS.md, ROADMAP.md and .agent/PLANS.md. Entry branch main;
+HEAD and local origin/main both `0287e7687a9cdb87eefb1cbfe27afdf9e4475b65`;
+index empty. Exactly the three original protected exceptions were present:
+
+| Path | SHA-256 |
+| --- | --- |
+| frontend/next-env.d.ts | F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0 |
+| backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json | A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C |
+| backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json | F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C |
+
+Before edits, hashed all 362 nonignored tracked/untracked files other than
+environment files. All three proposed new paths were absent. `models.py` imports
+Base from `database.py`, which loads configuration and constructs the operational
+engine. Alembic imports the same public Base symbol; keep that export compatible.
+
+## Constraints
+
+Exactly five authorized paths: this plan, app/orm_base.py, app/database.py,
+app/models.py and tests/test_orm_import_isolation.py (backend paths).
+No other repository edits, staging, commits, push or merge. Never read private
+dotenv. No real engine, SQL, connection, service, model, SEC/provider/network call.
+Every executable probe installs guards before target imports; legacy bootstrap
+compatibility uses a recording fake engine, never SQLAlchemy's real constructor.
+
+## Non-goals
+
+02B.2 and later; routes, reader DB access, publication admission/digests,
+financial selectors/calculations/authorizations, schema/migration changes,
+deployment, authentication, activation and frontend work.
+
+## Implementation stages
+
+1. Verify baseline, index, inventory and protected hashes; record this plan.
+2. Add focused fresh-process tests; demonstrate the old import coupling fails.
+3. Extract Base only, retain database re-export and update models' import.
+4. Run isolated focused tests, relevant compatibility regressions and syntax.
+5. Self-review source/metadata parity and exact scope; recheck preservation.
+
+## Decisions
+
+- 2026-10-28: Use one new inert module; no fallback, duplicate model definitions,
+  metadata cloning or second application registry. Do not change operational
+  database bootstrap. Fresh processes cover both model-first and database-first
+  imports. Compare model definitions from the immutable baseline commit in an isolated reference namespace
+  and PostgreSQL DDL in memory, without any database execution.
+- Keep this authorized active plan path for coordinator handoff; no move to a
+  completed path because the task authorizes exactly five paths.
+
+## Discovered issues
+
+None at preflight. Live database/Alembic execution is explicitly deferred.
+The pre-extraction run failed as expected: 24 failing test/subtest cases across
+8 methods (18.114s). Failures covered absent orm_base, the forbidden models-to-
+database import, identity/import-order assertions and source ownership. Sentinel
+negative controls, disabled reader and legacy bounds checks already passed.
+
+## Progress
+
+- [x] Baseline, empty index, protected hashes and absent new paths verified.
+- [x] Relevant ORM/database/reader sources and test isolation mechanisms inspected.
+- [x] Add tests and demonstrate pre-extraction failures.
+- [x] Extract Base and run focused verification.
+- [x] Complete source/metadata self-review; verify exact scope and preservation.
+- [ ] Independent review/coordinator acceptance (no staging or later work).
+
+## Test and validation strategy
+
+Use installed Python with `-I -S -B`; no site startup, bytecode or pytest cache.
+Fresh child processes inject site-packages explicitly after stdlib startup.
+Guard imports, dotenv files/loaders, environment URL access, engine constructors,
+physical drivers and sockets before target imports. Test sentinels themselves and
+an in-memory reintroduction of the old models import. Use synthetic legacy
+configuration and a recording fake engine for compatibility checks. Compare
+source AST, full model metadata/DDL and mapper identities; no live SQL.
+Record exact commands and results below after execution.
+
+## Completion criteria
+
+One Base exported by both modules; unchanged mapped class bodies and database
+behavior apart from Base ownership; isolated imports independent of configuration;
+focused negative/compatibility tests pass; reader still diagnostics-only; exact
+five-file scope and original protected bytes/index/revisions preserved.
+
+## Final outcome
+
+The production delta is only the new six-line inert Base module, a Base import/
+re-export replacing the old class in database.py, and the models.py import change.
+No mapped class body, engine/session code, policy, route, migration or financial
+calculation changed. Base.__module__ now identifies its new owning module;
+database.Base remains the identical exported object. Tests compare against
+baseline `0287e7687a9cdb87eefb1cbfe27afdf9e4475b65`, not moving HEAD.
+
+### Focused evidence actually run
+
+Working directory: `D:\Projects\finlens-foundation\backend`.
+
+```powershell
+.\.venv\Scripts\python.exe -I -S -B tests/test_orm_import_isolation.py
+# Before extraction: 8 methods, 24 failing test/subtest cases; 18.114s.
+# After extraction: 8 passed; 18.171s. Final run after pinning immutable baseline:
+# 8 passed; 18.747s.
+```
+
+The eight methods execute 38 fresh-process probes: ten inert imports across
+missing/development/sec_readonly/sec_reader/unknown profiles; eleven raising
+sentinel negative controls; one in-memory old-import regression; twelve import
+orders (all six permutations in each legacy profile); two legacy bounds/missing-
+URL checks; one diagnostic reader check; one metadata-reference comparison.
+One method additionally compares the full model/database source AST in the
+parent. The independent reference registry exists only inside the parity probe;
+all six application mappers remain in exactly one application registry.
+
+Metadata evidence: same Base object through orm_base/models/database and legacy
+`from app.database import Base`; exact table object and mapper identity; expected
+six mappings; full in-memory PostgreSQL table/index DDL, Python column defaults,
+autoincrement, mapper attributes and primary-key parity with baseline definitions.
+No DDL is executed. Guards reject application bootstrap imports, dotenv loaders/
+files, DATABASE_URL resolution, engine construction, physical drivers and sockets.
+The disabled reader still has only GET /healthz and GET /capabilities and false
+research/AI capability fields. No service or ASGI lifespan was started.
+
+Relevant existing regression, run with the same interpreter flags via stdin:
+
+```python
+import runpy
+from types import SimpleNamespace
+runpy.run_path('tests/run_sec_reader_offline.py', run_name='offline_probe')
+import sqlalchemy
+import sqlalchemy.engine.create
+def forbidden(*args, **kwargs):
+    raise AssertionError('Real engine construction forbidden in 02B.1 regressions')
+calls = []
+fake_engine = SimpleNamespace(connect=forbidden)
+def recording_engine(*args, **kwargs):
+    assert kwargs == {'pool_pre_ping': True}
+    calls.append((args, kwargs))
+    return fake_engine
+sqlalchemy.create_engine = recording_engine
+sqlalchemy.engine.create_engine = forbidden
+sqlalchemy.engine.create.create_engine = forbidden
+sqlalchemy.engine_from_config = forbidden
+import pytest
+result = pytest.main([
+    'tests/test_http_database_runtime.py::test_profile_limits_and_startup_options',
+    'tests/test_http_database_runtime.py::test_hostile_url_rejected_without_engine_or_connect',
+    'tests/test_http_database_runtime.py::test_hostile_environment_rejected_without_mutation',
+    'tests/test_http_database_runtime.py::test_tls_preserved_hostname_single_address_and_canonical_options',
+    '-q', '--tb=short', '-p', 'no:cacheprovider',
+])
+assert len(calls) == 1
+raise SystemExit(result)
+```
+
+Result: 45 passed in 0.48s; one existing Starlette/httpx deprecation warning.
+Exactly one recording fake bootstrap, zero real engines or connections. No
+runtime/pool/SQL tests requiring real engines or databases were executed.
+
+Four changed Python files were ast.parse/compile checked in memory under
+`-I -S -B` without application imports or bytecode. Scoped tracked `git diff
+--check` is clean; new files checked using `git diff --no-index --check -- NUL
+<path>` (difference exit 1 for additions; no whitespace errors). Git's existing
+LF-to-CRLF notices do not modify protected files.
+
+### Preservation and review handoff
+
+Final inventory/hash comparison verified exactly the five authorized paths
+changed/added (365 files now versus 362 at entry); all original snapshotted files
+other than the two authorized source edits are byte-identical. Verified main,
+unchanged HEAD/local origin/main, empty index and all three original protected
+hashes. Scoped whitespace checks found no errors in either tracked source or
+the three added files.
+No private dotenv, real engine, database/SQL, model, SEC/provider/network, service,
+deployment or Git delivery operation was used. Live DB/Alembic and deployment
+behavior remain unverified; unchanged source and synthetic parity are the scope
+of this evidence. Independent acceptance is pending; 02B.2 is not started.
+
+Recommendation: GO for independent review of 02B.1 only.
+Suggested commit, only if separately authorized:
+`refactor(runtime): isolate ORM metadata from database bootstrap`.
