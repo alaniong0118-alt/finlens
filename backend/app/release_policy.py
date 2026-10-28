@@ -20,9 +20,23 @@ def require_development() -> None:
 
 def development_only(function):
     """Reject even dry runs and injected clients before the function body runs."""
+    return _guarded(function, require_development)
+
+
+def require_encoder() -> None:
+    if server_profile().name not in {"development", "sec_readonly"}:
+        raise ReleaseModeBlocked()
+
+
+def encoder_only(function):
+    """Guard before cache hits as well as model imports/constructors."""
+    return _guarded(function, require_encoder)
+
+
+def _guarded(function, admission):
     @wraps(function)
     def guarded(*args, **kwargs):
-        require_development()
+        admission()
         return function(*args, **kwargs)
     # functools.wraps does not copy lru_cache's class-level control methods.
     # Keep the existing development cache API while admission stays outermost.
@@ -56,27 +70,47 @@ READONLY_ROUTES = frozenset({
 })
 
 
+# 02A has no database/research capability, including keyword-only research.
+READER_ROUTES = frozenset({("GET", "/healthz"), ("GET", "/capabilities")})
+
+
 class ReleaseAdmissionMiddleware:
     """Outermost admission, before CORS, routing redirects or dependencies.
 
     Capture the reviewed route objects at app construction. A newly registered
     alias/replacement cannot inherit permission from an admitted path.
     """
-    def __init__(self, app, router, admitted_routes):
+    def __init__(self, app, router, admitted_routes, expected_profile=None):
         self.app = app
         self.router = router
         self.admitted_routes = admitted_routes
+        self.expected_profile = expected_profile
 
     async def __call__(self, scope, receive, send):
-        if server_profile().name == "development" or scope["type"] == "lifespan":
+        profile = server_profile().name
+        consistent = (profile in {"development", "sec_readonly", "sec_reader"}
+                      and (self.expected_profile is None or profile == self.expected_profile))
+        if scope["type"] == "lifespan":
+            if not consistent:
+                raise ReleaseModeBlocked()
             return await self.app(scope, receive, send)
+        if consistent and profile == "development":
+            return await self.app(scope, receive, send)
+        allowed = (READONLY_ROUTES if profile == "sec_readonly" else
+                   READER_ROUTES if profile == "sec_reader" and self.expected_profile == "sec_reader"
+                   else frozenset())
         if scope["type"] == "http":
             from starlette.routing import Match
             for route in self.router.routes:
                 match, _ = route.matches(scope)
                 if match == Match.FULL:
-                    if (any(route is admitted for admitted in self.admitted_routes)
-                            and (scope["method"], route.path) in READONLY_ROUTES):
+                    if (consistent
+                            and any(route is admitted for admitted in self.admitted_routes)
+                            and (scope["method"], route.path) in allowed
+                            and (profile != "sec_reader" or (
+                                scope["path"] == route.path
+                                and scope.get("raw_path", b"") == route.path.encode("ascii")
+                                and not scope.get("root_path", "")))):
                         return await self.app(scope, receive, send)
                     break
             from starlette.responses import JSONResponse

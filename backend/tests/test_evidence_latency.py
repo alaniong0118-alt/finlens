@@ -326,12 +326,12 @@ def test_pin_input_and_freshness_equivalence(monkeypatch, suffix, headers, query
     assert lat._collector.active == 0
 
 
-@pytest.mark.parametrize("profile", ["sec_readonly", "unknown", "", "DEVELOPMENT"])
+@pytest.mark.parametrize("profile", ["sec_readonly", "sec_reader", "unknown", "", "DEVELOPMENT"])
 def test_resolved_profile_denies_collection(monkeypatch, profile):
     install(monkeypatch)
     enable(monkeypatch)
     monkeypatch.setattr(config, "_SERVER_PROFILE", NS(name=profile))
-    assert asyncio.run(request()).status_code == 200
+    assert asyncio.run(request()).status_code == (200 if profile == "sec_readonly" else 403)
     assert lat._collector is None
 
 

@@ -367,7 +367,7 @@ def test_missing_encoder_cache_never_constructs_or_downloads(monkeypatch, cached
     monkeypatch.setattr(huggingface_hub, "try_to_load_from_cache", lambda *a: cached)
     monkeypatch.setitem(sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=bomb))
     embedding._get_model.cache_clear()
-    with pytest.raises(RuntimeError, match="local cache"):
+    with pytest.raises(embedding.EncoderDependencyError):
         embedding.embed_texts(["query"])
     embedding._get_model.cache_clear()
 
@@ -392,7 +392,7 @@ def test_cached_encoder_is_local_only_and_incomplete_cache_fails_safely(monkeypa
     embedding._get_model.cache_clear()
     try:
         if incomplete:
-            with pytest.raises(RuntimeError, match="local cache"):
+            with pytest.raises(embedding.EncoderDependencyError):
                 embedding.embed_texts(["query"])
         else:
             assert len(embedding.embed_texts(["query"])[0]) == 384

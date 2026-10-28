@@ -1,4 +1,4 @@
-from app.release_policy import development_only
+from app.release_policy import development_only, encoder_only, require_encoder
 from functools import lru_cache
 from array import array
 import math
@@ -41,6 +41,7 @@ def validate_embedding(vector) -> None:
         raise ValueError("Embedding norm must be greater than zero.")
 
 
+@encoder_only
 @lru_cache(maxsize=1)
 def _get_model():
     """Load the encoder once, on first use, to keep API startup lightweight."""
@@ -51,6 +52,7 @@ def _get_model():
 
 
 def _load_model():
+    require_encoder()
     with latency.span("encoder_loader_body"):
         if server_profile().name == "sec_readonly":
             # Resolve a local snapshot without a hub request. Passing the local path
@@ -77,6 +79,7 @@ def _load_model():
         return model
 
 
+@encoder_only
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []

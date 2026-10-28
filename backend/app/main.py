@@ -2,6 +2,11 @@ import os
 from typing import Annotated
 
 from app.config import server_profile
+
+# The disabled reader must never initialize this module's DB/research stack.
+if server_profile().name == "sec_reader":
+    raise ValueError("sec_reader requires the isolated app.sec_reader entrypoint.")
+
 from app import evidence_latency as latency
 from app.release_policy import READONLY_ROUTES, ReleaseAdmissionMiddleware
 
