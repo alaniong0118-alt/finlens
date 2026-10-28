@@ -1,6 +1,6 @@
 # FL-RUNTIME-02B.1 — Isolate ORM metadata from database bootstrap
 
-Status: active; 02B.1/02B.2 accepted per coordinator, 02B.3A offline-verified/review pending
+Status: active; prior increments accepted per coordinator; 02B.3B1 offline-verified/review pending
 Roadmap phase: bounded runtime foundation; no reader data admission
 
 ## Objective
@@ -546,3 +546,181 @@ unstarted. GO for independent review of 02B.3A only.
 
 Suggested commit, only after separate authorization:
 `refactor(runtime): isolate deterministic keyword ranking`.
+
+## FL-RUNTIME-02B.3B1 — Shared complete publication integrity core
+
+### Objective, checkpoint and constraints
+
+Extract Tone's complete-publication admission into a reusable module returning
+frozen detached scalar records, preserving observable Tone behavior and its
+caller-owned read snapshot. Coordinator attests previous increments accepted.
+Verified main, HEAD/local origin/main
+`a488b7b28c7da2775f73f530fcc49f21015782b8`, empty index, exactly the three
+protected exceptions and their SHA-256 values recorded above. Both new paths
+are absent. Read root instructions, roadmap, ExecPlan rules, resolver, freshness
+primitives, strict-extra lifecycle schema, maintained Tone tests and main's
+read_session caller. Gate passed before edits. No private dotenv inspected.
+
+Authorized maximum six paths; chosen five: new backend/app/publication_admission.py,
+new backend/tests/test_publication_admission.py, backend/app/filing_tone_service.py,
+backend/tests/test_filing_tone_integration.py, and this plan. Leave freshness
+primitives and read_session unchanged. No Reader adapter/routes, strict policy,
+ranking/financial/provenance changes, new limits, SQL/physical connections,
+network/models/providers, services, deployment or Git delivery.
+
+### Decisions and implementation stages
+
+Keep existing freshness primitives as dependencies of the new core, avoiding
+cycles and duplicate digest algorithms. Move the admission gates in their exact
+order. The core accepts a validated integer version and independently rejects
+invalid selector/version types before reads. Tone retains its own pre-DB decoded
+pin/selector validation and constructs the unchanged public schemas only after
+the entire core succeeds. Core output omits embeddings after validation and
+contains only frozen dataclasses, tuples and scalar metadata/text. No selectable
+partial result, session owner, lifecycle manager or digest bypass is added.
+Narrowly update the maintained schema_ready monkeypatch to its new owning module;
+retain the publication-field compatibility export used by the synthetic Store.
+
+1. Record checkpoint; add guarded immutable-baseline tests and negative controls.
+2. Extract gates, detach all admitted chunks, retain Tone selection/response adapter.
+3. Run focused core tests and complete maintained synthetic Tone regressions.
+4. Self-review AST/SQL/failure parity, boundaries, exact scope and preservation.
+
+### Progress and validation strategy
+
+- [x] Pre-edit gate and relevant caller/primitive/test inspection.
+- [x] Shared core and Tone adapter.
+- [x] Guarded offline oracle, negative, boundary and maintained regression tests.
+- [x] Final preservation/self-review; independent review handoff.
+- [ ] Independent coordinator acceptance; no Git delivery or later increment.
+
+Use immutable `a488b7b28c7da2775f73f530fcc49f21015782b8` as the Tone oracle,
+synthetic sessions and compiled (never executed) SQL. Compare success bytes,
+errors/status/headers and read/failure ordering; test complete inventory/digest,
+unselected damage, exact established 4000-chunk/3000-character bounds, detached
+output, cancellation/cleanup propagation, forbidden dependency controls and
+disabled Reader routes. Launch with -I -S -B and guards before app imports;
+no pytest cache/plugins. Record actual commands/results and limitations below.
+
+### Completion criteria and outcome
+
+The five chosen paths are implemented and verified offline. Dependency structure:
+Tone adapter -> publication_admission -> existing freshness primitives/models/
+refresh contracts; chunk validation -> pure SEC URL/vector helpers. There is no
+reverse import or dependency on config/database bootstrap/acquisition/encoder.
+Freshness primitives (including existing schema capability caching, digest,
+resource bounds and read_session) are byte-identical. No new evidence cache.
+
+All gates from company lookup through full digest comparison have identical AST
+and order to the immutable resolver. Returned CompletePublication contains a
+frozen PublicationManifest and tuple of frozen PublicationChunk scalar records;
+no embeddings, ORM rows, session or partially verified chunks escape. Tone's
+schema definitions, request validator and scorer have identical AST to baseline.
+Its adapter selects only after successful admission; missing passage remains 404
+after full integrity validation. Existing error classifications, headers and
+cleanup/scoring order are preserved in the synthetic comparisons.
+
+### Actual verification, discoveries and negative controls
+
+Working directory: `D:\Projects\finlens-foundation\backend`.
+
+```powershell
+.\.venv\Scripts\python.exe -I -S -B tests/test_publication_admission.py
+# Final: 9 methods passed, 12.578s; 26 fresh guarded child processes.
+```
+
+The suite covers imports in five profiles, fifteen raising guard/mutant controls,
+recursive frozen/scalar detachment and post-admission ORM mutation independence,
+80 direct immutable-oracle cases with exact serialized success/error and compiled
+SQL/parameters/options/read-order parity, whole-publication/unselected corruption,
+missing selection after corruption, no partial detachment, reordered-body rejection,
+21 cancellation/runtime propagation injections and cleanup failure propagation.
+Source assertions prove unchanged public schema/validator/scorer AST and the
+verbatim admission gate sequence. No SQL is executed.
+
+Boundary probes admit 4000 chunks each of 3000 Unicode code points (24 million
+UTF-8 bytes) and a lifecycle last_error of 65537 characters; no unapproved output
+or lifecycle cap was introduced. Existing one-over manifest/inventory/text bounds
+reject before body reads. Import controls reject operational database/config,
+SEC/encoder/provider stacks, models, Reader/bootstrap; initialization controls
+reject engine creation, DATABASE_URL access, dotenv-file reads and networking.
+An in-memory forbidden-import mutant trips the same guard. An in-memory digest-
+bypass mutant must fail the unselected same-length corruption assertion; neither
+mutant is written to the repository. Scoring-work and deadline policies remain
+absent, as confirmed by the unchanged gate/primitives source.
+
+Initial verification exposed two harness defects: the immutable module's Pydantic
+objects must use its own scorer, and the first generated matrix had 77 cases
+rather than its asserted 80. Corrected the scorer selection and added three
+state-version corruption cases. Production admission needed no correction.
+
+Maintained regression launcher, run via stdin with the same interpreter flags:
+
+```python
+import runpy
+from types import SimpleNamespace
+runpy.run_path('tests/run_sec_reader_offline.py', run_name='offline_probe')
+import sqlalchemy
+import sqlalchemy.engine.create
+
+def forbidden(*args, **kwargs):
+    raise AssertionError('Real engine forbidden in publication admission regressions')
+calls = []
+fake_engine = SimpleNamespace(connect=forbidden)
+def recording_engine(*args, **kwargs):
+    assert kwargs == {'pool_pre_ping': True}
+    calls.append((args, kwargs))
+    return fake_engine
+sqlalchemy.create_engine = recording_engine
+sqlalchemy.engine.create_engine = forbidden
+sqlalchemy.engine.create.create_engine = forbidden
+sqlalchemy.engine_from_config = forbidden
+import pytest
+result = pytest.main([
+    'tests/test_filing_tone_integration.py',
+    'tests/test_sec_reader.py::test_reader_route_inventory_and_capabilities_fail_closed',
+    'tests/test_sec_reader.py::test_reader_import_and_requests_are_independent_of_data_and_provider_stack',
+    '-q', '--tb=short', '-p', 'no:cacheprovider',
+])
+assert len(calls) == 1, calls
+raise SystemExit(result)
+```
+
+Result: 146 passed in 2.83s; one existing Starlette/httpx deprecation warning.
+Exactly one recording fake bootstrap, zero real engines/connections. These are
+in-process synthetic ASGI requests, not live HTTP/service acceptance. The 19 new
+HTTP comparisons use the exact immutable resolver with unchanged schema classes
+and compare response bytes, all headers/status, SQL/read events and scoring calls.
+Cases include valid/old/Unicode/unscorable/unsupported text, pin failures,
+manifest/pending/digest/unselected damage, resource/metadata failures, missing
+selection and failed cleanup. Reader remains diagnostics-only with research/AI
+capabilities false. The sole socket exception is the existing guarded stdlib
+Windows asyncio wakeup socketpair, not an external service or network probe.
+
+### Preservation, remaining boundaries and review handoff
+
+Pre-edit inventory hashed 370 nonignored tracked/untracked files, excluding env
+files. Final comparison has 372 files, no deletions, and exactly the five chosen
+changed/added paths. Every original file outside the three chosen existing edits
+is byte-identical, including freshness, main, search, ranking, sec_reader and the
+three protected exceptions. All four changed Python files parse/compile in memory
+under -I -S -B without application imports or bytecode. Configured git diff
+--check and both new-file no-index checks find no whitespace errors (exit 1 for
+new-file differences). Existing LF-to-CRLF notices are informational.
+
+main, HEAD/local origin/main remain
+`a488b7b28c7da2775f73f530fcc49f21015782b8`; index empty. No private dotenv,
+real SQL/connection, model loading, SEC/provider request, live service, deployment,
+staging, commit, push or merge occurred. No source outside the five chosen paths
+was edited. Protected SHA-256 values remain exactly those recorded above.
+
+No blocker to independent review of this compatibility extraction. A future
+strict Reader entry point still needs separately approved finite lifecycle,
+scoring-work, deadline and output controls, caller-owned Reader DB/HTTP lifecycle
+and route/authorization review. None is implemented or activated here. This
+digest checks stored consistency; it cannot authenticate privileged DB writers or
+replace financial authorization. No live DB/performance/deployment acceptance
+is claimed. Broader 02B.3B/02B.4 remain unstarted.
+
+GO for independent review of 02B.3B1 only. Suggested commit, only after separate
+authorization: `refactor(runtime): share complete publication admission core`.

@@ -4,16 +4,20 @@ Run via run_dep01a2_increment2_offline.py with -B, no pytest cache/plugins.
 No physical DB, dotenv, provider, model, service or filesystem output is needed.
 """
 from datetime import date
+import ast
+from pathlib import Path
+import subprocess
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
 
 from app import config, database, main, freshness_service as fresh
-from app import filing_tone_service as tone
+from app import filing_tone_service as tone, publication_admission as admission
 from app.filing_tone import score_filing_tone as kernel_score
 from app.models import Company, CompanyRefreshState, FilingChunk, FilingPublication
 from app.release_policy import READONLY_ROUTES
@@ -143,7 +147,7 @@ def forbid_work(monkeypatch):
 def install(monkeypatch, store):
     monkeypatch.setattr(main, "HttpSessionLocal", lambda: store)
     monkeypatch.setattr(fresh, "schema_ready", lambda _: not store.legacy)
-    monkeypatch.setattr(tone, "schema_ready", lambda _: not store.legacy)
+    monkeypatch.setattr(admission, "schema_ready", lambda _: not store.legacy)
     def score(text):
         assert store.closed, "Scoring must follow successful session close"
         assert text in [c.text for c in store.chunks]
@@ -533,3 +537,70 @@ def test_other_methods_and_aliases_blocked_before_work(monkeypatch, method, path
     monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile("sec_readonly"))
     response = TestClient(main.app).request(method, path, follow_redirects=False)
     assert_error(response, "RELEASE_MODE_BLOCKED", 403)
+
+
+@pytest.fixture(scope="module")
+def immutable_resolver():
+    """Compile the exact baseline resolver with unchanged public schema classes."""
+    source = subprocess.run([
+        "git", "show",
+        "a488b7b28c7da2775f73f530fcc49f21015782b8:backend/app/filing_tone_service.py",
+    ], cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, check=True).stdout
+    tree = ast.parse(source)
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                 and n.name in {"resolve_published_passage", "_version_changed"}]
+    namespace = {**vars(fresh), **vars(tone),
+                 "Company": Company, "CompanyRefreshState": CompanyRefreshState,
+                 "FilingChunk": FilingChunk, "FilingPublication": FilingPublication,
+                 "ValidationError": ValidationError}
+    # Both variants use the same synthetic schema capability, never inspection.
+    namespace["schema_ready"] = lambda _: True
+    exec(compile(tree, "<immutable-tone-resolver>", "exec"), namespace)
+    return namespace["resolve_published_passage"]
+
+
+@pytest.mark.parametrize("case", [
+    "valid", "old", "unicode", "unscorable", "unsupported", "stale", "missing_pin",
+    "malformed_pin", "missing_selected", "damaged_missing_selected", "pending",
+    "missing_manifest", "conflicting_manifest", "digest", "unselected_text",
+    "unselected_embedding", "metadata", "oversize", "close_failure",
+])
+def test_http_bytes_headers_and_failure_order_match_immutable_head(monkeypatch, immutable_resolver, case):
+    def build():
+        store, pin, path = Store([chunk(), chunk(1, "other passage")]), "0", PATH
+        if case == "old":
+            store.version = store.state.data_version = 8
+            pin = "8"
+        elif case in {"unicode", "unscorable", "unsupported"}:
+            text = {"unicode": "📈\r\nSTRONG no loss; weak", "unscorable": "...",
+                    "unsupported": "strong\x00weak"}[case]
+            store = Store([chunk(text=text)])
+        elif case == "stale": store.version = store.state.data_version = 1
+        elif case == "missing_pin": pin = None
+        elif case == "malformed_pin": pin = "00"
+        elif case == "missing_selected": path = BASE + "/chunk_0099/tone"
+        elif case == "damaged_missing_selected":
+            path = BASE + "/chunk_0099/tone"
+            store.chunks[1].embedding = None
+        elif case == "pending": store.state.evidence = {"pending_targets": [ACC]}
+        elif case == "missing_manifest": store.publications = []
+        elif case == "conflicting_manifest": store.publications *= 2
+        elif case == "digest": store.publications[0].content_digest = "0" * 64
+        elif case == "unselected_text": store.chunks[1].text = "alter passage"
+        elif case == "unselected_embedding": store.chunks[1].embedding = None
+        elif case == "metadata": store.chunks[1].filename = "changed.htm"
+        elif case == "oversize": store.inventory[1].text_length = 3001
+        elif case == "close_failure": store.close_error = True
+        return store, pin, path
+
+    actual_resolver = tone.resolve_published_passage
+    outcomes = []
+    for resolver in (immutable_resolver, actual_resolver):
+        store, pin, path = build()
+        scoring = install(monkeypatch, store)
+        monkeypatch.setattr(main, "resolve_published_passage", resolver)
+        with TestClient(main.app, raise_server_exceptions=False) as client:
+            response = client.get(path, headers={} if pin is None else {"X-FinLens-Data-Version": pin})
+        outcomes.append((response.status_code, response.content, dict(response.headers),
+                         store.events, [sql for _, sql in store.statements], scoring.call_args_list))
+    assert outcomes[0] == outcomes[1]
