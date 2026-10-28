@@ -34,7 +34,8 @@ socket.socket.connect = socket.socket.connect_ex = forbidden
 socket.create_connection = socket.getaddrinfo = forbidden
 allowed_app = {'app.publication_admission', 'app.freshness_service', 'app.models',
     'app.orm_base', 'app.refresh_contracts', 'app.evidence_latency',
-    'app.sec_urls', 'app.embedding_validation', 'app.filing_tone_service', 'app.filing_tone'}
+    'app.sec_urls', 'app.embedding_validation', 'app.filing_tone_service', 'app.filing_tone',
+    'app.reader_resource_policy'}
 blocked = {'dotenv', 'psycopg', 'sqlite3', 'httpx', 'requests', 'openai', 'torch',
            'transformers', 'sentence_transformers', 'huggingface_hub', 'tensorflow'}
 class Guard(importlib.abc.MetaPathFinder):
@@ -381,9 +382,28 @@ for damage in ('last-embedding', 'last-text', 'digest', 'reordered'):
         old = node(baseline, 'resolve_published_passage').body
         start = next(i for i, n in enumerate(old) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == 'company')
         end = next(i for i, n in enumerate(old) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == 'selected')
-        new = node(core, 'admit_complete_publication').body
-        # New docstring/input guard precede the verbatim admission pipeline.
+        class TonePath(ast.NodeTransformer):
+            # Only erase the fixed Reader branches; the immutable oracle and
+            # every legacy gate remain unchanged. No generic AST relaxation.
+            def visit_If(self, item):
+                if isinstance(item.test, ast.Name) and item.test.id == 'reader':
+                    return [self.visit(n) for n in item.orelse
+                            if not (isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == 'evidence')]
+                return self.generic_visit(item)
+            def visit_IfExp(self, item):
+                if isinstance(item.test, ast.Name) and item.test.id == 'reader':
+                    return self.visit(item.orelse)
+                return self.generic_visit(item)
+            def visit_Name(self, item):
+                if item.id == 'evidence':
+                    return ast.Attribute(value=ast.Name(id='state', ctx=ast.Load()),
+                                         attr='evidence', ctx=item.ctx)
+                return item
+        new = TonePath().visit(node(core, '_admit_publication')).body
         self.assertEqual([ast.dump(n) for n in old[start:end]], [ast.dump(n) for n in new[2:-1]])
+        wrapper = node(core, 'admit_complete_publication')
+        self.assertEqual(ast.unparse(wrapper.body[-1]),
+                         'return _admit_publication(session, ticker, accession, expected, reader=False)')
         self.assertEqual(ast.dump(node(baseline, '_version_changed')), ast.dump(node(core, '_version_changed')))
 
 

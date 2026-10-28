@@ -1,6 +1,6 @@
 # FL-RUNTIME-02B.1 — Isolate ORM metadata from database bootstrap
 
-Status: active; prior increments accepted per coordinator; 02B.3B1 offline-verified/review pending
+Status: active; 02B.3B2b-FIX1 offline-verified; focused independent re-review pending
 Roadmap phase: bounded runtime foundation; no reader data admission
 
 ## Objective
@@ -724,3 +724,314 @@ is claimed. Broader 02B.3B/02B.4 remain unstarted.
 
 GO for independent review of 02B.3B1 only. Suggested commit, only after separate
 authorization: `refactor(runtime): share complete publication admission core`.
+<!-- Latest scoped increment is recorded below; historical evidence stays scoped. -->
+
+
+## FL-RUNTIME-02B.3B2b — Strict Reader publication helper
+
+### Objective, checkpoint and scope
+
+Implement only the approved fixed strict Reader admission helper through the
+mandatory shared integrity pipeline; preserve immutable Tone compatibility.
+Pre-edit: main at `14c8341009fbb978be96828cbd44123b055afb7b`, empty index,
+exactly the three historical protected exceptions and matching SHA-256 values
+recorded at the top of this plan. Both new paths absent. Root AGENTS, roadmap,
+ExecPlan rules and relevant source/tests read. Private dotenv never inspected.
+A non-environment inventory snapshot is held outside the repository for final
+preservation comparison.
+
+Exactly five authorized paths: app/publication_admission.py, new
+app/reader_resource_policy.py, new tests/test_reader_publication_admission.py,
+tests/test_publication_admission.py (all backend), and this plan. No sixth path,
+Git delivery, physical database, network, model/provider, service or activation.
+
+### Decisions and stages
+
+1. Verify baseline/protected bytes and inspect only direct integrity dependencies.
+2. Add fixed policy and private shared pipeline branches; no public override.
+3. Add actual-entry resource, integrity, projection, parser and mutation tests.
+4. Run offline focused/Tone tests, self-review and final preservation checks.
+
+Use PostgreSQL `octet_length(convert_to(CAST(evidence AS TEXT), 'UTF8'))` in
+both size and CASE guard. Existing JSON column preserves whitespace/escapes;
+no JSONB cast or normalized Python reserialization is size authority. Strict
+projections exclude facts/cleaned_text and ORM entities. Returned identity,
+versions, byte size and complete text are rechecked. CASE bounds transfer,
+not server CPU/RSS/time. No real PostgreSQL execution is authorized.
+
+Correction to prior design/calibration benchmark wording: deep-JSON synthetic
+benchmark evidence demonstrated early detection, **not parser avoidance**. No
+such benchmark is recorded in the preceding committed plan sections; it must
+not be promoted to an implementation claim. New tests must sentinel the parser
+through the actual strict entry for excessive bytes and nesting.
+
+Resource policy: lifecycle <=131072 UTF-8 bytes, container depth <=2, pending
+array occurrences <=4096; chunks <=4000 (4001 sentinel), each text <=3000 code
+points, aggregate <=12000000 code points / <=48000000 UTF-8 bytes; vectors
+exactly 384 dimensions, aggregate <=1536000 components; detached non-text
+<=2000000 logical bytes, total <=50000000 logical bytes. Logical accounting
+counts every scalar occurrence: UTF-8 strings, decimal ASCII integers and ISO
+dates, excluding container/object overhead and discarded vectors. Scalar types
+and schema widths are checked before encoding/accounting/detachment.
+
+Lifecycle: scan bounded original text before parsing, ignoring quoted/escaped
+delimiters; reject duplicate decoded keys, unknown fields before Pydantic, count
+pending targets without deduplication, then retain full StreamState validation.
+Invalid selectors -> 422 before reads; stale pin -> DATA_VERSION_CHANGED before
+lifecycle processing; resource excess -> SEARCH_SCOPE_TOO_LARGE before unsafe
+processing; otherwise malformed -> EVIDENCE_PENDING. Tone retains its policy
+and read/error order. Mixed-case precedence and scanner semantics tested below.
+
+### Progress and validation
+
+- [x] Baseline and protected gate.
+- [x] Fixed policy and shared pipeline implementation.
+- [x] Focused tests, mutation controls and immutable Tone compatibility.
+- [x] Self-review, final scope/hash/index verification and handoff.
+
+Deferred: Reader adapter/session ownership, DB/HTTP lifecycle, real database SQL
+execution/encoding and performance acceptance, elapsed/RSS/selected-response
+limits, ranking and its proposed 256000000 work budget, routes/capability wiring,
+service startup, acquisition, models/providers and deployment. Reader remains
+diagnostics-only. No next increment is authorized. Independent Astra High review
+and coordinator Git Step 1 remain subsequent gates.
+
+### Actual verification and self-review outcome
+
+Working directory `D:\Projects\finlens-foundation\backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -I -S -B tests/test_reader_publication_admission.py
+# Final: 9 methods passed, 10.281s; 12 fresh guarded child processes.
+.\.venv\Scripts\python.exe -I -S -B tests/test_publication_admission.py
+# Final: 9 methods passed, 13.560s; 26 fresh guarded child processes.
+```
+
+The Reader suite tests the actual strict entry, scalar detached/frozen results,
+public bypass rejection, pin zero/older intact publications, exact lifecycle byte
+boundary and one-over, exact pending/depth boundaries, escaped delimiters,
+malformed roots, duplicate decoded keys (including escaped key spellings),
+unknown members before Pydantic, dense/mixed-invalid pending arrays and numeric
+tokens with 10000 digits without numeric conversion. Numeric tokens produce a
+private marker; complete structural/resource validation precedes rejection of
+invalid scalar types. Stored representation whitespace and multibyte characters
+are accounted without reserialization. Stale pins precede parser invocation.
+
+The 4000-row successful strict fixture simultaneously reaches 3000 code points
+per chunk, 12000000 aggregate code points, 48000000 UTF-8 text bytes and 1536000
+vector components. Over-count, 4001 sentinel, per-text one-over and 383/385-vector
+dimensions reject; inventory/body reorder, missing/truncated/duplicate data,
+late unselected corruption, final invalid/nonfinite/zero/overflow vectors,
+canonical identity and wrong digest all reject without any partial detachment.
+Actual pgvector-style NumPy float32 arrays pass; zero-dimensional arrays reject
+as malformed evidence before len/conversion. All vector validation remains in
+the mandatory shared pipeline; no vector is returned.
+
+Independent aggregate arithmetic tests check exact limits and one-over. Some
+aggregate excesses are already implied by count*per-row limits; 50000000 total
+is exactly 48000000 text + 2000000 metadata, so its one-over cannot independently
+be reached while both constituent limits pass. A separate actual-entry fixture
+reaches exactly 2000000 non-text logical bytes and proceeds to an integrity
+sentinel; one additional byte fails before that sentinel. This uses deliberately
+noncanonical but scalar-width-valid metadata and is **not** a successful
+publication fixture. Repeated scalar occurrences are compared against the exact
+expected sum, not deduplicated by value/object identity.
+
+Five in-memory negative mutations each fail for their intended reason:
+
+1. Digest comparison bypass -> `strict corruption accepted`.
+2. Strict entry switched to legacy -> `strict corruption accepted`, using a
+   dual-mode synthetic session and valid lifecycle JSON exceeding 131072 bytes.
+3. SQL CASE changed to return raw text on excess -> `oversized payload transferred`;
+   the synthetic executor materializes/records the actual returned raw payload
+   based on compiled CASE semantics, even though Python later rejects it.
+4. Depth check removed -> `deep JSON reached parser` from the raising parser
+   sentinel through the actual strict entry.
+5. Canonical-source check bypass -> `strict corruption accepted`; inventory is
+   updated to the same damaged URL so no earlier identity mismatch masks it.
+
+The transfer control is compiled-SQL plus synthetic executor evidence, not real
+PostgreSQL execution. ReaderStore rejects ORM projections and legacy session
+methods, checks explicit UTF8 conversion in both SQL expressions, excludes
+facts/cleaned_text and verifies chunk sentinel/body length predicates. Actual
+entry tests use parser sentinels for both byte excess and depth excess. Twenty-
+five query-stage injections cover driver ProgrammingError/OperationalError,
+RuntimeError, CancelledError and KeyboardInterrupt; six validation/digest-stage
+injections also propagate unchanged. Session lifecycle ownership is absent.
+
+Immutable Tone oracle remains pinned to
+`a488b7b28c7da2775f73f530fcc49f21015782b8`. All 80 direct oracle cases still
+compare successful JSON bytes, errors/status/headers, SQL/parameters/options and
+read order. The AST test only erases fixed Reader branches and maps the local
+evidence alias back to state.evidence; it still compares the entire legacy gate
+sequence and the unchanged public schema/scorer. The legacy wrapper is asserted
+to fix reader=False. Pin zero, intact older publications and publication version
+<= evidence version <= current data version remain covered.
+
+Maintained Tone plus disabled-Reader regression: **146 passed in 2.94s**, one
+existing Starlette/httpx deprecation warning. Reproduction: use the full guarded
+stdin launcher recorded in the preceding 02B.3B1 Actual Verification section
+with the same interpreter flags, three selected test targets and fake engine;
+only the forbidden-engine diagnostic text changed. Exactly one recording fake
+bootstrap, no physical engines/connections. The 19 immutable ASGI comparisons
+retain exact bytes, all headers/status, SQL/read ordering and scoring calls.
+Reader still has only healthz/capabilities and false research/AI capabilities.
+These are in-process synthetic requests; no live HTTP/service was run.
+
+All four Python files parse/compile in memory with no application imports or
+bytecode. Scoped tracked/new-file whitespace checks pass (new-file no-index
+exit 1 only denotes additions). No unrelated broad audit was rerun.
+
+Final inventory comparison verifies exactly the five authorized changed/added
+paths against the pre-edit snapshot; every other original non-environment file
+is byte-identical, with no deletions. main and HEAD remain
+`14c8341009fbb978be96828cbd44123b055afb7b`; index remains empty. The three
+protected hashes remain:
+
+- next-env: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- canary report: A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- discovery report: F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Final Git status is the three protected exceptions plus the three scoped tracked
+edits and two scoped new files. No staging, commit or push. No private dotenv
+read/hash, real SQL/database, network/acquisition, provider/model, service,
+activation, deployment or HTTP/DB lifecycle work occurred. The policy adds no
+ranking machinery or 256000000 work budget. Elapsed time, RSS, selected-response
+limits and the separately approved future adapter/real DB/HTTP/runtime gates
+remain deferred; projection is not a PostgreSQL CPU/RSS/time guarantee.
+
+GO for independent implementation review of 02B.3B2b only. No known offline
+implementation blocker; independent Astra High acceptance and coordinator Git
+Step 1 are pending. Suggested commit after separate authorization:
+`feat(runtime): add strict reader publication admission helper`.
+
+
+## FL-RUNTIME-02B.3B2b-FIX1 — Reader-only no_autoflush correction
+
+### Objective, checkpoint and constraints
+
+Coordinator reports Astra High FAIL/NO-GO for one P2: strict Reader SELECTs can
+implicitly flush pending caller ORM state. Earlier UTF-8, depth, structural,
+integrity and Tone compatibility areas passed independent review and are not
+being redesigned. This finding supersedes the earlier no-known-blocker handoff.
+
+Verified main at `14c8341009fbb978be96828cbd44123b055afb7b`, empty index,
+the existing five-path implementation and three original protected exceptions.
+All three historical SHA-256 values match. Read root AGENTS, ExecPlan rules and
+the existing plan. Snapshot all non-environment repository files outside the
+repository; never inspect/hash private dotenv.
+
+Exactly three correction paths: backend/app/publication_admission.py,
+backend/tests/test_reader_publication_admission.py, and this plan. Preserve
+all other bytes, including prior implementation changes. No Git delivery,
+lifecycle ownership, explicit flush/commit/rollback, real engine/SQL/network,
+services, model/acquisition, activation or next Runtime increment.
+
+### Decision, stages and verification strategy
+
+Wrap the whole strict entry's private shared admission call in the supplied
+Session's actual no_autoflush context. Leave the Tone entry and shared pipeline
+unchanged. SQLAlchemy restores its prior configuration via finally, including
+False, exceptions and BaseException. No permanent session setting is added.
+
+Add a real unbound Session fixture with pending mapped Company state and a
+raising flush sentinel. Keep real Session.execute and ORM autoflush machinery;
+intercept only bind resolution after the real autoflush gate to replay the
+existing synthetic projected rows, without engine/connection/SQL. Check success,
+ordinary failure and cancellation at every SELECT, initial True/False state,
+pending-state preservation, no cleanup, and unchanged Tone autoflush behavior.
+One in-memory removal mutant must hit the raising flush sentinel before the
+post-autoflush fixture interception.
+
+- [x] Baseline/protected gate and bounded dependency inspection.
+- [x] Add regression and demonstrate pre-fix autoflush failure.
+- [x] Add Reader-only context and verify focused restoration/mutation probes.
+- [x] Relevant Reader/Tone/disabled-Reader regressions; syntax/whitespace.
+- [x] Final three-path preservation and focused Astra re-review handoff.
+
+### Actual FIX1 evidence and outcome
+
+Production correction is only `with session.no_autoflush:` around the strict
+entry's complete `_admit_publication(..., reader=True)` call (+2/-1 lines).
+Error translation occurs after context exit. No Tone entry, shared integrity
+pipeline, SQL projection/order, resource ceiling, lifecycle or other production
+AST changed; an in-memory pre-correction/current AST comparison verified this.
+No session ownership, permanent autoflush assignment or explicit flush/commit/
+rollback/cleanup was added. Synthetic ReaderStore only gains a null context
+interface; it is not the implicit-autoflush regression authority.
+
+The regression uses a real unbound `sqlalchemy.orm.Session`, real mapped pending
+Company state, the actual Session.no_autoflush property, and real Session.execute
+-> ORM pre-session execution -> Session._autoflush machinery. A raising flush
+sentinel replaces only Session.flush. A dedicated get_bind exception intercepts
+execution AFTER the actual autoflush gate; a wrapper replays the existing scalar
+projection fixtures from that interception. Session.connection is synthetic for
+the existing schema-capability probe; _connection_for_bind and all cleanup/
+transaction methods raise if used. No engine, physical connection or database SQL
+is involved. No do_orm_execute early-result hook masks autoflush.
+
+Before the production correction, the new actual-entry regression failed with
+`AutoflushAttempt: implicit Reader autoflush reached flush sentinel` at the first
+company SELECT, through SQLAlchemy context.py -> Session._autoflush -> flush.
+Result: 1 test, 1 expected failure, 0.786s. This reproduced the review finding
+before applying the fix.
+
+After correction, the real-Session matrix verifies initial autoflush True/False:
+2 successful full Reader admissions; 30 failures (RuntimeError, CancelledError,
+KeyboardInterrupt at each of the five SELECT stages for both initial settings);
+4 mapped malformed/resource HTTP failures; one caller-owned nested no_autoflush
+admission. All 37 Reader invocations preserve pending ORM state, unbound status,
+zero flush calls and the exact prior autoflush setting. Every intercepted Reader
+SELECT observes False. The nested context restores False internally and True
+only on the caller's outer exit. A separate actual Tone entry with initial True
+still triggers its original autoflush sentinel, proving the correction is
+Reader-only.
+
+One targeted in-memory mutant removes precisely the new context. It raises the
+same AutoflushAttempt at the first real ORM gate, with exactly one flush call,
+zero post-autoflush read interceptions, unchanged pending state, bind=None and
+autoflush=True. The control checks these facts before reraising, so unsupported
+fake-session interfaces or unrelated fixture failures cannot satisfy it. No
+mutation was written to the repository.
+
+Commands actually run from `D:\Projects\finlens-foundation\backend`:
+
+```powershell
+# Pre-fix: 1 expected failure; post-fix targeted pair: 2 passed, 1.625s.
+.\.venv\Scripts\python.exe -I -S -B tests/test_reader_publication_admission.py ReaderPublicationAdmissionTests.test_real_unbound_session_no_autoflush_and_restoration
+.\.venv\Scripts\python.exe -I -S -B tests/test_reader_publication_admission.py
+# 11 passed, 12.486s.
+.\.venv\Scripts\python.exe -I -S -B tests/test_publication_admission.py PublicationAdmissionTests.test_tone_matches_immutable_oracle_for_integrity_matrix PublicationAdmissionTests.test_source_gate_order_and_unmodified_public_schema PublicationAdmissionTests.test_detached_complete_output_and_pin_validation
+# 3 passed, 1.836s; all 80 immutable direct Tone cases retain exact SQL/read/output/error parity.
+.\.venv\Scripts\python.exe -I -S -B tests/test_reader_publication_admission.py ReaderPublicationAdmissionTests.test_no_autoflush_removal_hits_real_flush_sentinel
+# Final strengthened negative probe: 1 passed, 0.809s.
+```
+
+Narrowed immutable ASGI/disabled-Reader regression: **21 passed in 2.28s**, one
+existing Starlette/httpx deprecation warning. Use the guarded stdin launcher
+recorded above with the same interpreter flags and recording fake engine, but
+replace the complete Tone test-file target with:
+`tests/test_filing_tone_integration.py::test_http_bytes_headers_and_failure_order_match_immutable_head`;
+retain the two recorded disabled-Reader targets. Exactly one recording fake
+bootstrap; zero real engines/connections. This checks all 19 immutable HTTP
+bytes/status/headers/SQL/read-order cases and two diagnostics-only route/import
+checks. No broad QA/audit rerun, live service or PostgreSQL occurred.
+
+Both correction Python files parse/compile in memory without imports/bytecode.
+Correction-scoped whitespace checks pass. Final non-environment inventory
+comparison against the FIX1 entry snapshot verifies exactly the three authorized
+correction paths, no additions/deletions and every other file byte-identical,
+including reader_resource_policy.py and test_publication_admission.py.
+
+Final main/HEAD remain `14c8341009fbb978be96828cbd44123b055afb7b`, index empty.
+Git status still consists of the existing five-path implementation (three tracked
+edits and two new files) plus the same three protected exceptions. All three
+protected SHA-256 values remain exactly the historical values above. No private
+dotenv read/hash, staging, commit or push.
+
+No known remaining FIX1 blocker: **GO for focused Astra High re-review**.
+Independent acceptance and coordinator Git Step 1 remain pending. Reader remains
+diagnostics-only; all previously deferred DB/HTTP/runtime, ranking, activation
+and deployment gates remain deferred. Stop here; no next increment is started.
+Suggested commit only after separate authorization:
+`fix(runtime): suppress strict reader admission autoflush`.
