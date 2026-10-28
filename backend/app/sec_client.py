@@ -1,4 +1,5 @@
 from app.release_policy import development_only
+from app.sec_urls import build_filing_url, build_filing_raw_url
 import os
 import re
 import time
@@ -134,34 +135,6 @@ def get_company_facts(cik: str) -> dict:
 
     # Avoid binary-float rounding before Numeric(24,4) representability checks.
     return _sec_get(url).json(parse_float=Decimal)
-def build_filing_url(
-    company_cik: str,
-    accession_number: str,
-) -> str:
-    """
-    Build the SEC EDGAR filing detail URL
-    from a CIK and accession number.
-    """
-    cik = str(int(company_cik))
-    accession = accession_number
-    accession_without_dashes = accession.replace("-", "")
-
-    return (
-        "https://www.sec.gov/Archives/edgar/data/"
-        f"{cik}/"
-        f"{accession_without_dashes}/"
-        f"{accession}-index.html"
-    )
-def build_filing_raw_url(company_cik: str, accession_number: str) -> str:
-    cik = str(int(company_cik))
-    accession_without_dashes = accession_number.replace("-", "")
-
-    return (
-        "https://www.sec.gov/Archives/edgar/data/"
-        f"{cik}/"
-        f"{accession_without_dashes}/"
-        f"{accession_number}.txt"
-    )
 
 
 def get_filing_raw_text(

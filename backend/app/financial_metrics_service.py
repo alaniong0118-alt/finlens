@@ -15,7 +15,7 @@ from app.financial_metric_schemas import (
     AnnualFinancialComparison,
 )
 from app.models import Company, FinancialFact
-from app.sec_client import build_filing_url
+from app.sec_urls import build_filing_url
 from app.sec_parser import classify_period
 from app import revenue_scope_authorizations as scope_permissions
 

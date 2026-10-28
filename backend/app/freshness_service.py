@@ -234,8 +234,8 @@ def stored_research_text(session, cik, accession):
 
 
 def validate_chunks(chunks):
-    from app.embedding_service import validate_embedding
-    from app.sec_client import build_filing_url
+    from app.embedding_validation import validate_embedding
+    from app.sec_urls import build_filing_url
     if not chunks:
         raise ValueError("empty_filing")
     first = chunks[0]

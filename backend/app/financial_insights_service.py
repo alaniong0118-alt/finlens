@@ -192,7 +192,7 @@ class Composition:
         # Invalid accession metadata is retained; never manufacture a source URL.
         data["sec_url"] = None
         if fact.accession_number and re.fullmatch(r"\d{10}-\d{2}-\d{6}", fact.accession_number):
-            from app.sec_client import build_filing_url
+            from app.sec_urls import build_filing_url
             data["sec_url"] = checked_text(build_filing_url(fact.company_cik, fact.accession_number), 192)
         return self.graph.put(ref, data)
 

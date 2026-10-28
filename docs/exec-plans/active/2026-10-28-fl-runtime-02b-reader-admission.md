@@ -1,6 +1,6 @@
 # FL-RUNTIME-02B.1 — Isolate ORM metadata from database bootstrap
 
-Status: active; implementation/offline verification complete, independent review pending
+Status: active; 02B.1 accepted per coordinator, 02B.2 offline-verified/review pending
 Roadmap phase: bounded runtime foundation; no reader data admission
 
 ## Objective
@@ -190,3 +190,168 @@ of this evidence. Independent acceptance is pending; 02B.2 is not started.
 Recommendation: GO for independent review of 02B.1 only.
 Suggested commit, only if separately authorized:
 `refactor(runtime): isolate ORM metadata from database bootstrap`.
+
+## FL-RUNTIME-02B.2 — Pure SEC URL and vector validation helpers
+
+### Objective and current checkpoint
+
+Extract the existing URL builders and float32 vector validator without behavioral
+changes. This section supersedes the historical 02B.1 pending-review/next-work
+statements above: the coordinator attests 02A/02B.1 are reviewed and delivered.
+Verified main, HEAD/local origin/main
+`560dc30c00e56cd3a8978feb87140f42a97359f8`, empty index and exactly the original
+three protected exceptions with the SHA-256 values recorded above. All proposed
+new paths were absent. Entry inventory has 365 nonignored files, hashed without
+reading environment files. Root guidance and ExecPlan rules were reread.
+
+### Scope and decisions
+
+Authorized edits chosen: new app/sec_urls.py, app/embedding_validation.py and
+tests/test_pure_helper_isolation.py; existing app/sec_client.py,
+app/embedding_service.py, app/freshness_service.py,
+app/financial_metrics_service.py, app/financial_insights_service.py; this plan.
+All application/test paths are under backend. Nine paths total.
+
+Reviewed direct callers and relevant maintained tests. Other read/operational
+callers keep compatibility exports. filing_search_service.py still needs
+embed_texts and receives the same validator through the export; no edit needed.
+No additional production module or behavioral change is needed. Move the 384
+constant with the validator and re-export both from embedding_service. Leave
+all acquisition, encoder, policy, calculation, chunk conditions and digest logic
+intact. Both pure modules require only Python stdlib; no dotenv or data imports.
+
+### Constraints and non-goals
+
+No private dotenv, real SQL/connections, services, SEC/provider/network calls,
+model loading, package installation, schema changes, route/permission changes,
+publication-admission redesign, activation, deployment or Git delivery.
+No 02B.3 work. Protected bytes and every path outside the chosen scope must stay
+unchanged. Pure import probes use independent fresh processes with raising
+sentinels installed before target imports. Compatibility tests use synthetic
+dotenv only; any legacy engine in maintained regressions is replaced by a
+recording object before imports. No real engine is necessary.
+
+### Stages, validation and completion criteria
+
+1. Record verified checkpoint and bounded caller map.
+2. Add independent negative/parity probes and demonstrate pre-extraction failures.
+3. Move implementations verbatim; preserve compatibility imports; switch the
+   three required read-side consumers to pure helpers.
+4. Run focused tests and relevant synthetic passage/financial regressions.
+5. Verify syntax, AST equivalence, scope/whitespace/index/revisions/protected bytes.
+
+Use immutable baseline `560dc30c00e56cd3a8978feb87140f42a97359f8` for URL/vector
+outcome and function/source comparisons, including exception types/messages and
+causes. Exercise vector float32 boundaries and complete chunk validation damage
+cases; compare digest bytes and unchanged chunk identities. Maintain existing
+legacy profile guards and the reader's two disabled diagnostic routes. No test
+result implies approval to release research text.
+
+### Progress and discovered issues
+
+- [x] Baseline, protected hashes, empty index and caller/test inspection.
+- [x] Negative/parity tests and pre-extraction evidence.
+- [x] Bounded extraction and focused regressions.
+- [x] Final preservation/self-review and independent-review handoff.
+- [ ] Independent coordinator/security acceptance; no Git delivery or later work.
+
+### Actual verification
+
+Working directory `D:\Projects\finlens-foundation\backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -I -S -B tests/test_pure_helper_isolation.py
+# Before extraction: 9 methods, 21 failing test/subtest cases and 1 error, 5.116s.
+# Missing helper modules and existing operational imports were detected;
+# negative controls and the disabled-reader probe already passed.
+# After extraction: 9 passed, 4.349s; final run 9 passed, 4.333s.
+
+.\.venv\Scripts\python.exe -I -S -B tests/test_orm_import_isolation.py
+# Existing 02B.1 import/ORM regression: 8 passed, 18.144s.
+```
+
+The new suite uses 32 fresh processes. Ten pure-import probes cover missing,
+development, sec_readonly, sec_reader and unknown profiles without importing any
+third-party/application stack beyond the two helpers. Fifteen negative controls
+prove raising imports and dotenv/URL/network initialization sentinels. Other
+probes cover legacy exports/profiles, isolated read-side imports, chunk integrity,
+disabled reader diagnostics and immutable baseline outcome parity. The source
+test also verifies exact function AST equality for all three moved functions and
+only the intended moves/import substitutions in all five edited production files.
+
+Outcome comparisons include 240 URL cases and 38 vector factories: Unicode and
+numeric CIK normalization, permissive existing accession handling, invalid types,
+384 dimensions, float32 extrema/overflow/underflow/subnormals, NaN/infinities,
+zero norm, alternate iterable types, exceptions/messages/causes and unchanged
+inputs. Chunk tests preserve admitted identities and digest output, with twenty
+damaged-chunk cases, empty input and unselected invalid vectors. They do not
+admit publications or release research text. Function __module__ ownership moves
+to the pure modules; legacy exports refer to the exact same function objects.
+
+Maintained synthetic regressions used the existing offline guards plus a fake
+engine before collection. Reproduce with the same interpreter flags via stdin:
+
+```python
+import runpy
+from types import SimpleNamespace
+runpy.run_path('tests/run_sec_reader_offline.py', run_name='offline_probe')
+import sqlalchemy
+import sqlalchemy.engine.create
+def forbidden(*args, **kwargs):
+    raise AssertionError('Real engine forbidden in pure-helper regressions')
+calls = []
+fake_engine = SimpleNamespace(connect=forbidden)
+def recording_engine(*args, **kwargs):
+    assert kwargs == {'pool_pre_ping': True}
+    calls.append((args, kwargs))
+    return fake_engine
+sqlalchemy.create_engine = recording_engine
+sqlalchemy.engine.create_engine = forbidden
+sqlalchemy.engine.create.create_engine = forbidden
+sqlalchemy.engine_from_config = forbidden
+import pytest
+result = pytest.main([
+    'tests/test_filing_tone_integration.py',
+    'tests/test_financial_insights.py::test_discovery_and_seven_metric_composition_preserve_canonical_results',
+    'tests/test_financial_insights.py::test_selected_source_conflicts_reject_dependent_claims',
+    'tests/test_financial_insights.py::test_entire_loader_to_utf8_response_and_empty_evidence',
+    '-q', '--tb=short', '-p', 'no:cacheprovider',
+])
+assert len(calls) == 1
+raise SystemExit(result)
+```
+
+Result: 135 passed, 1.47s, one existing Starlette/httpx deprecation warning.
+Exactly one recording fake bootstrap, zero real engines or connections. The
+passage suite uses compiled SQL and in-memory Store responses, not SQL execution.
+Its digest, pending/version, complete-publication, malformed identity/vector and
+cleanup cases remain intact. Selected financial tests exercise canonical
+comparisons, source-conflict abstention and complete UTF-8 evidence composition.
+No full financial/DB/acquisition/model suite or live acceptance is claimed.
+
+All eight changed Python files parsed/compiled in memory without application
+imports or bytecode. Scoped tracked `git diff --check` passed with the existing
+repository line-ending configuration. New-file `git diff --no-index --check --
+NUL <path>` checks found no whitespace errors (exit 1 denotes additions).
+An initial check disabling autocrlf on tracked files misclassified their existing
+CRLF bytes; the correct configured check passed without normalization or edits.
+
+### Final scope, limitations and handoff
+
+Inventory/hash comparison verified exactly nine chosen paths: six existing
+edits and three additions, 368 files versus 365 at entry. All original files
+outside those six edits, including the three protected exceptions and prior
+ORM/database/policy/reader sources, are byte-identical. Branch main and
+HEAD/local origin/main remain `560dc30c00e56cd3a8978feb87140f42a97359f8`;
+index empty. No private dotenv, real engine, SQL, connections, service, SEC/
+provider/network call, model load, package installation, migration, deployment,
+activation, staging, commit, push or merge occurred.
+
+No scope blocker remains. URL builders retain their prior acceptance behavior;
+they are not newly hardened URL validators. Strict publication admission remains
+owned by existing readers and is unchanged. Native database/model/provider/
+deployment acceptance is not tested. The reader remains diagnostics-only.
+02B.3 is unstarted. GO for independent review of 02B.2 only.
+
+Suggested commit, only after separate authorization:
+`refactor(runtime): isolate SEC URL and vector validation helpers`.

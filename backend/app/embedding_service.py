@@ -1,7 +1,6 @@
 from app.release_policy import development_only, encoder_only, require_encoder
+from app.embedding_validation import EMBEDDING_DIMENSION, validate_embedding
 from functools import lru_cache
-from array import array
-import math
 from json import JSONDecodeError
 
 from sqlalchemy import select
@@ -12,7 +11,6 @@ from app.config import server_profile
 from app import evidence_latency as latency
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-EMBEDDING_DIMENSION = 384
 
 
 class EncoderDependencyError(RuntimeError):
@@ -25,20 +23,6 @@ class EncoderDependencyError(RuntimeError):
 
 def _encoder_unavailable():
     return EncoderDependencyError("The query encoder dependency is unavailable.")
-
-
-def validate_embedding(vector) -> None:
-    """Validate the float32 representation stored by pgvector, without changing it."""
-    if len(vector) != EMBEDDING_DIMENSION:
-        raise ValueError(f"Embedding must have {EMBEDDING_DIMENSION} dimensions.")
-    try:
-        values = array("f", vector)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("Embedding values must be finite float32 numbers.") from exc
-    if not all(math.isfinite(value) for value in values):
-        raise ValueError("Embedding values must be finite float32 numbers.")
-    if math.hypot(*values) <= 0:
-        raise ValueError("Embedding norm must be greater than zero.")
 
 
 @encoder_only
