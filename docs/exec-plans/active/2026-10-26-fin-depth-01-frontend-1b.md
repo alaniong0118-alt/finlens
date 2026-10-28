@@ -1011,3 +1011,729 @@ StrictMode listener ownership, simulation limitations and passive diagnostics.
 Stop for coordinator review. A subsequent authorized Linux Chromium run remains
 necessary for native acceptance. Suggested later commit:
 `fix: preserve evidence navigation focus ownership`.
+
+## Frontend 1B.3 bounded test-only implementation — 2026-10-27
+
+Status: active; implementation/offline validation authorized, Chromium acceptance
+requires separate coordinator authorization. This supersedes only the historical
+pending 1B.2B status above: the coordinator reports run 40458029544 complete with
+Linux QA-01 49/49, Chromium 79/79, native Worker/evidence focus and isolation PASS.
+That completed investigation and numerical admission audit are not repeated.
+
+### Objective, baseline and constraints
+
+Add exactly two synthetic Chromium scenarios using the existing AAA/publication-0
+fixture, production Worker and QA-01 isolation. Main/HEAD is
+302f6848ad26876097b282721f0ff72159383d0f; index empty. Only the original three
+protected exceptions exist. Their starting SHA-256 values match the baselines:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Edits are restricted to frontend/e2e/financial-insights.spec.ts and this plan.
+Do not access backend/.env, SEC/providers/database/Docker/paid AI/deployment;
+do not install, start browsers/services/Linux runners, dispatch, stage, commit or
+push. No production, fixture, dependency, workflow or global config changes.
+
+### Implementation stages and decisions
+
+1. Append local read-only geometry and bounded native keyboard helpers; preserve
+   the existing accepted browser test without refactoring its assertions.
+2. Scenario A uses scoped mobile/touch context settings and one comparison at
+   390x844 then 320x844. Check wrapping/overflow, FCF 15 -> CapEx 5 -> source 10,
+   natural destination visibility, source attributes, F final-page/return identity,
+   <=25 records, D separation and unchanged Insights HTTP ledger.
+3. Scenario B checks 1440x1000 native sequential focus/Enter/Space and a held HTTP
+   comparison, including Later -> Cancel -> Later before release. Repeat critical
+   keyboard destination visibility/reflow at 720x500, explicitly not browser zoom.
+4. Run only offline no-emit TypeScript, spec-scoped ESLint, Playwright list-only
+   discovery, diff/scope/preservation checks. Record actual results separately.
+
+Visibility probes must never call focus/scrollIntoView or mutate styles to repair
+destinations. Trigger taps/native keyboard may naturally scroll. Insights is a
+single paginated region in document flow, not an independent scroll box; do not
+assert an unchanged document scroll offset across intentional evidence navigation.
+The existing HTTP hold cannot control Worker-local paging. Real 200% browser zoom,
+assistive technology and native pending-page focus revocation remain excluded.
+Release held responses in finally; keep fixture page-close-before-unroute ordering
+and existing runner-owned process/directory cleanup unchanged. Future execution
+must use supported Linux QA-01 isolation and preserve all protected fingerprints.
+
+### Progress and completion criteria
+
+- [x] Verify branch/HEAD/index/protected inventory before writes; read root guidance.
+- [x] Implement exactly two scenarios within the two-path scope.
+- [x] Complete scoped offline validation and self-review; record limitations below.
+- [ ] Coordinator review and separately authorized supported Chromium execution.
+
+Implementation/offline handoff completes only when two new cases are discoverable,
+type/lint and scope/preservation checks pass, and the remaining runtime gates are
+explicit. No new browser/zoom/accessibility PASS is implied by authored tests.
+
+### Validation and final outcome
+
+Implemented exactly two tests. Scenario A uses one mobile/touch context and one
+comparison across both widths. It checks document/panel/record/field overflow,
+single-column controls/cards/collections/values, wrapped >=44px controls, the exact
+four-record lineage and canonical source attributes without following the link.
+Every evidence arrival checks focused identity and unclipped, hit-testable heading
+before any further activation. After the Astra P2 correction below, F traversal
+expects exactly eight fixture pages sized [2,2,2,4,4,6,17,8] and 45 records, checks
+final and initial disabled boundaries, <=25 unique records, disjoint page identities,
+exact restoration on return and stable identities across both widths. D category
+and warning remain separate; the unrelated snapshot text and Insights request
+count stay unchanged, with exactly one comparison request.
+
+Scenario B checks native forward/reverse year/Compare order, then a registered
+HTTP hold. Later -> Cancel -> Later uses native Tab/Shift+Tab before release;
+completion must preserve Later focus. The gate is released on the success path
+and unconditionally in finally. Native Enter/Space cover policy/metadata/metric
+disclosures and the FCF lineage, collection and pagination controls. Focus probes
+check :focus-visible, positive outline width/style and offset, independent focal
+and required outline-band ancestor/viewport clipping, and focal hit-test visibility.
+Bounded Tab traversal checks reverse escape to the evidence
+summary and forward escape into Snapshot period. Critical lineage/pagination/focus
+checks repeat at 720x500, with explicit desktop reflow-only naming and geometry.
+Only two deliberate control-focus seeds exist; neither is an evidence destination.
+All destination probes are read-only. No Worker/fetch/clock/style/focus shim or
+new browser listeners are installed; fixture teardown remains unchanged.
+
+Offline checks actually run from frontend/ on 2026-10-27 (all exit 0):
+
+- `node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false`
+  — no diagnostics; repeated after the final spec adjustment.
+- `node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts`
+  — no diagnostics; repeated after the final spec adjustment.
+- `node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --grep "1B.3" --list --reporter=list`
+  — exactly two new cases discovered; list-only, no browser/server execution.
+- `node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list`
+  — three spec cases discovered, including the unchanged accepted original case.
+- `git diff --check` — no whitespace errors. Final scope, prefix/append-only,
+  encoding and protected-fingerprint checks are recorded in the handoff.
+
+No behavioral E2E, numerical admission, 1B.2B investigation, QA-01 lifecycle rerun,
+browser build/startup, service, Linux runner, network-backed acceptance, install,
+SEC/provider/database/Docker/paid AI/deployment access or Git delivery occurred.
+The private backend/.env was never accessed. No runtime acceptance PASS is claimed.
+
+### Proposed invocation and coordinator/Astra handoff
+
+After independent review and separate execution authorization, use the established
+supported Linux QA-01 runner with its isolation preflight, deny-all upstream,
+registered-gate release, page-close-before-unroute ordering and owned process-tree
+termination verified before temporary-directory deletion. Never bypass occupied
+ports, weaken network rules or use native Windows browser startup for this task.
+Then, from frontend/ (proposal only; not executed):
+
+```text
+npm run test:e2e:isolation
+node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --grep "1B.3" --reporter=list
+```
+
+No installation or workflow dispatch is implied by this proposal. Preserve the
+three protected hashes and empty index, capture bounded failure diagnostics and
+verify existing runner-owned cleanup afterward. No unrelated process termination
+or arbitrary directory cleanup is authorized.
+
+Independent Astra handoff: review only this two-path diff against 302f684, preserving
+the original test and completed 1B.2B evidence. Check native keyboard ordering and
+the two explicit control seeds, the held comparison's finally release, bounded
+Tab/page traversal, natural destination heading versus whole-record visibility,
+outline/clipping/hit-test probes, mobile-scoped context options, page identities,
+D separation and unchanged HTTP count. Check that none of these checks repairs
+focus or scrolling and that no geometry claim is promoted from static discovery.
+The remaining gaps are actual 200% browser zoom, assistive technology and native
+Worker-local pending-page focus revocation. The HTTP hold covers comparison only.
+
+Recommendation: GO for coordinator/Astra review of the test-only candidate;
+Chromium acceptance and full 1B.3 acceptance remain pending. Stop for coordinator
+review. Suggested later commit: `test: cover financial insights mobile reflow and keyboard navigation`.
+
+Final preservation self-review passed: main/HEAD remain 302f6848ad26876097b282721f0ff72159383d0f,
+index empty, exactly the two authorized candidates plus the three original
+exceptions. All three protected SHA-256 values match the starting values above.
+An offline assertion verified that the entire original browser test remains
+unchanged apart from type imports, the plan retains its complete original prefix,
+and the spec contains exactly three test declarations (one original plus two new).
+Both edited files passed fatal UTF-8 decoding, no-BOM/no-NUL, terminal-newline and
+consistent CRLF checks. No unrelated file was modified. Behavioral results remain
+NOT EXECUTED; implementation and offline review handoff are complete.
+
+## Frontend 1B.3 two-P2 correction authorization — 2026-10-27
+
+Status: active. Coordinator authorizes corrections only in the existing spec and
+this plan; main/HEAD remain 302f6848ad26876097b282721f0ff72159383d0f, index empty,
+two existing candidates plus three original protected exceptions. All three
+protected SHA-256 values above match at correction entry. backend/.env is excluded.
+
+Confirmed defects: the four-page cap conflicts with unchanged fixture pagination
+(45 F records, eight pages sized [2,2,2,4,4,6,17,8], FCF observation on page 5).
+The heading-only focus probe can accept a clipped outline under overflow:hidden.
+Correct the fixture-backed expectations; separate focal visibility from actual
+outline segments using focused-target bounds, width/offset and ancestor/viewport
+clipping. Require the arrival top/side indicator segments for tall destinations,
+without requiring their offscreen bottom edge. Add deterministic synthetic
+adversarial rejection checks to the existing scenario/helper, not another scenario.
+
+Allowed validation: noEmit TypeScript, scoped ESLint, list-only discovery, focused
+synthetic geometry and pagination checks, diff/scope/protected verification. No
+browser, service, Linux runner, external provider, install or Git delivery is
+authorized. Keep the two scenarios, production/fixture/Worker/values, finally hold
+release and teardown unchanged. Real 200% zoom, assistive technology and native
+Worker-local pending-page focus preservation remain outside acceptance.
+
+### Corrections and decisions
+
+- P2-1: spec-local `insightsFPageSizes = [2,2,2,4,4,6,17,8]` replaces the invalid
+  four-page cap. These pages are packed by the unchanged production byte,
+  structural-entry and <=25-record budgets, not ceil(45/25). A checks all eight
+  page sizes and 45 total records at both mobile widths, retaining disjoint keys,
+  exact return identities and disabled first/final boundaries. The shared lineage
+  checks that the later FCF observation arrives on F page 5 of 8. No values change.
+- P2-2: read-only DOM sampling now records focused-target and focal rectangles
+  separately, outline width/offset/style, viewport bounds, and separate ancestor
+  chains. Ancestor client/padding boxes exclude borders and scrollbars. The
+  focused element's own overflow can clip its child heading but does not clip
+  its own outline; indicator clipping starts at its parent.
+- A pure `assessInsightsFocus` checks the sampled heading and actual rectangular
+  outline bands independently against the viewport and overflow clipping axes,
+  without the old one-pixel clipping allowance. Outline outer/inner edges use
+  width plus signed offset / signed offset respectively. Controls require all
+  four bands. Evidence destinations require the actual top band and both side
+  bands through the heading bottom; the offscreen bottom of a tall record is not
+  required. This is an arrival-indicator policy, not a whole-record-fit claim.
+  Keyboard checks require :focus-visible; any observed :focus-visible indicator
+  is checked for clipping even after pointer activation.
+- `insightsFocusAdversarialChecks` is called inside existing scenario B, preserving
+  exactly two new scenarios. Seven deterministic rectangle cases exercise a tall
+  positive control, hidden-ancestor rejection, viewport rejection, independent
+  zero/positive-offset behavior, a full control and its clipped bottom band.
+  The old helper's reproduced case has a visible heading and rejected outline.
+  No target focus, scrolling, style, production, Worker, fixture or teardown
+  mutation is introduced by sampling/assessment/adversarial checks.
+
+### Bounded validation actually executed
+
+From frontend/, all commands/checks below passed (exit 0):
+
+- `node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false`
+- `node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts`
+- `node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list`
+  — exactly three spec cases: unchanged original and exactly two 1B.3 scenarios.
+- PowerShell single-quoted here-string piped to `node`: TypeScript AST extraction
+  of the committed assessor/adversarial function and actual `target.evaluate`
+  callback; in-memory transpilation and VM execution. All seven committed cases
+  pass. A JSDOM integration check invokes that actual measurement callback with
+  synthetic rectangles (JSDOM supplies no real layout): target [20,20,300,1200],
+  heading [34,34,286,60], viewport [0,0,390,844], outline width/offset 3/3.
+  An overflow:hidden ancestor has border box [18,18,302,846], two-pixel borders,
+  and measured client clip [20,20,300,844]. Result: focalVisible=true,
+  indicatorVisible=false; the actual required `expect(indicatorVisible).toBe(true)`
+  assertion throws, proving rejection instead of a heading-only false positive.
+- The same bounded inline harness loads only local fixture/presentation modules
+  with the existing TypeScript/CommonJS loader pattern. Production
+  `prepareInsights(browserFinancialInsights('AAA',0,'compare'), new InsightBudget())`
+  returns eight F pages sized [2,2,2,4,4,6,17,8], 45 records and later FCF on page 5.
+  The committed spec constant is AST-extracted and compared to that exact vector.
+  No broad admission audit or finance-value recomputation is run.
+
+Reproducible core adversarial command from frontend/ (offline; also exercises the
+exact same seven checks embedded in scenario B):
+
+```powershell
+@'
+const fs = require('node:fs'), vm = require('node:vm'), ts = require('typescript');
+const source = fs.readFileSync('e2e/financial-insights.spec.ts','utf8');
+const ast = ts.createSourceFile('spec.ts',source,ts.ScriptTarget.Latest,true);
+const names = ['assessInsightsFocus','insightsFocusAdversarialChecks'];
+const code = names.map(name => ast.statements.find(node =>
+  ts.isFunctionDeclaration(node) && node.name.text === name).getText(ast)).join('\n');
+const context = vm.createContext({expect:require('@playwright/test').expect});
+vm.runInContext(ts.transpileModule(code,{compilerOptions:{
+  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context);
+console.log(vm.runInContext('insightsFocusAdversarialChecks()',context));
+'@ | node
+```
+
+No Chromium/services/runners/network-backed acceptance, external providers,
+Docker/database, private backend/.env access or Git delivery occurred. Browser
+focus painting remains NOT EXECUTED; synthetic rectangles do not establish it.
+Actual browser 200% zoom, assistive technology and native Worker-local pending-page
+focus preservation remain explicitly unaccepted.
+
+Final preservation checks passed: exactly two allowed candidates plus three
+protected exceptions, all three protected hashes unchanged, main/HEAD still
+302f6848ad26876097b282721f0ff72159383d0f and index empty. The original accepted
+test and pre-1B.3 plan history are preserved; exactly two added scenarios remain.
+UTF-8/no-BOM/no-NUL/CRLF/newline and `git diff --check` checks passed.
+
+Progress: both corrections and bounded offline validation/self-review complete.
+Stop for coordinator and targeted Astra
+re-review of the eight-page fixture binding, independent outline segments,
+client-box/axis clipping, tall-record policy and deterministic hidden-ancestor
+rejection. No browser execution, staging, commit or push is authorized.
+
+## Frontend 1B.3 scoped production focus repair — 2026-10-27
+
+Status: active; minimal production correction implemented and offline verification
+passed; awaiting coordinator approval and independent targeted Astra review. This section is the current scope; earlier authorization and verdicts
+remain historical. Entry branch test/fin-depth-01-1b3-chromium, HEAD
+478075e433d5759976c1961d1aad839792c2324c, empty index. Only the original modified
+frontend/next-env.d.ts and two untracked AAPL reports existed at entry; all three
+protected SHA-256 values match the established fingerprints above.
+
+### Failure evidence, root cause and exact repair
+
+Coordinator-confirmed failure in PR https://github.com/alaniong0118-alt/finlens/pull/1,
+CI run 40469254327: native Tab focuses Compare annual periods with its bottom at
+viewport y=1000. The global 3px solid outline with +3px outward offset extends to
+y=1006 and is clipped. The strict geometry assertion correctly rejects it. This
+failure evidence was supplied by the coordinator; this repair does not rerun CI
+or independently execute a browser.
+
+Allowed edits are exactly frontend/app/globals.css,
+frontend/e2e/financial-insights.spec.ts and this existing ExecPlan. Add only
+.financial-insights .insights-actions .primary-button:focus-visible with
+outline-color:currentColor and outline-offset:-6px. Keep the inherited 3px solid
+outline. The pure assessor, DOM measurements, strict clipping assertion, native
+keyboard actions and all seven existing adversarial cases remain unchanged.
+Add an inset positive and outward negative control at the exact 1000px boundary,
+and read-only computed-style assertions after native Tab focuses Compare.
+
+### Progress and validation strategy
+
+- [x] Verify expected branch/HEAD, empty index, entry inventory and protected hashes.
+- [x] Add the scoped CSS correction, two deterministic boundary cases and focused
+  computed-style expectations without changing existing strict assertions.
+- [x] Run bounded offline TypeScript, spec ESLint, geometry/CSS expectations,
+  Playwright list-only discovery, diff/scope/protected checks and self-review.
+- [ ] Coordinator approval and independent targeted Astra review; any subsequent
+  browser execution or Git delivery requires separate authorization.
+
+No Chromium, browser/services/build, CI execution, network/provider access,
+database/Docker, dependency installation or Git writes are authorized. Do not
+read backend/.env. Preserve next-env.d.ts and both original reports; hash reports
+only. Financial calculations, Worker, API, fixtures, components, global focus
+policy, isolation runner and workflow are outside this repair.
+
+### Offline verification and specificity/contrast assessment
+
+All following checks actually ran on 2026-10-27 and exited 0. From frontend/:
+
+- node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+  — no diagnostics; no incremental output.
+- node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts
+  — no diagnostics.
+- node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list
+  — exactly three cases discovered: original plus the two existing 1B.3 scenarios.
+  This was list-only; no browser or configured webServer was started.
+- The reproducible TypeScript AST/VM adversarial command in the preceding two-P2
+  section was run against the updated functions using local Playwright expect.
+  All nine deterministic cases passed: original seven unchanged, inset boundary
+  accepted and outward boundary rejected. At target [20,956,300,1000], viewport
+  [0,0,1440,1000], width=3 and offset=-6, the outer rectangle is
+  [23,959,297,997] and all four bands fit. With the original offset=+3, focal
+  visibility still passes but indicator visibility fails with outer bottom=1006.
+- Inline Node/PostCSS expectations parsed the real globals.css and required the
+  scoped rule to contain exactly outline-color:currentColor and offset:-6px;
+  the global focus rule still has exactly outline:3px solid var(--accent) and
+  offset:3px. The base primary-button background/text and dark text override were
+  checked directly. Local relative-luminance calculations linearized sRGB with
+  threshold 0.04045, exponent 2.4 and weights 0.2126/0.7152/0.0722, then used
+  (Lmax+0.05)/(Lmin+0.05). Both theme pairs exceed 4.5:1.
+
+The new selector has specificity (0,4,0): three classes and :focus-visible. It
+wins over global :focus-visible (0,1,0) for color and offset without setting width
+or style. Existing primary-button rules set background/text but no outline; no
+!important is needed. The production Insights actions contain one primary button,
+Compare. Cancel and buttons elsewhere do not match the scoped selector.
+
+Normal enabled light theme: background #087e78, text/currentColor ring #ffffff,
+contrast 4.9228:1. Dark theme: background #57d3c0, text/currentColor ring #0c2627,
+contrast 8.6858:1. Because the ring is inset, its adjacent fill is the button's
+accent background; reusing the accent outline color would conceal it. The band
+runs 3–6px inside the border box, within the existing padding. These are static
+CSS/theme assessments, not browser painting, forced-colors or visual acceptance.
+The four authored computed-style expectations check 3px/solid/-6px/current text
+color after existing native Tab; they were type/lint/discovery checked, not run.
+
+From the repository root, git diff --check passed (Git only warned of the existing
+LF-to-CRLF policy for globals.css). A bounded inline Node self-review compared
+HEAD contents: removing the exact new CSS block restores globals.css byte-content
+after newline normalization; removing only the new boundary block and four style
+assertions restores the entire baseline spec. The pure assessor, strict DOM focus
+helper and Tab traversal helper are identical to HEAD; all native keyboard actions
+and the original seven cases remain intact. The plan retains its complete original
+prefix. All three candidates pass UTF-8/no-BOM/no-NUL/terminal-newline checks.
+
+Exact candidate scope is the three allowed paths. The only other status entries
+are the original modified next-env.d.ts and two original untracked AAPL reports.
+Branch/HEAD remain test/fin-depth-01-1b3-chromium /
+478075e433d5759976c1961d1aad839792c2324c; index empty. Protected SHA-256 values
+were verified before and after implementation (reports hashed only):
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+### Targeted Astra handoff and remaining acceptance gaps
+
+Review exactly the three-file working-tree diff against
+478075e433d5759976c1961d1aad839792c2324c in PR 1. Check selector scope and cascade,
+inherited 3px thickness, signed -6px offset, currentColor contrast against both
+fills, the exact viewport-boundary positive/outward-negative pair, and preservation
+of every prior clipping rejection, native action and strict focus assertion. Check
+that style probes only read the focused Compare button and do not repair layout,
+focus or scrolling. Reconfirm the three protected fingerprints and empty index.
+No Astra review was executed during this repair; this is its review handoff.
+
+CI run 40469254327 remains failed historical evidence. The production repair's
+Chromium focus painting and computed styles, native Tab behavior at the viewport
+boundary and full 1B.3 acceptance remain NOT EXECUTED here. Actual 200% browser
+zoom, assistive technology and native Worker-local pending-page focus preservation
+remain outside acceptance. No financial calculations, Worker/API/fixtures,
+components, global focus policy, runner or workflow were changed. No browser,
+service/build, CI rerun, provider, database/Docker, dependency installation,
+backend/.env access, staging, commit/amend, push or merge occurred.
+
+Outcome: bounded repair and offline self-review complete; stop for coordinator
+approval and independent targeted Astra review. Any later execution/publication
+needs separate authorization. Suggested later commit message:
+fix: keep annual insights Compare focus outline inside viewport
+
+## Frontend 1B.3 unified action focus repair — 2026-10-27
+
+Status: active; unified action repair and bounded offline verification complete;
+awaiting targeted Astra/coordinator review. This appended section is the current repair scope; all earlier evidence,
+verdicts and baselines remain historical. Entry branch
+test/fin-depth-01-1b3-chromium, HEAD 3b10eb098703fc015602f610e8494fe3bd17b6af,
+index empty. Exactly the three original protected exceptions exist; their hashes
+match the established values. Changes are restricted to globals.css, the existing
+financial-insights.spec.ts and this plan. No browser/CI execution or Git delivery.
+
+### Accepted second-run evidence and implementation decision
+
+The completed read-only triage established the following evidence; this repair
+uses it without repeating root-cause analysis or downloading/running CI again.
+Run https://github.com/alaniong0118-alt/finlens/actions/runs/40491981755 reports
+QA-01 49/49, isolation PASS and Chromium 80/81: Scenario A passes; B fails at Cancel
+(spec line 509 at that HEAD, strict indicatorVisible assertion line 356). Compare
+and its computed-style expectations pass. Diagnostic artifact 12728434315,
+chromium-failure-diagnostics, is bound to this exact run, branch and HEAD. Its ZIP
+SHA-256 matched GitHub: 2EB051418E66AF73F190ABE9209B7BE3A6B20D95974986A3B6AB3DCBA277DFC3.
+
+Recorded Cancel bounds (left,top,right,bottom) are
+(253.421875,955.203125,429.015625,1000), viewport (0,0,1440,1000). Its 3px solid
+outline with +3px offset extends to y=1006. Geometry JSON, screenshot, error
+context and trace agree: focused, focus-visible, focal-visible and hit-testable,
+but indicatorVisible=false. All six ancestors use visible overflow; the
+viewport clips the bottom band (y=1003..1006) and the lower side segments. The
+trace's spec matches the current source. This is a production indicator defect;
+the strict test is correct. No retry-specific runtime result is implied.
+
+Replace the Compare-only selector, without duplication, with
+.financial-insights .insights-actions > button:focus-visible. Keep only its existing
+outline-color:currentColor and outline-offset:-6px declarations, inheriting the
+unchanged global 3px solid outline. The direct action family includes Compare,
+Cancel and the conditional Retry button's Reload annual comparison / Retry year
+discovery labels. Do not broaden to other Insights controls or global buttons.
+
+Keep all nine original geometric cases. Add the exact fractional Cancel pair:
++3px rejects with outer bottom 1006; -6px accepts with outer bottom 997 and all
+four indicator bands. Add four read-only Cancel computed-style assertions after
+existing native Tab/focus validation: 3px, solid, -6px and computed currentColor.
+Keep strict measurement/assessment, native actions, scenario sequencing, held
+response release/finally cleanup, Worker, API and fixtures unchanged. Retry label
+coverage will be checked offline against the real component JSX and CSS selector;
+no fixture or request sequence is added to exercise a new runtime state.
+
+### Progress and validation strategy
+
+- [x] Verify expected branch/HEAD, empty index and original protected hashes.
+- [x] Replace only the action-family selector; add fractional geometry pair and
+  Cancel computed-style expectations in the existing scenario.
+- [x] TypeScript noEmit, spec ESLint, all geometry cases, CSS selector/specificity,
+  theme/hover contrast, list-only discovery, diff/scope/hash checks and self-review.
+- [ ] Independent targeted Astra/coordinator review; browser execution remains a
+  separate authorization gate.
+
+Do not read backend/.env or modify protected files. No browser, services/build,
+CI execution, Docker/PostgreSQL, providers, dependency installation, staging,
+commit/amend, push or merge. The separate light secondary TEXT contrast gap is
+explicitly excluded from this repair; no normal text compliance claim is made.
+
+### Bounded offline results and accessibility assessment
+
+Actually executed on 2026-10-27, from frontend/, all exit 0:
+
+- node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+  — no diagnostics or incremental output.
+- node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts
+  — no diagnostics.
+- node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list
+  — exactly three cases: original plus existing Scenario A and Scenario B. This
+  was list-only, without browser or configured webServer execution.
+- A bounded PowerShell single-quoted here-string piped to node used the existing
+  TypeScript AST/VM extraction pattern above, executing the actual
+  assessInsightsFocus and insightsFocusAdversarialChecks with local Playwright
+  expect. All 11 cases passed, including all nine prior cases and the exact
+  fractional Cancel pair. Outward +3 is rejected, bottom=1006; inset -6 is
+  accepted, bottom=997. Inset outer bounds are
+  (256.421875,958.203125,426.015625,997); all four bands fit.
+- The same inline harness parsed actual globals.css with local PostCSS and
+  postcss-selector-parser. It required exactly one new family rule, no old
+  Compare-only rule, exactly the two existing declarations, unchanged global
+  3px solid/+3px declarations, and specificity (0,3,1) versus global (0,1,0).
+  No !important, width/style override, text-color change or other CSS edit.
+- Actual component TSX was AST-parsed without executing React/Worker/API code.
+  The actions div contains three button elements (primary Compare, secondary
+  Cancel, conditional secondary Retry). JSX text/conditional string extraction
+  verified all four labels, including Reload annual comparison and Retry year
+  discovery. A JSDOM structural selector check used those actual extracted
+  classes/labels and matched all four action variants; negative controls outside
+  Insights, outside actions, and nested under another child did not match.
+  :focus-visible was parsed as part of the real selector; JSDOM checked only
+  its structural portion. No keyboard-modality or browser painting claim follows.
+- The real shared primary/secondary padding is 11px vertical and 16px horizontal,
+  with a 1px border. Geometry assertions confirm the inset band runs 3..6px
+  inside the border box, within existing padding and clear of the text content
+  box. Text, padding, min-height and wrapping rules are unchanged. This is a
+  static box/geometry assessment; actual wrapped-label painting is still pending.
+
+Theme variables, primary/secondary text/fill declarations and the real existing
+hover rule filter:brightness(.95) were read directly from CSS. Relative luminance
+uses sRGB linearization at 0.04045 with exponent 2.4, weights
+0.2126/0.7152/0.0722 and (Lmax+0.05)/(Lmin+0.05). Hover values model multiplication
+of each color channel by 0.95. Static text/currentColor-ring versus fill results:
+
+| Action appearance | Text / currentColor ring | Fill | Normal | Hover |
+|---|---|---|---|---|
+| Primary light | #ffffff | #087e78 | 4.9228:1 | 4.7899:1 |
+| Secondary light | #087e78 | #e9f6f2 | 4.4373:1 | 4.3215:1 |
+| Primary dark | #0c2627 | #57d3c0 | 8.6858:1 | 7.9891:1 |
+| Secondary dark | #57d3c0 | #1a3a3c | 6.6986:1 | 6.2783:1 |
+
+All proposed rings exceed 3:1 in both themes and modeled hover states. The
+existing light secondary 13px TEXT contrast is approximately 4.44:1 normally and
+4.32:1 on hover, below 4.5:1. This separate gap is retained intentionally under
+the explicit scope restriction; no normal text contrast compliance is claimed.
+currentColor changes only the focus outline, not the button text or background.
+
+From the repository root, git diff --check passed. Git emitted only the existing
+LF-to-CRLF policy warning for globals.css; original file newline conventions were
+preserved. An inline Node/TypeScript self-review restores the entire baseline CSS
+by reversing only the selector change and restores the entire baseline spec by
+removing only the new fractional pair/result flags and Cancel style checks/local
+locator. This proves all nine existing cases, Scenario A/B native actions,
+request sequencing and held-response cleanup are unchanged. The assessor, strict
+DOM focus helper, Tab traversal, lineage and page helpers also match HEAD exactly.
+The plan retains its complete historical prefix. Candidate UTF-8/no-BOM/no-NUL/
+terminal-newline checks passed. No component, fixture, Worker, API, calculation,
+other Insights control, global focus policy, isolation runner or workflow changed.
+
+### Integrity, remaining gates and targeted Astra handoff
+
+Final verification: branch test/fin-depth-01-1b3-chromium, HEAD
+3b10eb098703fc015602f610e8494fe3bd17b6af, index empty; exactly the three authorized
+candidates plus the three original protected exceptions. Protected SHA-256 values
+match entry; AAPL reports were hashed only:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Astra handoff: review only the three-file diff against this HEAD. Confirm the
+single direct-child family selector covers Compare/Cancel/both Retry labels,
+retains 3px solid thickness and correct currentColor contrast, and excludes other
+controls. Inspect exact fractional geometry and unchanged nine adversarial cases,
+strict indicatorVisible assertion and native navigation. Verify Cancel probes are
+read-only and preserve the registered hold, finally release and fixture ordering.
+Check static text clearance/hover calculations and explicit retained TEXT gap.
+Reconfirm no extra candidate, protected-file drift, index mutation or Git delivery.
+No independent Astra review was executed in this repair; it remains a gate.
+
+The failed second CI run remains historical evidence; no new Chromium or CI
+execution occurred. Runtime Cancel computed styles, Retry-state styles and the
+remaining Scenario B keyboard route at 1440x1000/720x500 remain unverified for this
+candidate. The earlier Scenario A touch/pointer PASS does not establish keyboard
+indicator visibility. Actual 200% browser zoom, assistive technology, forced-color
+painting, wrapped-label painting and native Worker-local pending-page focus
+preservation remain outside acceptance. No service/build, Docker/PostgreSQL,
+external provider, private backend/.env access or Git writes occurred.
+
+Outcome: unified action repair, bounded offline checks and self-review complete;
+stop for coordinator and targeted Astra review. No staging, commit/amend, push,
+merge or CI rerun is authorized. Suggested later commit message:
+fix: unify annual insights action focus outlines
+
+## Frontend 1B.3 Astra-owned native scroll clearance — 2026-10-27
+
+Status: implementation authorized; browser acceptance and Git delivery pending.
+Owner: Astra. Entry branch test/fin-depth-01-1b3-chromium, HEAD
+e8549b70c2c3c3a0d3c5581a4dab0c12ced6b0c4, empty index; only the three original
+protected exceptions exist. Authorized edits are globals.css, the existing
+financial-insights.spec.ts and this plan. No browser, services, CI, provider,
+database, backend/.env access or Git writes are authorized.
+
+### Evidence and decision
+
+Third run 40495640230 / artifact 12730239025 is bound to this HEAD. In-memory
+download SHA-256 e4565df9ab340aa071ccd1f15a779751799965555aa49b4a2a6123789e57ac5d
+matches GitHub. The report records 80/81 Chromium tests, Scenario A PASS and B
+FAIL; QA-01 and isolation succeeded. All 20 focus attachments, screenshot, error
+context and trace were inspected during the preceding read-only investigation.
+The trace spec matches this baseline. Compare and Cancel pass with inset rings.
+Shift+Tab reaches Examine financial evidence, but its bounds are
+(72,-0.0625,275.09375,44.734375), viewport 1440x1000. Focus and hit testing pass;
+focal visibility fails and the outward outline starts at -6.0625. Eight ancestors
+have visible overflow. Inset alone fixes the indicator but not focal visibility.
+The 720x500 route was never reached. Preserve all previous failure evidence.
+
+Implement the approved scoped scroll-margin:8px policy for Insights buttons,
+selects, summaries, links and tabindex=-1 destinations, plus the Snapshot period
+select. This reserves room for the 6px outward ring and subpixel rounding during
+native focus scrolling. Keep the validated action inset rule and global focus
+policy unchanged. No event-handler scrolling, focus mutation, layout-spacing
+change, epsilon, retries or test-injected styles are permitted.
+
+### Implementation and validation plan
+
+- [x] Add scoped CSS and verify actual DOM selector coverage and exclusions.
+- [x] Preserve 11 adversarial cases; add the exact third-run failure, inset-only
+  insufficiency, and bounded top/bottom clearance cases.
+- [x] Split B into independently scheduled desktop and reflow cases; inspect
+  intermediate native stops, computed margins, diagnostic activation, return
+  identities and reverse traversal from Snapshot without changing Scenario A.
+- [x] Run noEmit TypeScript, scoped ESLint, deterministic geometry/policy checks,
+  list-only discovery, whitespace/scope and protected-hash verification.
+- [x] Prepare independent review handoff; no Git or browser acceptance implied.
+
+The light-secondary normal-text contrast gap remains a separate P2 (4.4373:1
+normal, 4.3215:1 modeled hover). No WCAG AA text-compliance claim or color repair.
+Actual browser scrolling/painting, wrapped links, 200% browser zoom, assistive
+technology, forced colors and Worker-local pending-page focus remain unaccepted.
+
+### Implemented route and scope
+
+The only production change is the four-line approved scroll-margin rule.
+Selector specificity is (0,2,1) for the Insights branch (the a[href] argument
+sets :is specificity), and (0,2,2) for the Snapshot branch. No existing rule sets
+scroll-margin. Removing this block restores baseline CSS exactly after newline
+normalization, including global focus, action inset styling, colors and spacing.
+The selector includes the real action/statement/lineage/collection/pagination
+buttons, year selects, summaries, SEC/navigation anchors, record/viewport
+destinations and the direct Snapshot select. It excludes headings, paragraphs,
+other panels' controls and a select nested below the Snapshot label's direct child.
+
+B-desktop (1440x1000) and B-reflow (720x500) are separate default-scheduled tests,
+each with its own scenario/context, 90s timeout and no retries. Both start at their
+own viewport before loading the page. Reflow is CSS viewport coverage, not actual
+browser zoom. Each case performs the original native comparison sequence and held
+HTTP Cancel/Later traversal, then policy Enter/Space and two evidence route legs:
+
+1. Forward native traversal to the FCF statement, exact 15 USD -> CapEx 5 USD ->
+   source fact 10 lineage, fields disclosure and official SEC link focus (no link
+   activation).
+2. Shift+Tab to financial collection, F page 1 -> Next via Space -> page 2 ->
+   Previous via Enter -> identical page 1. Check fixed page sizes, disjoint keys,
+   category/scope, <=25 records and first-page Previous disabled.
+3. Shift+Tab to diagnostic collection, Space activation, D heading/category/warning
+   and pressed states; reverse to financial, Enter and identical F page 1.
+4. Reverse to evidence summary, forward out to Snapshot period; then repeat the
+   route with reverse traversal from Snapshot to the original FCF statement.
+   Snapshot text and Insights request counts remain invariant after each leg.
+
+Only the two pre-existing year-control seeds use programmatic focus. Evidence
+destinations are focused solely by production behavior. Every native stop visited
+by insightsTabTo within the approved selector is measured, including summaries,
+links and controls between named targets. The 120-step limit remains. Measurements
+add target identity, scroll position and four computed margin longhands; keyboard
+checks require all four to equal 8px. Existing focal, hit-test, focus-visible and
+indicator assertions remain strict. No scrolling/style/focus mutation occurs in
+the observer. The pure geometry assessor is identical to HEAD. Original E2E and
+the complete Scenario A test block are preserved. Lineage helper behavior is
+unchanged (only its reverse-leg comment changed). Worker/API/fixtures/cleanup and
+global retries=0 remain untouched; finally still releases the held response.
+
+### Offline verification actually executed
+
+From frontend/, all final checks below passed:
+
+- node node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+- node node_modules/eslint/bin/eslint.js e2e/financial-insights.spec.ts
+- node node_modules/@playwright/test/cli.js test e2e/financial-insights.spec.ts --project=desktop-chromium --list --reporter=list
+  — four tests: original Worker E2E, A, B-desktop and B-reflow. List-only starts
+  neither a browser nor the configured webServer. Independent width cases use
+  the unchanged default scheduling, not a serial describe group.
+- TypeScript AST/VM extraction of the actual assessInsightsFocus and
+  insightsFocusAdversarialChecks, using local Playwright expect: 17/17 cases.
+  All prior 11 assertions remain as an exact prefix. Six additions cover the
+  recorded top clipping, inset-only insufficiency, and top/bottom clearance at
+  both viewport sizes with the recorded 1/16px rounding residue. Four clearance
+  cases are mathematical examples, explicitly not native-scroll acceptance.
+- PostCSS verifies the sole scroll-margin rule and exact 8px value; deleting
+  only that block reproduces HEAD CSS. An AST-built DOM uses the real component
+  JSX templates, including EvidenceRecord, both statement call sites and Snapshot.
+  All 22 representative template targets across 14 control/destination families
+  match; negative controls do not. JSDOM computes the shorthand as 8px. Browser
+  longhand expectations are authored/type-checked, not browser-executed. JSX map
+  templates are represented once, not mistaken for a live record inventory.
+  The initial offline probe incorrectly assumed 23 nodes and omitted statement
+  call sites (observed 20); the corrected probe includes those sites and checks
+  actual family membership (22), without any production-code change for it.
+- Source comparisons verify original E2E, Scenario A, all prior geometry cases,
+  pure assessor and strict assertion lines are preserved. Full candidate diff
+  was inspected against the complete keyboard route and unchanged production DOM.
+- git diff --check: PASS; only the existing globals.css LF/CRLF policy warning.
+  Exact scope/index and protected hashes verified, with reports hashed only.
+
+The geometry extraction is reproducible as a PowerShell single-quoted here-string
+piped to node from frontend/ (no output files):
+
+```javascript
+const fs = require('node:fs'), ts = require('typescript'), vm = require('node:vm');
+const source = fs.readFileSync('e2e/financial-insights.spec.ts', 'utf8');
+const tree = ts.createSourceFile('spec.ts', source, ts.ScriptTarget.Latest, true);
+const code = ['assessInsightsFocus', 'insightsFocusAdversarialChecks'].map(name =>
+  tree.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).getText(tree)).join('\n');
+const context = vm.createContext({ expect: require('@playwright/test').expect });
+vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+console.log(vm.runInContext('insightsFocusAdversarialChecks()', context));
+```
+
+### Integrity and independent review handoff
+
+Branch/HEAD remain test/fin-depth-01-1b3-chromium /
+e8549b70c2c3c3a0d3c5581a4dab0c12ced6b0c4, index empty. Candidate scope is exactly
+the three authorized paths, plus the original protected worktree exceptions.
+Protected SHA-256 matches the established baselines:
+
+- frontend/next-env.d.ts: F4E8976C19FC926644D72610BF1058BD6BF52ADD97E46A02BC0B912A751625C0
+- canary-aapl_guarded_live_20261010_111844_3580610-publication.json:
+  A783517D2875E39DF4C831C410265D0126FBF6A9D3DDBA1103F7BD61B057844C
+- refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json:
+  F8DF96C8890C0ECE1E1701B25BC5C43B879C359ECEB96ACB451A2A0DAA58BF7C
+
+Independent reviewer: review only these three files against the stated HEAD.
+Check the exact margin selector, unchanged action/global outlines, actual DOM
+coverage and exclusions; replay all 17 cases; inspect independent width discovery,
+native intermediate checks, reverse route, D/F return identity, request counts
+and failure cleanup. Check that no geometry tolerance or browser mutation was
+introduced. Reconfirm protected hashes and empty index. Return a bounded verdict
+to the coordinator; do not stage, execute Chromium, rerun CI or modify files.
+
+Native scrolling with the added margins, full B routes, rounded outlines, narrow
+inline-link fragments and runtime cost of intermediate observations still require
+separately authorized Chromium evidence. Static probes cannot establish those.
+No structural insufficiency requiring a broader production change was found.
+Prior CI remains failed evidence, not acceptance of this candidate. No new browser,
+services, CI, providers, database operations, backend/.env access or Git writes
+occurred. Stop for independent review/coordinator approval before Git operations.
+Suggested later commit: fix: reserve native focus clearance across annual insights
