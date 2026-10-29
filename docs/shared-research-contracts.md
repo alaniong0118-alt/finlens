@@ -220,7 +220,7 @@ These are explicit join gates, not scope removal or requests for blanket permiss
 
 ## Proposed C1 representation lock for focused review
 
-Status: **PROPOSED / PENDING INDEPENDENT REVIEW**. These preferred decisions remove representation ambiguity for the smallest inert slice; they are not approved, implemented, a public API change or an authority grant. The independent C0 FAIL and C1 NO-GO remain in force until coordinator disposition after focused re-review. Existing database/HTTP/model/activation gates remain separate.
+Status: **APPROVED REPRESENTATION / C1 IMPLEMENTATION CANDIDATE, INDEPENDENT IMPLEMENTATION REVIEW PENDING** (2026-10-29). The coordinator's supplied C1 task records focused independent approval of this complete representation lock and authorizes its exact four-path bounded implementation at main `791a4c5dd93f5cf92cbc802662027126d5388cee`. That current instruction supersedes the historical pending representation review/C1 NO-GO for this inert slice only. The lock below is implemented by the uncommitted candidate; it is not a public API change or an authority grant. C2-C9 production integration and existing database/HTTP/model/activation gates remain separate.
 
 ### Representation decisions and equality
 
@@ -298,26 +298,36 @@ Preferred acyclic direction: standard-library primitives -> inert research_contr
 | Canonical round trip, reordered input keys/whitespace, non-ASCII label and duplicate member | Canonical output stable; no lossy normalization; duplicates/unknown fields fail, source spelling preserved. |
 | Import/constructor forbidden-effect sentinels | Any configuration/env, file, DB, socket, model/provider, registry lookup or ID-generation effect fails guarded tests. No sentinel merely masks the attempted effect. |
 
-No C1 implementation, tests or ExecPlan are written by FIX1. The test matrix is proposed acceptance, not executed evidence. Representation decisions are now explicit preferred proposals; independent review must approve them or identify a concrete alternative before C1 authorization. Source registries, real authentication, financial bridges, rights retention/storage, runtime cancellation and public integration remain later adapter decisions, not hidden C1 capabilities.
+Historical FIX1 wrote no C1 implementation, tests or ExecPlan; its matrix was proposed acceptance. The separately authorized C1 candidate now implements the locked values and tests below. Source registries, real authentication, financial bridges, rights retention/storage, runtime cancellation and public integration remain later adapter decisions, not hidden C1 capabilities.
 
-## Proposed first implementation slice (not performed)
+## C1 bounded implementation record
 
 **FL-ALL-1215-W1-C1 - Inert identity and evidence-reference value objects.**
 
 Implement only C1 entity/security/listing reference metadata and the C2 discriminated reference variants, with minimal C3 version/time precision metadata needed to identify them. This slice resolves/validates record structure, not authoritative company lookup, evidence admission or financial calculations. Treat decoded references as untrusted until a later authorized server resolver supplies the context.
 
-Proposed exact scope after separate approval:
+Exact coordinator-authorized scope:
 
 1. New `backend/app/research_contracts.py`: inert standard-library value objects/validation; no imports of config, dotenv, ORM/database, model/provider, acquisition or operational modules.
 2. New `backend/tests/test_research_contracts.py`: guarded offline identity/collision/reference/temporal tests; no real I/O/services.
 3. New `docs/exec-plans/active/2026-10-29-shared-research-reference-values.md`: required implementation record, scope, decisions and actual checks.
 4. This contract document: record approved representation decisions and actual slice evidence only; preserve proposed status for every unimplemented consumer.
 
-Dependencies: independent C0 documentation/contract review; coordinator approval of the explicit proposed C1 representation lock (namespaces, closed field sets, serialization, bounds, pins and time/interval semantics); rechecked current HEAD/index/protected hashes; separate C1 implementation authorization. Existing helper acceptance is reused, not rerun. C1 can use synthetic reference values without DB/model/source credentials; it cannot activate Reader or make caller-provided evidence “admitted.”
+Entry dependencies satisfied by the supplied coordinator task and local baseline checks: C0 accepted/committed/pushed; focused independent representation approval; separate exact C1 implementation authorization; main at the expected HEAD, empty index, only the three protected exceptions and matching hashes. Existing helper acceptance is reused, not rerun. C1 uses synthetic reference values without DB/model/source credentials; it cannot activate Reader or make caller-provided evidence “admitted.”
 
 Definition of done: no-DB entity and multiple listing/share-class references; ticker collisions cannot collapse identities; DB/session/market namespaces cannot be confused; zero pins and unknown/date-only times are preserved; invalid/missing/foreign-owner reference shape is rejected where structural context is available; import/constructor guards detect forbidden operational effects. No ownership authorization or source verification is claimed from pure validation. No financial ID fabrication, mutation of existing schemas/digests or consumer integration. Independent review must judge new boundaries before any follow-on scope.
 
 Later resolver, artifact store, financial-input bridge, generation, jobs, ownership, billing and public routes require their own authorizations and relevant acceptance. Do not begin them as part of C0 or C1.
+
+### C1 candidate behavior and verification (2026-10-29)
+
+- [research_contracts.py](../backend/app/research_contracts.py) implements frozen slotted KeyRef, EntityRef, AuthorityIdentifier, SecurityRef, ListingRef, SymbolAlias, IdentityResolution, DateInterval, distinct unknown/date/instant TimePoint classes, and the closed DatabasePublicationRef / SessionArtifactRef / MarketPublicationRef variants of EvidenceRef. All constructor fields, including nullable fields, are explicit; nested collections require tuples. Full-record equality/hash includes metadata; KeyRef compares only its exact namespace/id pair.
+- `canonical_sec_cik(text)` is the sole CIK padding factory. `encode(record)` returns canonical v1 UTF-8 bytes; `decode(bytes)` returns fresh immutable values. Byte/depth preflight precedes bounded recursive parsing; node counts include member names, containers and scalar values. Duplicate decoded names reject before dict insertion. Integer lexemes are bounded before int construction; floats/exponents/negative zero/nonfinite values reject. All lock field/collection/aggregate limits apply to constructors and decoding.
+- `check_reference_context` compares supplied entity/security/listing records and explicit expected keys, rejecting mismatches and conflicting full records. An expected relationship with no comparable supplied link rejects. Owner/session expectations default to null, so private references require both explicit keys. It returns no authority decision, performs no lookup and never treats origin/rights/admission labels as verified.
+- Focused isolated command from repository root: `backend/.venv/Scripts/python.exe -I -S -B backend/tests/test_research_contracts.py`. Actual passing candidate run: **49 tests, 609 successful subtests, zero failures/errors/skips**. Includes eight in-memory semantic mutants (each baseline rejects and changed branch accepts), ten positive forbidden-effect sentinel controls, and a fresh-process guarded module execution covering all root constructors, nested values, context checks and codec. The guard compiles the candidate source before installing sentinels so ordinary source loading is outside the operational-effect boundary.
+- Negative checks cover missing/null/unknown/mixed fields, escaped duplicate keys, namespaces/context substitutions, CIK/accession/LEI/hash syntax, pin zero/max/coercion/order, temporal/offset/overflow precision, duplicate/conflicting members, dated alias adjacency/overlap, Unicode controls, nested mutation, and exact/one-over field/collection limits. A valid envelope padded with JSON whitespace passes at 65536 input bytes; 65537 rejects before parsing. Generic parser depth 8/nodes 2048 boundary fixtures are explicitly invalid C1 schema, with one-over rejection; the actual closed schema reaches at most depth 5 and remains below 2048 nodes. Reduced-cap controls verify direct-constructor aggregate checks without inventing valid unreachable schema fixtures. No measured wall-time/RSS claim is made.
+- Initial execution: 45 tests with two failed subtests. One test incorrectly rejected allowed null jurisdiction and was corrected. The other exposed Python's ISO parser accepting `24:00:00`; explicit RFC3339 clock ranges now reject it before normalization. Expanded coverage and self-review also require actual comparable context links. No locked representation deviation or unresolved contradiction was found.
+- Syntax, whitespace, exact-scope and final preservation checks are recorded in the [C1 ExecPlan](exec-plans/active/2026-10-29-shared-research-reference-values.md). Independent Astra High implementation review remains pending; local GO is only readiness for that review. No C2-C9 consumers, authentication, real-source authority, Universal Research acquisition, services, Reader activation or deployment were implemented or exercised.
 
 ## C0 verification boundary
 
