@@ -939,7 +939,7 @@ def offline_checks():
     module = launcher_module()
     import_guard_counts = dict(attempts)
     valid = ["--execute", "--docker-context", "desktop-linux", "--expected-context-endpoint", "npipe:////./pipe/dockerDesktopLinuxEngine",
-             "--image", "pgvector/pgvector@sha256:" + "a" * 64, "--expected-head", module.BASELINE,
+             "--image", "pgvector/pgvector@sha256:" + "a" * 64, "--expected-head", module.BACKEND_BASELINE,
              "--candidate-sha256", "b" * 64]
 
     def config(**changes):
@@ -1202,7 +1202,7 @@ def offline_checks():
             self.assertEqual(before, attempts)
 
         def test_05_partial_and_unreviewed_cli_refuses(self):
-            for args in (["--execute"], valid[:-2], valid[:-1] + ["bad"], [x if x != module.BASELINE else "0" * 40 for x in valid]):
+            for args in (["--execute"], valid[:-2], valid[:-1] + ["bad"], [x if x != module.BACKEND_BASELINE else "G" * 40 for x in valid]):
                 with self.subTest(args_count=len(args)), self.assertRaises(module.Refusal):
                     module.parse(args)
 
@@ -1780,12 +1780,345 @@ def offline_checks():
     return 0 if result.wasSuccessful() and not result.skipped else 1
 
 
+def offline_admission_checks():
+    """New admission cases only: synthetic bytes/Git, no real writes or processes."""
+    import socket
+    import subprocess
+    import unittest
+    from unittest.mock import patch
+
+    attempts = {"process": 0, "network": 0, "import": 0, "env": 0, "write": 0}
+
+    def blocked(kind):
+        attempts[kind] += 1
+        raise AcceptanceFailure("admission_offline_" + kind + "_forbidden")
+
+    class ImportGuard(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname.split(".")[0] in {"app", "psycopg", "sqlalchemy", "alembic", "jwt", "cryptography",
+                                           "dotenv", "fastapi", "uvicorn", "openai", "torch", "sentence_transformers",
+                                           "sqlite3", "httpx", "requests"}:
+                blocked("import")
+
+    def audit(event, args):
+        if event.startswith("subprocess.") or event in {"os.system", "sqlite3.connect"}:
+            blocked("process")
+        if event.startswith("socket."):
+            blocked("network")
+        if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
+            name = os.fsdecode(os.fspath(args[0])).replace("\\", "/").rsplit("/", 1)[-1]
+            if name == ".env" or name.startswith(".env."):
+                blocked("env")
+            mode, flags = args[1], args[2]
+            if mode is not None and any(c in mode for c in "wax+") or flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC):
+                blocked("write")
+
+    sys.meta_path.insert(0, ImportGuard())
+    sys.addaudithook(audit)
+    subprocess.Popen = os.system = lambda *a, **k: blocked("process")
+    socket.create_connection = socket.getaddrinfo = lambda *a, **k: blocked("network")
+    socket.socket.connect = socket.socket.connect_ex = lambda *a, **k: blocked("network")
+    module = launcher_module()
+    files = (
+        "backend/scripts/accept_research_ownership_postgres.py",
+        "backend/tests/acceptance_research_ownership_postgres.py",
+        "docs/exec-plans/active/2026-10-30-ucr-ownership-postgres-acceptance.md",
+    )
+    execution = "e" * 40
+    diff = ["diff", "--no-ext-diff", "--no-textconv", "--quiet"]
+    calls = {"fixtures": 0, "refusals_before_effects": 0}
+
+    def digest(content, paths=files):
+        value = hashlib.sha256()
+        for relative in paths:
+            for part in (relative.encode(), content[relative]):
+                value.update(len(part).to_bytes(8, "big"))
+                value.update(part)
+        return value.hexdigest()
+
+    class Fixture:
+        def __init__(self):
+            self.working = {relative: (relative + "\nsynthetic\n").encode() for relative in files}
+            self.committed = dict(self.working)
+            self.protected = {relative: ("protected:" + relative).encode() for relative in module.PROTECTED}
+            self.hashes = {relative: hashlib.sha256(data).hexdigest() for relative, data in self.protected.items()}
+            self.digest = digest(self.working)
+            self.head, self.branch, self.staged = execution, b"main\n", False
+            self.status = b"".join((b" M " if p == "frontend/next-env.d.ts" else b"?? ") + p.encode() + b"\0"
+                                   for p in module.PROTECTED)
+            self.missing, self.changes, self.worktree_changes = set(), {}, False
+            self.entries, self.faults, self.git_calls, self.reads, self.effects, self.receipts = {}, {}, [], [], [], []
+            self.paths = files
+
+        def arguments(self):
+            return ["--execute", "--docker-context", "desktop-linux", "--expected-context-endpoint",
+                    "npipe:////./pipe/dockerDesktopLinuxEngine", "--image", "pgvector/pgvector@sha256:" + "a" * 64,
+                    "--expected-head", execution, "--candidate-sha256", self.digest]
+
+        def read(self, path):
+            relative = path.relative_to(ROOT).as_posix()
+            self.reads.append(relative)
+            if relative in self.working:
+                return self.working[relative]
+            if relative in self.protected:
+                return self.protected[relative]
+            raise FileNotFoundError("synthetic_missing_file")
+
+        def run(self, argv, **kwargs):
+            check(argv[0] == "git" and kwargs == {"seconds": 5, "cwd": str(ROOT), "env": module.clean_environment()},
+                  "non_git_or_unbounded_admission_command")
+            args = argv[1:]
+            self.git_calls.append(args)
+            if args[0] in self.faults:
+                fault = self.faults[args[0]]
+                if isinstance(fault, BaseException):
+                    raise fault
+                return fault
+            output, code = b"", 0
+            if args[:2] == ["rev-parse", "--verify"]:
+                revision = args[2].removesuffix("^{commit}")
+                check(args[2] == revision + "^{commit}" and revision in {module.BACKEND_BASELINE, execution},
+                      "wrong_commit_verification")
+                output, code = revision.encode() + b"\n", int(revision in self.missing)
+            elif args == ["rev-parse", "HEAD"]:
+                output = self.head.encode() + b"\n"
+            elif args == ["branch", "--show-current"]:
+                output = self.branch
+            elif args == [*diff, "--cached"]:
+                code = int(self.staged)
+            elif args == ["status", "--porcelain=v1", "-z", "--untracked-files=all"]:
+                output = self.status
+            elif args == [*diff, module.BACKEND_BASELINE, execution, "--", *module.BACKEND_INPUTS]:
+                code = int(any(any(p == scope or p.startswith(scope + "/") for scope in module.BACKEND_INPUTS)
+                               for p in self.changes))
+            elif args == [*diff, "HEAD", "--", *module.BACKEND_INPUTS]:
+                code = int(self.worktree_changes)
+            elif args[:3] == ["ls-tree", "-z", execution] and args[3] == "--":
+                relative = args[4]
+                data = self.committed.get(relative)
+                oid = hashlib.sha1(b"blob " + str(len(data or b"")).encode() + b"\0" + (data or b"")).hexdigest()
+                output = self.entries.get(relative, b"100644 blob " + oid.encode() + b"\t" + relative.encode() + b"\0"
+                                          if data is not None else b"")
+            elif args[:2] == ["cat-file", "blob"]:
+                found = [data for data in self.committed.values()
+                         if hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest() == args[2]]
+                check(len(found) == 1, "synthetic_blob_not_found")
+                output = found[0]
+            else:
+                raise AcceptanceFailure("unexpected_admission_git_command")
+            return module.Output(output, b"", code)
+
+        def invoke(self, arguments=None):
+            calls["fixtures"] += 1
+            fixture = self
+
+            class MemoryRun:
+                def __init__(self, args, root, process):
+                    fixture.effects.append("run_constructed")
+                    self.nonce = "a" * 32
+
+                def receipt(self, **values):
+                    fixture.receipts.append(values)
+
+                def execute(self):
+                    fixture.effects.append("synthetic_execute")
+                    return 0
+
+            def mkdir(path, **kwargs):
+                check(path == Path(os.environ["LOCALAPPDATA"]) / "FinLens/ownership-acceptance" / ("a" * 32)
+                      and kwargs == {"parents": True, "exist_ok": False}, "unexpected_evidence_write")
+                fixture.effects.append("synthetic_mkdir")
+
+            with patch.object(Path, "read_bytes", lambda path: fixture.read(path)), patch.object(Path, "mkdir", mkdir), \
+                    patch.object(module, "PROTECTED", self.hashes), patch.object(module, "FILES", self.paths), \
+                    patch.object(module, "Run", MemoryRun), patch.dict(os.environ, {"LOCALAPPDATA": "C:/synthetic"}), \
+                    patch("sys.stdout", new=io.StringIO()):
+                return module.main(self.arguments() if arguments is None else arguments, process=self)
+
+    class AdmissionChecks(unittest.TestCase):
+        def refused(self, fixture, arguments=None):
+            self.assertEqual(fixture.invoke(arguments), 2)
+            self.assertEqual(fixture.effects, [])
+            self.assertEqual(fixture.receipts, [])
+            self.assertTrue(set(fixture.reads) <= set(files) | set(fixture.paths) | set(module.PROTECTED))
+            calls["refusals_before_effects"] += 1
+
+        def test_01_positive_guards(self):
+            for name in ("app.database", "psycopg", "sqlalchemy", "alembic", "dotenv", "sqlite3"):
+                with self.subTest(name=name), self.assertRaises(AcceptanceFailure):
+                    __import__(name)
+            for event, args in (("subprocess.Popen", ("docker", [], None, None)),
+                                ("socket.connect", (None, ("127.0.0.1", 5432))),
+                                ("open", (".env", "r", 0)),
+                                ("open", ("synthetic_write", "w", os.O_WRONLY))):
+                with self.subTest(event=event), self.assertRaises(AcceptanceFailure):
+                    sys.audit(event, *args)
+            self.assertTrue(all(attempts.values()))
+
+        def test_02_postcommit_positive_and_receipt(self):
+            fixture = Fixture()
+            self.assertEqual(module.FILES, files)
+            self.assertEqual(module.BACKEND_BASELINE, "c83449d4e87512c173680369916121a58227ac4d")
+            self.assertNotEqual(execution, module.BACKEND_BASELINE)
+            self.assertEqual(fixture.invoke(), 0)
+            self.assertEqual(fixture.effects, ["run_constructed", "synthetic_mkdir", "synthetic_execute"])
+            record, = fixture.receipts
+            self.assertEqual(record["backend_baseline"], module.BACKEND_BASELINE)
+            self.assertEqual(record["execution_head"], execution)
+            self.assertEqual(record["candidate_sha256"], fixture.digest)
+            self.assertEqual(len({record["backend_baseline"], record["execution_head"], record["candidate_sha256"]}), 3)
+            self.assertNotIn("head", record)
+            self.assertEqual(len([c for c in fixture.git_calls if c[0] == "cat-file"]), 3)
+
+        def test_03_missing_or_malformed_execution_revision(self):
+            for value in (None, "", "e" * 39, "e" * 41, "E" * 40, "g" * 40, "main", execution + "\n"):
+                fixture = Fixture()
+                args = fixture.arguments()
+                position = args.index("--expected-head")
+                args[position:position + 2] = [] if value is None else ["--expected-head", value]
+                with self.subTest(value=value):
+                    self.refused(fixture, args)
+                    self.assertEqual(fixture.git_calls, [])
+
+        def test_04_head_branch_and_unavailable_commits(self):
+            for kind in ("head", "branch", "baseline_missing", "execution_missing"):
+                fixture = Fixture()
+                if kind == "head": fixture.head = "f" * 40
+                elif kind == "branch": fixture.branch = b"other\n"
+                else: fixture.missing.add(module.BACKEND_BASELINE if kind == "baseline_missing" else execution)
+                with self.subTest(kind=kind): self.refused(fixture)
+
+        def test_05_clean_committed_backend_changes(self):
+            for path in ("backend/app/account_auth.py", "backend/migrations/versions/synthetic.py", "backend/requirements.txt"):
+                for change in ("content", "addition", "deletion", "mode"):
+                    fixture = Fixture()
+                    fixture.changes[path] = change
+                    with self.subTest(path=path, change=change): self.refused(fixture)
+
+        def test_06_backend_worktree_changes(self):
+            fixture = Fixture()
+            fixture.worktree_changes = True
+            self.refused(fixture)
+
+        def test_07_working_content_and_execplan_edits_refuse_early(self):
+            for relative in files:
+                fixture = Fixture()
+                fixture.working[relative] += b"edit"
+                with self.subTest(path=relative):
+                    self.refused(fixture)
+                    self.assertEqual(fixture.git_calls, [])
+
+        def test_08_harness_order_and_path_changes(self):
+            for paths in (tuple(reversed(files)), files[:-1], (files[0] + ".other", *files[1:])):
+                fixture = Fixture()
+                fixture.paths = paths
+                with self.subTest(paths=paths):
+                    self.refused(fixture)
+                    self.assertEqual(fixture.git_calls, [])
+
+        def test_09_dirty_harness_even_with_matching_new_digest(self):
+            for relative in files:
+                fixture = Fixture()
+                fixture.working[relative] += b"edit"
+                fixture.digest = digest(fixture.working)
+                fixture.status += b" M " + relative.encode() + b"\0"
+                with self.subTest(path=relative): self.refused(fixture)
+
+        def test_10_missing_and_nonregular_committed_entries(self):
+            for relative in files:
+                for entry in (None, b"120000 blob " + b"a" * 40, b"040000 tree " + b"a" * 40,
+                              b"160000 commit " + b"a" * 40, b"100644 tree " + b"a" * 40):
+                    fixture = Fixture()
+                    if entry is None: del fixture.committed[relative]
+                    else: fixture.entries[relative] = entry + b"\t" + relative.encode() + b"\0"
+                    with self.subTest(path=relative, entry=entry): self.refused(fixture)
+
+        def test_11_committed_working_mismatch_including_execplan(self):
+            for relative in files:
+                fixture = Fixture()
+                fixture.committed[relative] += b"committed_edit"
+                with self.subTest(path=relative): self.refused(fixture)
+
+        def test_12_raw_newline_and_byte_differences(self):
+            for change in (lambda data: data.replace(b"\n", b"\r\n"), lambda data: b"\xef\xbb\xbf" + data):
+                fixture = Fixture()
+                fixture.committed[files[2]] = change(fixture.committed[files[2]])
+                self.refused(fixture)
+
+        def test_13_index_and_unrelated_status(self):
+            fixture = Fixture()
+            fixture.staged = True
+            self.refused(fixture)
+            for extra in (b" M unrelated.py\0", b"?? unrelated.py\0", b"M  frontend/next-env.d.ts\0",
+                          b" M frontend/next-env.d.ts", b"\0", b"?? renamed.py\0old.py\0"):
+                fixture = Fixture()
+                fixture.status = extra
+                with self.subTest(extra=extra): self.refused(fixture)
+
+        def test_14_changed_protected_hashes(self):
+            for relative in module.PROTECTED:
+                fixture = Fixture()
+                fixture.protected[relative] += b"edit"
+                with self.subTest(path=relative): self.refused(fixture)
+
+        def test_15_git_failures_at_every_command_family(self):
+            for family in ("rev-parse", "branch", "diff", "status", "ls-tree", "cat-file"):
+                for failure in (module.Output(b"", b"", 128), OSError("synthetic_failure"),
+                                module.CommandFailure("output_limit", uncertain=True)):
+                    fixture = Fixture()
+                    fixture.faults[family] = failure
+                    with self.subTest(family=family, failure=type(failure).__name__): self.refused(fixture)
+
+        def test_16_malformed_and_excessive_git_results(self):
+            for result in (None, module.Output("text", b"", 0), module.Output(b"", "text", 0),
+                           module.Output(b"", b"", False), module.Output(b"", b"warning", 0),
+                           module.Output(b"x" * (module.CLI_CAP + 1), b"", 0),
+                           module.Output(b"x" * module.CLI_CAP, b"x", 0),
+                           module.Output(execution.encode() + b"\nextra\n", b"", 0)):
+                fixture = Fixture()
+                fixture.faults["rev-parse"] = result
+                with self.subTest(result=type(result).__name__): self.refused(fixture)
+
+        def test_17_malformed_tree_and_status_results(self):
+            for value in (b"", b"garbage\0", b"100644 blob " + b"G" * 40 + b"\t" + files[0].encode() + b"\0",
+                          b"100644 blob " + b"a" * 40 + b"\twrong.py\0"):
+                fixture = Fixture()
+                fixture.entries[files[0]] = value
+                self.refused(fixture)
+            fixture = Fixture()
+            fixture.status += fixture.status
+            self.refused(fixture)
+
+        def test_18_selector_isolation(self):
+            with patch.dict(main.__globals__, {"offline_admission_checks": lambda: 7,
+                                              "offline_checks": lambda: blocked("process"),
+                                              "worker_entry": lambda: blocked("process")}), \
+                    patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()):
+                before = dict(attempts)
+                self.assertEqual(main(["--offline-admission"]), 7)
+                self.assertEqual(main([]), 2)
+                for args in (["--offline-admission", "--offline"], ["--execute"]):
+                    with self.assertRaises(SystemExit) as raised: main(args)
+                    self.assertEqual(raised.exception.code, 2)
+                self.assertEqual(attempts, before)
+
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(AdmissionChecks))
+    print(json.dumps({"offline_admission_only": True, "tests": result.testsRun, "failures": len(result.failures),
+                      "errors": len(result.errors), "skips": len(result.skipped), "positive_guard_hits": attempts,
+                      **calls, "previous_58_suite": "NOT_RERUN", "postgres_cases": "NOT_RUN"}, sort_keys=True))
+    return 0 if result.wasSuccessful() and not result.skipped else 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--offline", action="store_true", help="Run only new, guarded fake-adapter/refusal checks")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--offline", action="store_true", help="Run the historical guarded offline suite")
+    selection.add_argument("--offline-admission", action="store_true", help="Run only new guarded admission checks")
     args = parser.parse_args(argv)
+    if args.offline_admission:
+        return offline_admission_checks()
     if not args.offline:
-        print("REFUSED: choose --offline; real acceptance is launched only by the reviewed opt-in launcher")
+        print("REFUSED: choose --offline or --offline-admission; real acceptance requires the reviewed opt-in launcher")
         return 2
     return offline_checks()
 

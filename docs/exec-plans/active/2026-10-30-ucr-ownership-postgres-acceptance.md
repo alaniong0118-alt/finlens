@@ -393,3 +393,109 @@ No .env was opened/hashed. Only the three whitelisted candidate files changed.
 Local correction completion means readiness for focused independent re-review,
 not acceptance: Git Step 1 and operational execution remain NO-GO. Stop for the
 coordinator and Astra; no next phase starts automatically.
+
+## UCR-PG-POSTCOMMIT-02 — bounded admission correction (2026-10-30)
+
+### Superseding chronology and entry state
+
+The coordinator's supplied handoff records the subsequent focused independent
+Astra PASS for the original FIX1 candidate: all three findings closed, no
+remaining or introduced P0-P3 findings in that review. Astra independently ran
+the 58-check offline suite once with guarded in-memory probes. That historical
+evidence is reused, not rerun or claimed as a pass on this modification.
+The original three files were committed and pushed as
+b991b3ce88fb46cd0c0dc02d9ef3b51ba4848bf1 (+2826/-0). These events supersede the
+earlier review-pending/Git-NO-GO disposition, while preserving its chronology.
+Operational acceptance was never authorized; all 28 PostgreSQL cases are NOT RUN.
+
+Verified implementation entry: main at that commit, empty index, only the three
+original protected worktree exceptions and all three recorded hashes matching.
+The committed launcher still binds both expected and actual HEAD to
+c83449d4e87512c173680369916121a58227ac4d, so its post-commit admission fails.
+
+### Authorized scope, decision and planned validation
+
+Only the existing launcher, acceptance module and this append-only ExecPlan
+section may change. Keep the immutable reviewed backend baseline B separate
+from the exact ordered three-file harness F and its raw length-framed SHA-256 D,
+and from the separately operator-approved execution commit E. Require scoped
+committed backend equality to B, clean committed harness files, matching working
+and committed aggregates, and unchanged protected exceptions before effects.
+Retain every operational/resource/ownership/cleanup constraint and the 67-item
+inventory. No operational launcher invocation, Docker, SQL, services, providers,
+dependency changes, Git writes or additional agents are authorized.
+
+Independent review is a coordinator gate using a trusted handoff naming B, F,
+D, reviewed commit R and PASS reference; initially operator-approved E should
+equal R. CLI strings establish consistency, not independent review evidence,
+permission or installed-package attestation. No approval framework is added.
+
+Implement only the new guarded --offline-admission selection, synthetic Git and
+filesystem fixtures, and in-memory receipts. Run only that selection, never the
+previous 58 checks. Verify positive post-commit identity, negative identity/tree/
+status/blob/byte checks, refusal before operational effects and selector isolation.
+Finish with syntax/scope/diff/preservation self-review. Actual results follow
+after they run; independent review of this modification remains pending.
+
+Freeze all three files before final raw hashes and aggregate calculation. Do not
+embed that aggregate or a future final commit ID in F. The final independent
+PASS, committed R and execution approval must be recorded outside F. Any later
+edit, including this ExecPlan, invalidates frozen D and needs renewed binding.
+The original candidate aggregate supplied in the coordinator handoff identifies
+the previous candidate only. Git delivery, environment commissioning, Docker
+preflight and actual execution each remain separately gated; operational NO-GO.
+
+### Implementation outcome and actual new offline evidence
+
+Admission now validates full lowercase execution commit E separately from fixed
+BACKEND_BASELINE B, verifies both commit objects, main/HEAD/index, strict NUL
+status entries limited to the protected exceptions and their raw hashes, and
+committed/worktree backend equality using bounded Git with external diff and
+text conversion disabled. Each committed harness entry must be a regular blob;
+its raw bytes use the same ordered framing as working bytes. Both aggregates
+must equal supplied D. Errors, malformed replies and excessive output refuse.
+The existing early working-digest refusal remains before any process adapter.
+The authorized-input receipt separates backend_baseline, execution_head and
+candidate_sha256. Admission precedes Run construction and evidence-directory
+creation. Operational behavior and all 28 PostgreSQL scenarios are unchanged.
+
+Working directory: D:/Projects/finlens-foundation. Only new test command run:
+
+    & 'D:\Projects\finlens-foundation\backend\.venv\Scripts\python.exe' -I -S -B backend/tests/acceptance_research_ownership_postgres.py --offline-admission
+
+Initial run: 18 tests, one failed assertion in the synthetic read allowlist for
+a deliberately altered harness path; the launcher correctly refused that case.
+Correcting the fixture's read assertion produced the closure result: 18 tests,
+zero failures/errors/skips (0.108 seconds), 96 synthetic invocation fixtures:
+one post-commit success and 95 refusals before any simulated operational effect.
+The positive fixture verifies distinct B/E/D in an in-memory receipt. Negative
+fixtures require empty effect and receipt lists, including no evidence mkdir,
+Run construction or execution dispatch. All Git replies/file contents are
+synthetic; the positive path replaces mkdir and Run with in-memory adapters.
+Sentinel controls positively block six operational imports, one process event,
+one socket event, one environment-file event and one filesystem-write event.
+These controls issue audit events only, without actual operational I/O.
+
+The mutually exclusive new selector cannot invoke the old suite or operational
+mode. The historical suite's baseline-name reference and malformed-head fixture
+were adjusted for the new interface, but its 58 checks were NOT RERUN. Its prior
+independent PASS remains evidence for the previous candidate only.
+
+In-memory AST/compile, whitespace/EOF and append-only-history checks passed.
+Self-review verified unchanged ASTs for Run/BoundedProcess and the PostgreSQL
+acceptance class, worker entry, runtime guard and payload validation. Scoped
+git diff --check passed. Git reports its pre-existing LF-to-CRLF advisory; no
+line-ending setting or bytes were normalized. A later checkout that changes
+raw harness bytes must refuse unless binding is renewed; no automatic repinning.
+Final scope/preservation checks retain main/starting HEAD, empty index, only the
+three authorized modifications plus original protected exceptions and matching
+protected hashes. Final candidate hashes/aggregate are returned outside F.
+
+Local bounded implementation is complete, pending independent review of this
+new candidate and separately authorized Git delivery. No new independent PASS
+or delivery is claimed. Docker/image compatibility, native Windows supervision,
+observable resource enforcement, commissioning/preflight permission and exact
+E/D operational authorization remain unresolved. No operational launcher,
+Docker, worker, connection, SQL, migration, provider, installation or Git write
+ran; backend/.env was not read/hashed. All 28 PostgreSQL cases remain NOT RUN.
+Stop here with operational NO-GO; no next phase begins automatically.

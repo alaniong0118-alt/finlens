@@ -18,7 +18,8 @@ import threading
 import time
 from uuid import uuid4
 
-BASELINE = "c83449d4e87512c173680369916121a58227ac4d"
+BACKEND_BASELINE = "c83449d4e87512c173680369916121a58227ac4d"
+BACKEND_INPUTS = ("backend/app", "backend/migrations", "backend/requirements.txt")
 FILES = (
     "backend/scripts/accept_research_ownership_postgres.py",
     "backend/tests/acceptance_research_ownership_postgres.py",
@@ -84,7 +85,8 @@ def parse(argv):
     parser.add_argument("--allow-pull", action="store_true")
     args = parser.parse_args(argv)
     require(args.execute, "execution_opt_in_required")
-    require(args.expected_head == BASELINE, "unreviewed_head")
+    require(type(args.expected_head) is str and re.fullmatch(r"[0-9a-f]{40}", args.expected_head),
+            "execution_commit_required")
     require(type(args.candidate_sha256) is str and re.fullmatch(r"[0-9a-f]{64}", args.candidate_sha256),
             "reviewed_candidate_digest_required")
     require(type(args.docker_context) is str and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", args.docker_context),
@@ -97,16 +99,59 @@ def parse(argv):
     return args
 
 
-def candidate_digest(root):
-    """Length-framed ordered path/content digest; never scans environment files."""
+def harness_digest(read_bytes):
+    """Identical framing for working bytes and committed blobs; no normalization."""
     digest = hashlib.sha256()
     for relative in FILES:
-        data = (root / relative).read_bytes()
+        data = read_bytes(relative)
         require(len(data) <= MIB, "candidate_file_too_large")
         for part in (relative.encode(), data):
             digest.update(len(part).to_bytes(8, "big"))
             digest.update(part)
     return digest.hexdigest()
+
+
+def candidate_digest(root):
+    """Length-framed ordered path/content digest; never scans environment files."""
+    return harness_digest(lambda relative: (root / relative).read_bytes())
+
+
+def admit_repository(args, root, process):
+    """Identity consistency only; coordinator review and operator approval are external."""
+    def git(arguments):
+        result = process.run(["git", *arguments], seconds=5, cwd=str(root), env=clean_environment())
+        require(isinstance(result, Output) and type(result.returncode) is int
+                and type(result.stdout) is bytes and type(result.stderr) is bytes, "git_result_invalid")
+        require(len(result.stdout) + len(result.stderr) <= CLI_CAP, "git_output_limit")
+        require(result.returncode == 0 and not result.stderr, "git_admission_failed")
+        return result.stdout
+
+    for revision in (BACKEND_BASELINE, args.expected_head):
+        require(git(["rev-parse", "--verify", revision + "^{commit}"]) == revision.encode() + b"\n",
+                "commit_identity_unverified")
+    require(git(["rev-parse", "HEAD"]) == args.expected_head.encode() + b"\n", "execution_head_changed")
+    require(git(["branch", "--show-current"]) == b"main\n", "repository_branch_changed")
+    diff = ["diff", "--no-ext-diff", "--no-textconv", "--quiet"]
+    require(git([*diff, "--cached"]) == b"", "repository_index_changed")
+    status = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+    allowed = {(b" M " if relative == "frontend/next-env.d.ts" else b"?? ") + relative.encode()
+               for relative in PROTECTED}
+    entries = status[:-1].split(b"\0") if status.endswith(b"\0") else []
+    require((not status or status.endswith(b"\0")) and len(entries) == len(set(entries))
+            and all(entry in allowed for entry in entries), "unrelated_worktree_change")
+    for relative, expected in PROTECTED.items():
+        require(hashlib.sha256((root / relative).read_bytes()).hexdigest() == expected, "protected_file_changed")
+    require(git([*diff, BACKEND_BASELINE, args.expected_head, "--", *BACKEND_INPUTS]) == b"",
+            "reviewed_backend_changed")
+    require(git([*diff, "HEAD", "--", *BACKEND_INPUTS]) == b"", "committed_service_inputs_changed")
+
+    def committed_bytes(relative):
+        entry = git(["ls-tree", "-z", args.expected_head, "--", relative])
+        match = re.fullmatch(rb"100(?:644|755) blob ([0-9a-f]{40})\t" + re.escape(relative.encode()) + b"\0", entry)
+        require(match is not None, "committed_harness_entry_invalid")
+        return git(["cat-file", "blob", match[1].decode("ascii")])
+
+    require(harness_digest(committed_bytes) == args.candidate_sha256, "committed_candidate_digest_mismatch")
 
 
 def clean_environment():
@@ -601,22 +646,7 @@ def main(argv=None, *, process=None):
         root = Path(__file__).resolve().parents[2]
         require(candidate_digest(root) == args.candidate_sha256, "candidate_digest_mismatch")
         process = process or BoundedProcess()
-        for command, expected in ((["git", "rev-parse", "HEAD"], BASELINE),
-                                  (["git", "branch", "--show-current"], "main"),
-                                  (["git", "diff", "--cached", "--name-only"], "")):
-            result = process.run(command, seconds=5, cwd=str(root), env=clean_environment())
-            require(result.returncode == 0 and result.stdout.decode().strip() == expected, "repository_baseline_changed")
-        result = process.run(["git", "status", "--porcelain", "--untracked-files=all"], seconds=5,
-                             cwd=str(root), env=clean_environment())
-        require(result.returncode == 0, "repository_status_unverified")
-        for line in result.stdout.decode().splitlines():
-            require(line[3:] in set(PROTECTED) | set(FILES), "unrelated_worktree_change")
-        for relative, expected in PROTECTED.items():
-            require(hashlib.sha256((root / relative).read_bytes()).hexdigest() == expected, "protected_file_changed")
-        # All committed backend inputs must remain at the independently reviewed HEAD.
-        result = process.run(["git", "diff", "--name-only", "HEAD", "--", "backend/app", "backend/migrations",
-                              "backend/requirements.txt"], seconds=5, cwd=str(root), env=clean_environment())
-        require(result.returncode == 0 and not result.stdout.strip(), "committed_service_inputs_changed")
+        admit_repository(args, root, process)
         expected_python = root / "backend/.venv/Scripts/python.exe"
         require(Path(sys.executable).resolve() == expected_python.resolve(), "established_interpreter_required")
         local = os.environ.get("LOCALAPPDATA", "")
@@ -625,7 +655,8 @@ def main(argv=None, *, process=None):
         directory = Path(local) / "FinLens" / "ownership-acceptance" / run.nonce
         directory.mkdir(parents=True, exist_ok=False)
         run.directory = directory
-        run.receipt(event="authorized_inputs", head=BASELINE, candidate_sha256=args.candidate_sha256,
+        run.receipt(event="authorized_inputs", backend_baseline=BACKEND_BASELINE, execution_head=args.expected_head,
+                    candidate_sha256=args.candidate_sha256,
                     context=args.docker_context, endpoint=args.expected_context_endpoint, image=args.image)
         return run.execute()
     except (Refusal, CommandFailure, OSError, ValueError) as error:
