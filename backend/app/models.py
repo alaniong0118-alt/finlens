@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint, text
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -269,3 +269,51 @@ class FilingPublication(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     data_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
     __table_args__ = (CheckConstraint("chunk_count > 0 AND data_version >= 0", name="ck_publication_counts"),)
+
+
+class ResearchAccount(Base):
+    """Provider subject mapping only; never credentials or financial authority."""
+    __tablename__ = "research_accounts"
+    id: Mapped[str] = mapped_column(String(36, collation="C"), primary_key=True)
+    issuer: Mapped[str] = mapped_column(String(2048, collation="C"), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255, collation="C"), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    token_cutoff: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("-1"))
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"))
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="uq_research_account_identity"),
+        CheckConstraint("token_cutoff >= -1 AND revision > 0", name="ck_research_account_lifecycle"),
+    )
+
+
+class ResearchSession(Base):
+    __tablename__ = "research_sessions"
+    id: Mapped[str] = mapped_column(String(36, collation="C"), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36, collation="C"), ForeignKey("research_accounts.id"), nullable=False)
+    request_key: Mapped[str] = mapped_column(String(128, collation="C"), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'active'"))
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"))
+    __table_args__ = (
+        UniqueConstraint("owner_id", "id", name="uq_research_session_owner"),
+        UniqueConstraint("owner_id", "request_key", name="uq_research_session_request"),
+        CheckConstraint("state IN ('active', 'revoked') AND revision > 0", name="ck_research_session_lifecycle"),
+    )
+
+
+class ResearchArtifact(Base):
+    """Reservation only: no body, source/trust declarations or financial values."""
+    __tablename__ = "research_artifacts"
+    id: Mapped[str] = mapped_column(String(36, collation="C"), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36, collation="C"), ForeignKey("research_accounts.id"), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(36, collation="C"), nullable=False)
+    request_key: Mapped[str] = mapped_column(String(128, collation="C"), nullable=False)
+    session_revision: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'reserved'"))
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"))
+    __table_args__ = (
+        ForeignKeyConstraint(["owner_id", "session_id"], ["research_sessions.owner_id", "research_sessions.id"],
+                             name="fk_research_artifact_owned_session"),
+        UniqueConstraint("owner_id", "request_key", name="uq_research_artifact_request"),
+        CheckConstraint("state IN ('reserved', 'revoked') AND revision > 0 AND session_revision > 0",
+                        name="ck_research_artifact_lifecycle"),
+    )

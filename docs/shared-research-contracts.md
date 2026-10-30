@@ -205,6 +205,108 @@ Public admitted SEC evidence and private/session evidence can be used together o
 
 Long-running jobs recheck revoked/expired access before final delivery/publication. Error/status/log paths must not leak secrets, private bodies or another owner's identifiers. Native ACL/process/DB-role separation supplements application checks; Python audit hooks or a typed record are not an OS sandbox.
 
+#### Dormant account ownership candidate — 2026-10-30
+
+[Verifier](../backend/app/account_auth.py) and
+[ownership service](../backend/app/research_ownership.py) implement a bounded,
+unwired backend prerequisite. No provider, production issuer/client/public-key
+snapshot, account seed, route, UI or global service instance is configured. The
+default verifier returns AUTH_UNAVAILABLE before a database factory is reached.
+This candidate does not complete C7, 15a/15b, a signed-in workspace or UCR.
+
+The single configured profile is RFC 9068 RS256 with known kid, at+jwt or
+application/at+jwt header, exact issuer, dedicated API audience and one interactive
+client_id. Required claims are iss/aud/sub/client_id/jti/iat/exp; optional nbf is
+checked. ID-token type/audience, other algorithms, delegated/agent subjects,
+unknown keys and token-selected key sources are rejected. Only later provider
+commissioning can establish that this client issues end-user Authorization Code
+with PKCE tokens rather than machine/delegated grants; the claims alone do not
+prove that configuration. No email-based account merging or entitlement grant.
+
+Trusted server composition supplies an immutable IssuerPolicy/KeySnapshot and a
+dedicated PostgreSQL Session factory, never request arguments or an authority
+callback. Installation validates a bounded public RSA JWKS from the policy's
+exact HTTPS source reference. This module never fetches it. Server-controlled
+rotation atomically replaces the snapshot with a higher revision and invalidates
+in-flight identities under the old revision. Unknown/stale keys fail without
+refresh/fallback. Commissioning must establish protected configuration delivery,
+TLS capture of the real issuer's JWKS, renewal at least before the one-hour expiry,
+planned current/next-key overlap for 900 seconds plus 30 seconds, and emergency
+key removal. Python object structure is not privileged-process isolation.
+
+Limits: token 16384 bytes; JWKS 65536 bytes/16 keys; RSA 2048-4096 bits; JSON depth
+8/1024 value nodes; at most four audiences; token lifetime 900 seconds; UTC claim
+skew 30 seconds. Both verifier wall time and a fresh database clock_timestamp()
+sample validate token times and must agree within 30 seconds. Verifier wall versus
+monotonic sampling rejects detected jumps over that allowance. Invalidation takes
+the account lock and stores max(old cutoff, ceil(DB wall time)+30), then increments
+the account revision. Every authenticated operation rejects iat <= cutoff with no
+skew grace. Already invalidated tokens cannot become valid as clocks move; new
+tokens may require waiting past the cutoff. Actual synchronized-clock behavior is
+unaccepted. Local invalidation neither terminates provider sessions nor revokes
+refresh tokens; provider-only logout is not immediately observable here.
+
+Service entrypoints authenticate raw tokens internally: create_session(token,
+request_key), resolve_session(token, session_key, expected_revision),
+reserve_artifact(token, session_key, expected_revision, request_key),
+resolve_artifact(token, session_key, session_revision, artifact_key,
+expected_revision), revoke_session(token, session_key, expected_revision), and
+invalidate_account_tokens(token). Cancellation is an optional non-clearable latch;
+request callers supply neither principals nor owner assertions. Returned frozen
+OwnedMetadata carries C1 keys, state/revision and, only for account invalidation,
+the cutoff. It contains no token, issuer/subject, content or financial reference.
+Artifact reservations are not SessionArtifactRef financial evidence.
+
+The service begins/commits/rolls back/closes each fresh transaction; repository
+helpers do not commit. It sets READ COMMITTED/READ WRITE and fixed transaction-local
+lock_timeout=1s, statement_timeout=2s, idle_in_transaction_session_timeout=5s.
+Allocation locks account -> session -> artifact, checks retained-record quotas
+(20 sessions/100 artifact reservations per account), and never releases quota on
+revocation. Unique issuer/subject plus INSERT ON CONFLICT DO NOTHING followed by
+a separate locked SELECT handle first-login contention. All new identity/key
+columns use C collation for exact comparison. Composite owner/session foreign keys
+and owner-scoped idempotency constraints are additive. Counts are serialized by
+the service's account lock, not a cross-row database CHECK; direct writers must
+follow this protocol. No database enforcement/concurrency proof is claimed.
+
+Session allocation replay resolves the same owner/operation request. Artifact
+replay must additionally match the original session and its revision. It still
+requires valid authentication, live parent/artifact and current access. No replay
+can bypass invalidation or revocation. Revocation of the same session transition
+can return its already-revoked revision to its authenticated owner.
+
+The operation has a cooperative five-second deadline, a one-second pre-COMMIT
+reserve and a 65536-byte encoded result cap. Before COMMIT dispatch, failure or
+cancellation rolls back pending work. Dispatch is ordered against cancellation
+under the latch lock and conservatively marks the outcome indeterminate before
+calling the driver. An exception then cannot prove that no COMMIT was sent.
+Confirmed commits persist even when cancellation, stale configuration, expiry or
+cleanup failure prevents return. Rollback/close failures invalidate the connection
+and withhold the result; no cleanup can undo an acknowledged commit.
+
+There is no automatic retry. An authenticated retry of the same allocation key is
+the bounded reconciliation path, using the same account-lock/unique-key protocol;
+it can recover a committed allocation or allocate once after rollback. Lock timeout
+or continued uncertainty is failure, never proof of absence. Reconciliation itself
+can commit and lose acknowledgement. No unlocked absence lookup proves a prior
+in-flight transaction rolled back. Later revocation cannot retract a detached
+snapshot already authorized; future HTTP delivery needs its own last access check
+and must not hold database locks across sending bytes.
+
+Migration a7c730103001 follows f94c6f41e0cb and creates only research_accounts,
+research_sessions and research_artifacts. No existing data or migration is changed.
+Automatic downgrade raises a forward-only error. Code rollback can leave the new
+tables intact; deleting populated ownership records requires separate approval.
+
+See the [ExecPlan](exec-plans/active/2026-10-30-ucr-account-ownership.md) for actual
+offline commands/results. Fake sessions and compiled PostgreSQL DDL are unit/schema
+evidence only. Real migrations/constraints/concurrency/rollback, provider login/key
+rotation/logout, DB privileges, native Windows and HTTP/browser gates remain open.
+Next integration is separately scoped authenticated session POST/GET after those
+applicable gates. Source custody, rights, extraction verification, financial
+admission and session-engine references remain later prerequisites. An owner, a
+matching digest or a C1 capture does not authorize financial calculation.
+
 B1-B6 reuse owned operation/event/quota primitives but require separate provider signature/account/test-mode verification and a billing ledger. Neither a Stripe/browser success redirect nor a billing entitlement attests financial evidence. Non-commercial billing accepts code/mocks/authorized sandbox workflows and rejects live-mode charging; no merchant activation is needed.
 
 ### C8 - Bounded acquisition/jobs and committed change events
