@@ -553,38 +553,104 @@ def test_no_late_publication_after_cleanup_deadline(monkeypatch):
     assert response.status_code == 504 and b"assessment" not in response.content
 
 
-def test_canonical_ast_changes_are_only_budget_instrumentation():
-    import ast
-    from pathlib import Path
-    import subprocess
-    baseline = subprocess.run(["git","show","HEAD:backend/app/financial_metrics_service.py"],
-        capture_output=True,text=True,check=True).stdout
-    current = Path("app/financial_metrics_service.py").read_text()
-    def financial_class(source):
-        return next(n for n in ast.parse(source).body if isinstance(n,ast.ClassDef) and n.name=="FinancialMetrics")
-    class Strip(ast.NodeTransformer):
-        def visit_Call(self,node):
-            node = self.generic_visit(node)
-            if isinstance(node.func,ast.Attribute) and isinstance(node.func.value,ast.Name) and node.func.value.id=="self":
-                if node.func.attr=="_walk": return node.args[0]
-            return node
-        def visit_UnaryOp(self,node):
-            node=self.generic_visit(node)
-            if isinstance(node.op,ast.Not) and isinstance(node.operand,ast.Call) and isinstance(node.operand.func,ast.Attribute) and node.operand.func.attr=="_contains":
-                return ast.Compare(left=node.operand.args[1],ops=[ast.NotIn()],comparators=[node.operand.args[0]])
-            return node
-    original=financial_class(baseline)
-    updated=financial_class(current)
-    updated.body=[n for n in updated.body if not isinstance(n,ast.FunctionDef) or n.name not in {"_tick","_walk","_contains"}]
-    for method in updated.body:
-        if isinstance(method,ast.FunctionDef):
-            if method.name=="__init__":
-                method.args.kwonlyargs.pop();method.args.kw_defaults.pop()
-            method.body=[n for n in method.body if not (
-                isinstance(n,ast.Assign) and any(isinstance(t,ast.Attribute) and t.attr=="_budget" for t in n.targets)) and not (
-                isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Attribute) and n.value.func.attr=="_tick")]
-    updated=Strip().visit(updated)
-    assert ast.dump(updated,include_attributes=False)==ast.dump(original,include_attributes=False)
+def test_c5_insights_use_delegated_engine_and_keep_original_diagnostics(monkeypatch):
+    from app import financial_metric_engine as engine
+    from test_financial_metrics import c5_reference
+    rows = dataset()
+    reference = c5_reference()(COMPANY, rows)
+    original = engine.FinancialMetricEngine.observation
+    calls = []
+    def delegated(self, name, period):
+        calls.append((name, period))
+        return original(self, name, period)
+    monkeypatch.setattr(engine.FinancialMetricEngine, "observation", delegated)
+    model = FinancialMetrics(COMPANY, rows)
+    expected = reference.annual_comparison(2025).model_dump(mode="json")
+    assert model.annual_comparison(2025).model_dump(mode="json") == expected
+    assert calls and all(a is b for a, b in zip(model.facts, rows))
+    negative = dataset()
+    negative[-1].value = Decimal("-5")
+    ctx = context(negative)
+    assert ctx.model.base["capital_expenditures"][-1].value == Decimal("-5")
+    assert ctx.comparisons["free_cash_flow"].status == "unavailable"
+    assert any(n.ref.category == "D" for n in ctx.graph.nodes.values())
+
+
+def test_c5_conversion_and_projection_charge_the_same_budget(monkeypatch):
+    from app import financial_metric_engine as engine
+    rows, budget = dataset(), Budget()
+    original_init = engine.FinancialMetricEngine.__init__
+    observed = []
+    def delegated(self, *args, **kwargs):
+        observed.append(budget.counts["work"])
+        return original_init(self, *args, **kwargs)
+    monkeypatch.setattr(engine.FinancialMetricEngine, "__init__", delegated)
+    model = FinancialMetrics(COMPANY, rows, budget=budget)
+    assert observed[0] > len(rows)  # Conversion is charged before delegation.
+    point = model._engine.observation("revenue", model._engine.period("annual", date(2025,1,1), date(2025,12,31)))
+    before = budget.counts["work"]
+    assert model._project(point).value == Decimal("120")
+    assert budget.counts["work"] > before  # Source/operand/period projection is charged.
+    budget.counts["work"] = LIMITS["work"]
+    with pytest.raises(InsightsFailure):
+        model._project(point)
+    before_calls = len(observed)
+    with pytest.raises(InsightsFailure):
+        FinancialMetrics(COMPANY, rows, budget=budget)
+    assert len(observed) == before_calls  # Exhausted conversion cannot enter engine.
+
+
+@pytest.mark.parametrize("stage", ["conversion", "delegated_work", "projection", "existing_object"])
+def test_c5_authority_loss_withholds_actual_delegated_results(monkeypatch, stage):
+    from contextlib import contextmanager
+    from app import financial_metric_engine as engine, financial_metrics_service as facade
+    from test_aapl_activation_safety import isolated
+    from test_activation_lease_admission import SyntheticLease
+    # Reuse the established synthetic lifecycle fixture without registering its
+    # autouse behavior for unrelated Insights tests or invoking native custody.
+    with contextmanager(isolated.__wrapped__)(monkeypatch):
+        model = FinancialMetrics(COMPANY, dataset())
+        controller = activation_lifecycle._claim_launch()
+        lease = SyntheticLease()
+        controller.bind_operator(object(), lease)
+        controller.publishing()
+        controller.seal()
+        controller.ready()
+        reached, exposed = [], []
+        if stage == "conversion":
+            original = facade.usable
+            def lose(*args):
+                reached.append(stage)
+                lease.lose(notify=False)
+                return original(*args)
+            monkeypatch.setattr(facade, "usable", lose)
+            action = lambda: FinancialMetrics(COMPANY, dataset())
+        elif stage == "delegated_work":
+            original = engine.FinancialMetricEngine.calculate
+            def lose(*args):
+                result = original(*args)
+                reached.append(result.value)
+                lease.lose(notify=False)
+                return result
+            monkeypatch.setattr(engine.FinancialMetricEngine, "calculate", lose)
+            action = lambda: model.summary("annual")
+        elif stage == "projection":
+            original = model._project
+            def lose(*args):
+                result = original(*args)
+                reached.append(result.value)
+                lease.lose(notify=False)
+                return result
+            monkeypatch.setattr(model, "_project", lose)
+            action = lambda: model.summary("annual")
+        else:
+            reached.append(stage)
+            lease.lose(notify=False)
+            action = lambda: model.summary("annual")
+        with pytest.raises(RuntimeError):
+            exposed.append(action())
+        assert reached and not exposed and activation_lifecycle._readers == 0
+        assert controller.phase is activation_lifecycle.Phase.FAILED
 
 
 @pytest.mark.parametrize("target,direction,outcome", [

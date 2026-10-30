@@ -1,12 +1,11 @@
 """Read-only financial normalization. No SEC client requests or AI dependency."""
-from datetime import date, timedelta
-from decimal import Decimal, localcontext
+from datetime import date
 import re
 
 from sqlalchemy import select
 from app.activation_lifecycle import financial_reader
 
-from app.financial_metric_registry import METRICS, SELECTION_POLICY, REVENUE_CONCEPTS, GROSS_MARGIN_COVERAGE, revenue_bases_compatible
+from app.financial_metric_registry import METRICS, SELECTION_POLICY, GROSS_MARGIN_COVERAGE
 from app.financial_metric_schemas import (
     FactProvenance, FinancialPeriod, MetricInput, NormalizedMetric,
     NormalizedFinancialSummary, NormalizedMetricHistory, HistoryComparability,
@@ -18,21 +17,12 @@ from app.models import Company, FinancialFact
 from app.sec_urls import build_filing_url
 from app.sec_parser import classify_period
 from app import revenue_scope_authorizations as scope_permissions
+from app import financial_metric_engine as engine
+from app.financial_metric_engine import ANNUAL_COMPARISON_METRICS, UnknownMetric
 
 
 class UnknownCompany(ValueError):
     pass
-
-
-class UnknownMetric(ValueError):
-    pass
-
-
-ANNUAL_COMPARISON_METRICS = (
-    "revenue", "revenue_growth_yoy", "operating_margin", "net_margin",
-    "operating_cash_flow", "capital_expenditures", "free_cash_flow",
-    "gross_profit", "operating_income", "net_income", "gross_margin",
-)
 
 
 def original_concept(fact):
@@ -66,7 +56,11 @@ def period_key(point):
 
 
 class FinancialMetrics:
-    """Normalize an already loaded company dataset; shared by API and coverage audit."""
+    """DB compatibility facade over the shared deterministic engine.
+
+    Original rows remain available for authorization and Insights diagnostics.
+    Conversion does not infer dimensional, accounting or source admission.
+    """
 
     @financial_reader
     def __init__(self, company, facts, *, authorization_evidence=(), budget=None):
@@ -74,59 +68,141 @@ class FinancialMetrics:
         self._tick()
         self.company = company
         self.facts = [f for f in self._walk(facts) if f.company_cik == company.cik]
-        # Internal evidence comes from verified original markup, never inferred
-        # from Company Facts frame/fiscal annotations or request parameters.
-        self.authorization_evidence = tuple(authorization_evidence)
-        self.selection_approvals = {}
-        self.selection_rejections = {}
-        self.base = {name: [] for name, definition in self._walk(METRICS.items()) if definition.kind != "derived"}
-        # Dates of usable revenue observations establish reporting boundaries;
-        # their economic scopes are resolved separately before selecting values.
-        revenue = [f for f in self._walk(self.facts) if usable(f, METRICS["revenue"])]
-        self.annual_bounds = sorted({(f.period_start, f.period_end) for f in self._walk(revenue)
-                                     if period_kind(f, METRICS["revenue"]) == "annual"})
-        self.ytd_starts = {f.period_start for f in self._walk(revenue)
-                           if period_kind(f, METRICS["revenue"]) in {"half_year", "nine_months"}}
-        self.bank_revenue = any(original_concept(f) == "RevenuesNetOfInterestExpense" for f in self._walk(revenue))
-        for name, definition in self._walk(METRICS.items()):
-            if definition.kind == "derived":
-                continue
-            groups = {}
-            for fact in self._walk(self.facts):
-                if usable(fact, definition):
-                    key = (period_kind(fact, definition), fact.period_start, fact.period_end)
-                    groups.setdefault(key, []).append(fact)
-            for key, candidates in self._walk(groups.items()):
-                eligible = candidates
-                if name == "revenue":
-                    eligible = self.revenue_candidates(candidates)
-                    if not eligible:
-                        point = self.missing(name, "Incompatible revenue scopes; no unambiguous canonical observation.", self.period(*key))
-                        rejected = self.selection_rejections.get(key)
-                        if rejected:
-                            point.reason = f"Revenue selection authorization rejected: {rejected}."
-                            candidates = self.authorization_facts(("revenue",), key[0], key[2])
-                        point.alternatives = [self.source(name, f) for f in self._walk(sorted(candidates, key=lambda f: f.id))]
-                        self.base[name].append(point)
-                        continue
-                ranked = sorted(eligible, key=lambda f: (
-                    f.filed, -definition.concepts.index(original_concept(f)),
-                    (f.form.startswith("10-K") if key[0] == "annual" else f.form.startswith("10-Q")),
-                    f.form.endswith("/A"), f.accession_number, f.id,
-                ), reverse=True)
-                chosen = ranked[0]
-                self.base[name].append(NormalizedMetric(
-                    metric=name, unit=definition.unit, status="available", value=chosen.value,
-                    period=self.period(*key), provenance=[self.source(name, chosen)],
-                    alternatives=[self.source(name, f) for f in self._walk(ranked[1:])],
-                    revenue_basis=REVENUE_CONCEPTS[original_concept(chosen)].basis if name == "revenue" else None,
-                ))
-                if name == "revenue":
-                    approval = self.selection_approvals.get((key[0], key[1], key[2]))
-                    if approval:
-                        self.base[name][-1].scope_authorization = self.approval_provenance(approval)
-                    self.base[name][-1].alternatives.extend(self.source(name, f) for f in self._walk(sorted(candidates, key=lambda f: f.id)) if not self._contains(eligible, f))
-            self.base[name].sort(key=lambda p: (p.period.end, p.period.start or date.min))
+        self.authorization_evidence = tuple(self._walk(authorization_evidence))
+        self._rows = {}
+        observations = []
+        for fact in self._walk(self.facts):
+            self._rows[fact.id] = fact
+            eligible = tuple(name for name, definition in self._walk(METRICS.items())
+                             if definition.kind != "derived" and usable(fact, definition))
+            if eligible:
+                # Capture the complete source once, then derive engine values and
+                # dates from that same projection rather than rereading the row.
+                observations.append(self._capture_source(self.source(eligible[0], fact), eligible))
+            else:
+                observations.append(engine.Observation(fact.id, original_concept(fact), fact.value,
+                    fact.unit, fact.period_start, fact.period_end, None, fact.filed, fact.form,
+                    fact.accession_number, eligible))
+        self._observations = {o.reference: o for o in self._walk(observations)}
+        self.selection_approvals = {}  # Keep the DB evaluator's original ApprovalRef values.
+        self._engine = engine.FinancialMetricEngine(tuple(self._walk(observations)), _DBPermissions(self), budget=budget)
+        self.selection_rejections = self._engine.selection_rejections
+        self.annual_bounds = list(self._walk(self._engine.annual_bounds))
+        self.ytd_starts = set(self._walk(self._engine.ytd_starts))
+        self.bank_revenue = self._engine.bank_revenue
+        self.base = {name: [self._project(p) for p in self._walk(points)]
+                     for name, points in self._walk(self._engine.base.items())}
+
+    def _public_period(self, period):
+        self._tick()
+        return None if period is None else FinancialPeriod(kind=period.kind, start=period.start,
+            end=period.end, fiscal_year=period.fiscal_year, fiscal_period=period.fiscal_period,
+            fiscal_label_basis=period.fiscal_label_basis)
+
+    def _internal_period(self, period):
+        self._tick()
+        return None if period is None else engine.Period(period.kind, period.start, period.end,
+            period.fiscal_year, period.fiscal_period, period.fiscal_label_basis)
+
+    def _capture_source(self, source, eligible_metrics=()):
+        self._tick()
+        kind = None
+        if eligible_metrics:
+            kind = ("instant" if source.period_start is None else
+                    classify_period(source.period_start.isoformat(), source.period_end.isoformat()))
+        return engine.Observation(source.fact_id, source.original_concept, source.value, source.unit,
+            source.period_start, source.period_end, kind, source.filed, source.form,
+            source.accession_number, eligible_metrics,
+            tuple(self._walk(source.model_dump(mode="python").items())))
+
+    def _project_source(self, ref):
+        self._tick()
+        if not ref.observation.source_projection:
+            raise ValueError("Missing captured source projection.")
+        fields = dict(self._walk(ref.observation.source_projection))
+        fields["canonical_metric"] = ref.metric
+        return FactProvenance(**fields)
+
+    def _project(self, point):
+        self._tick()
+        return NormalizedMetric(metric=point.metric, unit=point.unit, status=point.status,
+            value=point.value, reason=point.reason, period=self._public_period(point.period),
+            formula=point.formula,
+            provenance=[self._project_source(r) for r in self._walk(point.provenance)],
+            alternatives=[self._project_source(r) for r in self._walk(point.alternatives)],
+            inputs=[MetricInput(role=i.role, metric=i.metric, value=i.value, unit=i.unit,
+                period=self._public_period(i.period), fact_ids=[r.observation.reference for r in self._walk(i.references)],
+                revenue_basis=i.revenue_basis) for i in self._walk(point.inputs)],
+            revenue_basis=point.revenue_basis,
+            scope_authorization=self.approval_provenance(point.scope_authorization) if point.scope_authorization else None)
+
+    def _unproject(self, point):
+        self._tick()
+        def refs(sources):
+            # A matching ID does not replace submitted accession/concept/value or
+            # any other source field before the original calculation checks.
+            return tuple(engine.ObservationRef(s.canonical_metric, self._capture_source(s))
+                         for s in self._walk(sources))
+        return engine.Metric(metric=point.metric, unit=point.unit, status=point.status,
+            value=point.value, reason=point.reason, period=self._internal_period(point.period), formula=point.formula,
+            provenance=refs(point.provenance), alternatives=refs(point.alternatives),
+            # This conversion serves calculate(), whose historical behavior uses
+            # immediate operands/provenance, not their previous input ancestry.
+            revenue_basis=point.revenue_basis,
+            scope_authorization=_approval(point.scope_authorization))
+
+    @financial_reader
+    def period(self, kind, start, end):
+        return self._public_period(self._engine.period(kind, start, end))
+
+    @financial_reader
+    def missing(self, name, reason, period=None, status="unavailable"):
+        return self._project(self._engine.missing(name, reason, self._internal_period(period), status))
+
+    @financial_reader
+    def observation(self, name, period):
+        return self._project(self._engine.observation(name, self._internal_period(period)))
+
+    @financial_reader
+    def calculate(self, name, operands, period, roles):
+        return self._project(self._engine.calculate(name, tuple(self._unproject(p) for p in self._walk(operands)),
+                                                   self._internal_period(period), roles))
+
+    @financial_reader
+    def metric_periods(self, name, kind):
+        return [self._public_period(p) for p in self._walk(self._engine.metric_periods(name, kind))]
+
+    @financial_reader
+    def reporting_periods(self, kind):
+        return [self._public_period(p) for p in self._walk(self._engine.reporting_periods(kind))]
+
+    @financial_reader
+    def fiscal_observation(self, name, requested: FiscalPeriodRequest):
+        return self._project(self._engine.fiscal_observation(name, engine.FiscalRequest(requested.fiscal_year, requested.quarter)))
+
+    @financial_reader
+    def compare_fiscal(self, name, earlier: FiscalPeriodRequest, later: FiscalPeriodRequest):
+        result = self._engine.compare_fiscal(name, engine.FiscalRequest(earlier.fiscal_year, earlier.quarter),
+                                            engine.FiscalRequest(later.fiscal_year, later.quarter))
+        self._tick()
+        return MetricComparison(status=result.status, reason=result.reason, earlier_period=earlier, later_period=later,
+            earlier=self._project(result.earlier), later=self._project(result.later),
+            absolute_change=result.absolute_change, percentage_change=result.percentage_change,
+            percentage_status=result.percentage_status, percentage_reason=result.percentage_reason,
+            direction=result.direction, formula=result.formula)
+
+    @financial_reader
+    def annual_comparison(self, fiscal_year=None):
+        result = self._engine.annual_comparison(fiscal_year)
+        return AnnualFinancialComparison(ticker=self.company.ticker, company_name=self.company.name,
+            company_cik=self.company.cik, period=self._public_period(result.period), selection_policy=SELECTION_POLICY,
+            metrics={name: self._project(p) for name, p in self._walk(result.metrics)},
+            requested_fiscal_year=fiscal_year, fiscal_years=list(self._walk(result.fiscal_years)), period_reason=result.reason)
+
+    @financial_reader
+    def revenue_candidates(self, candidates):
+        selected = self._engine.revenue_candidates([self._observations[f.id] for f in self._walk(candidates)])
+        return [self._rows[o.reference] for o in self._walk(selected)]
 
     def _tick(self):
         if self._budget is not None:
@@ -141,35 +217,10 @@ class FinancialMetrics:
         return any(value is needle or value == needle for value in self._walk(values))
 
     @financial_reader
-    def revenue_candidates(self, candidates):
-        bases = {REVENUE_CONCEPTS[original_concept(f)].basis for f in self._walk(candidates)}
-        if all(revenue_bases_compatible(left, right) for left in self._walk(bases) for right in self._walk(bases)):
-            return candidates
-        # Before/after interest expense are different canonical banking bases.
-        # Neither recency nor a matching numeric value establishes equivalence.
-        if "net_interest" in bases:
-            return []
-        if "total_revenue" in bases:
-            return [f for f in self._walk(candidates) if REVENUE_CONCEPTS[original_concept(f)].basis == "total_revenue"]
-        if not scope_permissions.REVENUE_SELECTION_AUTHORIZATIONS:
-            return []
-        # Only this otherwise ambiguous component branch admits a new selection
-        # permission. Existing total/net-interest selection remains unchanged.
-        first = candidates[0]
-        kind = period_kind(first, METRICS["revenue"])
-        raw = self.authorization_sources(("revenue",), kind, first.period_end)
-        target = scope_permissions.SourceIdentity.from_fact(first).period_scope()
-        decision = scope_permissions.authorize_selection(target, raw, self.authorization_evidence)
-        if not decision.accepted:
-            if decision.reason != "no_authorization":
-                self.selection_rejections[(kind, first.period_start, first.period_end)] = decision.reason
-            return []
-        self.selection_approvals[(kind, first.period_start, first.period_end)] = decision.ref
-        return [f for f in self._walk(candidates) if scope_permissions.SourceIdentity.from_fact(f) == decision.selected]
-
     def authorization_sources(self, names, kind, end):
         return tuple(scope_permissions.SourceIdentity.from_fact(f) for f in self._walk(self.authorization_facts(names, kind, end)))
 
+    @financial_reader
     def authorization_facts(self, names, kind, end):
         # Include same-end/kind observations with changed starts, not just the
         # already selected rows. New fiscal boundaries must invalidate review.
@@ -180,62 +231,7 @@ class FinancialMetrics:
     def approval_provenance(ref):
         return ScopeAuthorizationProvenance(permission=ref.permission, approval_id=ref.approval_id, version=ref.version)
 
-    def period(self, kind, start, end):
-        self._tick()
-        period = FinancialPeriod(kind=kind, start=start, end=end)
-        if kind == "annual":
-            return period.model_copy(update={"fiscal_year": end.year, "fiscal_period": "FY",
-                                             "fiscal_label_basis": "annual_period_end_year"})
-        if kind == "instant":
-            return period
-        bounds = [(a, b) for a, b in self._walk(self.annual_bounds) if a <= start <= end <= b]
-        if len(bounds) == 1:
-            anchor, year = bounds[0][0], bounds[0][1].year
-            basis = "observed_annual_boundary"
-        elif bounds:
-            return period  # Ambiguous overlapping fiscal boundaries.
-        else:
-            anchors = [a for a in self._walk(self.ytd_starts) if a <= start <= end and (end-a).days < 390]
-            candidates = [a for a in self._walk(anchors) for _, b in self._walk(self.annual_bounds)
-                          if a == b + timedelta(days=1)]
-            if len(set(candidates)) != 1:
-                return period
-            anchor = candidates[0]
-            # A previous full 52/53-week or calendar year supports a 364–371
-            # day projection; transition/stub calendars do not. Near Dec/Jan
-            # even that range spans two end years, so preserve uncertainty.
-            prior_lengths = {(b-a).days+1 for a, b in self._walk(self.annual_bounds) if anchor == b + timedelta(days=1)}
-            end_years = {(anchor + timedelta(days=days-1)).year for days in self._walk(range(364, 372))}
-            year = (next(iter(end_years)) if len(end_years) == 1
-                    and all(364 <= days <= 371 for days in self._walk(prior_lengths)) else None)
-            basis = "ytd_start_after_observed_annual_end"
-            # Two consecutive full calendar years with the same month/day
-            # boundaries distinguish a calendar schedule from a week calendar.
-            # This retains Jan–Dec issuer labels without assuming every Jan
-            # start ends in December or incrementing the previous end year.
-            calendar_years = set()
-            for a, b in self._walk(self.annual_bounds):
-                if anchor != b + timedelta(days=1) or (b-a).days+1 not in {365, 366}:
-                    continue
-                for previous_start, previous_end in self._walk(self.annual_bounds):
-                    if (previous_end + timedelta(days=1) == a
-                            and (previous_end-previous_start).days+1 in {365, 366}
-                            and (previous_start.month, previous_start.day) == (a.month, a.day)
-                            and (previous_end.month, previous_end.day) == (b.month, b.day)):
-                        calendar_years.add(anchor.year + ((b.month, b.day) < (anchor.month, anchor.day)))
-            if len(calendar_years) == 1:
-                year = calendar_years.pop()
-                basis = "ytd_start_with_observed_calendar_year_pattern"
-        if kind == "quarter":
-            offsets = [i for i in self._walk(range(4)) if abs((start-anchor).days - 91*i) <= 14]
-            label = f"Q{offsets[0]+1}" if len(offsets) == 1 else None
-        else:
-            label = {"half_year": "Q2", "nine_months": "Q3"}.get(kind) if start == anchor else None
-        if label:
-            period = period.model_copy(update={"fiscal_year": year, "fiscal_period": label,
-                                               "fiscal_label_basis": basis})
-        return period
-
+    @financial_reader
     def source(self, name, fact):
         self._tick()
         return FactProvenance(
@@ -248,45 +244,7 @@ class FinancialMetrics:
             sec_url=build_filing_url(fact.company_cik, fact.accession_number), stored_at=fact.created_at,
         )
 
-    def missing(self, name, reason, period=None, status="unavailable"):
-        self._tick()
-        return NormalizedMetric(metric=name, unit=METRICS[name].unit, status=status,
-                                reason=reason, period=period, formula=METRICS[name].formula)
-
     @financial_reader
-    def observation(self, name, period):
-        self._tick()
-        if self.bank_revenue and name in {"gross_profit", "gross_margin"}:
-            return self.missing(name, "Gross profit/margin is not applicable to the observed net-interest revenue basis.", period, "not_applicable")
-        if name in self.base:
-            for point in self._walk(self.base[name]):
-                if (point.period.start == period.start and point.period.end == period.end
-                        and point.period.kind == period.kind):
-                    if name == "capital_expenditures" and point.value < 0:
-                        return self.missing(name, "Negative payment fact conflicts with positive-outflow CapEx convention.", period)
-                    return point
-            return self.missing(name, "No compatible stored SEC fact for this period, concept and unit.", period)
-        if name == "revenue_growth_yoy":
-            current = self.observation("revenue", period)
-            prior = [p for p in self._walk(self.base["revenue"]) if p.period.kind == period.kind
-                     and p.period.start is not None and period.start is not None
-                     and 357 <= (period.end-p.period.end).days <= 378
-                     and 357 <= (period.start-p.period.start).days <= 378
-                     and abs((period.end-period.start).days - (p.period.end-p.period.start).days) <= 9
-                     and (not period.fiscal_period or not p.period.fiscal_period
-                          or period.fiscal_period == p.period.fiscal_period)]
-            if len(prior) != 1:
-                return self.missing(name, "No unique comparable prior-year period.", period)
-            if (current.status == "available" and prior[0].status == "available"
-                    and not revenue_bases_compatible(current.revenue_basis, prior[0].revenue_basis)):
-                return self.missing(name, "Current/prior revenue economic bases are not explicitly comparable.", period)
-            return self.calculate(name, [current, prior[0]], period, ["current", "prior"])
-        operands = {"gross_margin": ("gross_profit", "revenue"),
-                    "operating_margin": ("operating_income", "revenue"),
-                    "net_margin": ("net_income", "revenue"),
-                    "free_cash_flow": ("operating_cash_flow", "capital_expenditures")}[name]
-        return self.calculate(name, [self.observation(n, period) for n in self._walk(operands)], period, list(operands))
-
     def reviewed_gross_margin_scope(self, gross_profit, revenue):
         """Exact source-pair authorization; no ticker or global basis exception."""
         if len(gross_profit.provenance) != 1 or len(revenue.provenance) != 1:
@@ -321,150 +279,6 @@ class FinancialMetrics:
         return False
 
     @financial_reader
-    def calculate(self, name, operands, period, roles):
-        self._tick()
-        denominator_approval = None
-        if any(p.status != "available" for p in self._walk(operands)):
-            failures = []
-            for role, operand in self._walk(zip(roles, operands, strict=True)):
-                if operand.status != "available":
-                    label = f"{role} {operand.metric}" if role in {"current", "prior"} else role
-                    failures.append(f"{label.replace('_', ' ').capitalize()}: {operand.reason or 'No failure reason supplied.'}")
-            return self.missing(name, "Missing or invalid compatible inputs. " + " ".join(failures), period)
-        first, second = operands
-        if name == "gross_margin" and (
-                first.provenance[0].accession_number != second.provenance[0].accession_number):
-            return self.missing(name, "Gross profit and revenue must come from the same filing accession.", period)
-        if name.endswith("margin"):
-            concept = second.provenance[0].original_concept
-            approved = REVENUE_CONCEPTS[concept].margin_denominator
-            if name == "gross_margin" and not approved:
-                approved = self.reviewed_gross_margin_scope(first, second)
-            if name == "net_margin" and not approved and scope_permissions.DENOMINATOR_AUTHORIZATIONS:
-                revenue = next((f for f in self._walk(self.facts) if f.id == second.provenance[0].fact_id), None)
-                numerator = next((f for f in self._walk(self.facts) if f.id == first.provenance[0].fact_id), None)
-                if revenue is not None and numerator is not None:
-                    decision = scope_permissions.authorize_denominator(
-                        name, scope_permissions.SourceIdentity.from_fact(revenue),
-                        scope_permissions.SourceIdentity.from_fact(numerator),
-                        self.authorization_sources(("revenue", "net_income"), period.kind, period.end),
-                        self.authorization_evidence)
-                    if decision.accepted:
-                        approved, denominator_approval = True, decision.ref
-                    elif decision.reason != "no_authorization":
-                        rejected = self.missing(name, f"Revenue denominator authorization rejected: {decision.reason}.", period)
-                        raw = self.authorization_facts(("revenue", "net_income"), period.kind, period.end)
-                        rejected.alternatives = [self.source(n, f) for f in self._walk(sorted(raw, key=lambda f: f.id))
-                                                 for n in self._walk(("revenue", "net_income"))
-                                                 if original_concept(f) in METRICS[n].concepts]
-                        return rejected
-            if not approved or (self.bank_revenue and second.revenue_basis != "net_interest"):
-                return self.missing(name, "Selected revenue scope does not establish an approved total/net-interest margin denominator.", period)
-        if name != "free_cash_flow" and second.value <= 0:
-            return self.missing(name, "Denominator must be positive; zero/negative revenue growth or margin bases are unavailable.", period)
-        with localcontext() as context:
-            context.prec = 28
-            if name == "free_cash_flow":
-                value = first.value - second.value
-            elif name == "revenue_growth_yoy":
-                value = (first.value - second.value) / second.value
-            else:
-                value = first.value / second.value
-        return NormalizedMetric(
-            metric=name, unit=METRICS[name].unit, status="available", value=value,
-            period=period, formula=METRICS[name].formula,
-            provenance=[source for p in self._walk(operands) for source in self._walk(p.provenance)],
-            inputs=[MetricInput(role=role, metric=p.metric, value=p.value, unit=p.unit,
-                                period=p.period, fact_ids=[s.fact_id for s in self._walk(p.provenance)], revenue_basis=p.revenue_basis)
-                    for role, p in self._walk(zip(roles, operands, strict=True))],
-            scope_authorization=self.approval_provenance(denominator_approval) if denominator_approval else None,
-        )
-
-    def metric_periods(self, name, kind):
-        """Shared normalized anchors; never infer a quarter from annual/YTD."""
-        anchor_name = name if name in self.base else ("operating_cash_flow" if name == "free_cash_flow" else "revenue")
-        return [p.period for p in self._walk(self.base[anchor_name]) if p.period.kind == kind]
-
-    def reporting_periods(self, kind):
-        anchors = self.metric_periods("revenue", kind)
-        return anchors or [p.period for points in self._walk(self.base.values()) for p in self._walk(points) if p.period.kind == kind]
-
-    @financial_reader
-    def fiscal_observation(self, name, requested: FiscalPeriodRequest):
-        """Exact requested normalized fiscal label, with existing vintage selection."""
-        definition = METRICS[name]
-        kind = "quarter" if requested.quarter else "annual"
-        anchors = (self.reporting_periods(kind) if definition.kind == "instant"
-                   else self.metric_periods(name, kind) or self.reporting_periods(kind))
-        matches = {(p.kind, p.start, p.end): p for p in self._walk(anchors)
-                   if p.fiscal_year == requested.fiscal_year
-                   and p.fiscal_period == (f"Q{requested.quarter}" if requested.quarter else "FY")}
-        if len(matches) != 1:
-            reason = ("Multiple stored reporting periods have this fiscal label; selection is ambiguous."
-                      if matches else "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.")
-            return self.missing(name, reason)
-        period = next(iter(matches.values()))
-        if definition.kind == "instant":
-            period = self.period("instant", None, period.end)
-        return self.observation(name, period)
-
-    @financial_reader
-    def compare_fiscal(self, name, earlier: FiscalPeriodRequest, later: FiscalPeriodRequest):
-        """Read-only comparisons over canonical observations, including input scope."""
-        left, right = self.fiscal_observation(name, earlier), self.fiscal_observation(name, later)
-        result = MetricComparison(status="unavailable", earlier_period=earlier, later_period=later,
-                                  earlier=left, later=right)
-        if left.status != "available" or right.status != "available":
-            result.status = "not_applicable" if "not_applicable" in {left.status, right.status} else "unavailable"
-            result.reason = "; ".join(f"{request.label}: {point.reason}" for request, point in self._walk([(earlier, left), (later, right)]) if point.status != "available")
-            return result
-        if (left.unit != right.unit or left.period.kind != right.period.kind
-                or earlier.quarter != later.quarter
-                or (earlier.fiscal_year, earlier.quarter or 0) >= (later.fiscal_year, later.quarter or 0)):
-            result.reason = "Comparison requires chronological, matching annual or same fiscal-quarter bases and units."
-            return result
-        year_gap = later.fiscal_year - earlier.fiscal_year
-        tolerance = 14 + year_gap // 4 + 1  # week calendars and accumulated leap days
-        gaps = [(right.period.end-left.period.end).days]
-        if left.period.start is not None and right.period.start is not None:
-            gaps.append((right.period.start-left.period.start).days)
-        if any(abs(gap - 365 * year_gap) > tolerance for gap in self._walk(gaps)):
-            result.reason = "Fiscal reporting boundaries do not align across the requested years."
-            return result
-        if left.period.start is not None and right.period.start is not None:
-            if abs((left.period.end-left.period.start).days - (right.period.end-right.period.start).days) > 9:
-                result.reason = "Reporting durations are not comparable."
-                return result
-        if name == "revenue" and not revenue_bases_compatible(left.revenue_basis, right.revenue_basis):
-            result.reason = "Earlier/later revenue economic bases are not explicitly comparable."
-            return result
-        left_inputs = {(i.role, i.metric, i.unit): i for i in self._walk(left.inputs)}
-        right_inputs = {(i.role, i.metric, i.unit): i for i in self._walk(right.inputs)}
-        if left_inputs.keys() != right_inputs.keys() or any(
-            i.metric == "revenue" and not revenue_bases_compatible(i.revenue_basis, right_inputs[key].revenue_basis)
-            for key, i in self._walk(left_inputs.items())
-        ):
-            result.reason = "Derived input economic bases or roles are not explicitly comparable."
-            return result
-        with localcontext() as context:
-            context.prec = 28
-            result.absolute_change = right.value - left.value
-            result.direction = "increase" if result.absolute_change > 0 else "decrease" if result.absolute_change < 0 else "no_change"
-            result.status = "available"
-            if left.unit == "ratio":
-                result.percentage_status = "not_applicable"
-                result.percentage_reason = "Ratio comparisons use percentage-point change, not percentage growth."
-            elif name == "diluted_eps":
-                result.percentage_status = "not_applicable"
-                result.percentage_reason = "EPS is reported as filed; stock-split/restatement share-basis comparability is unverified."
-            elif left.value <= 0:
-                result.percentage_reason = "Percentage change requires a positive earlier value; zero/negative baselines use absolute change only."
-            else:
-                result.percentage_change = result.absolute_change / left.value
-                result.percentage_status = "available"
-        return result
-
-    @financial_reader
     def history(self, name, kind="quarter", limit=40):
         if name not in METRICS:
             raise UnknownMetric(name)
@@ -481,37 +295,6 @@ class FinancialMetrics:
                                        comparability=HistoryComparability() if name == "diluted_eps" else None)
 
     @financial_reader
-    def annual_comparison(self, fiscal_year=None):
-        """Discover observed labels or resolve one exact annual reporting window.
-
-        Fiscal labels follow period(), including fiscal end-year labeling for week
-        calendars. Filing-context FY annotations are not reporting-period labels.
-        No latest-period or per-metric period fallback is permitted here.
-        """
-        # Comparison coverage is the union of its metrics' existing annual anchors.
-        # Revenue-first reporting_periods remains unchanged for other endpoints.
-        anchors = [p for name in self._walk(ANNUAL_COMPARISON_METRICS)
-                   for p in self._walk(self.metric_periods(name, "annual"))]
-        years = sorted({p.fiscal_year for p in self._walk(anchors)
-                        if p.fiscal_year is not None and 1900 <= p.fiscal_year <= 2099}, reverse=True)
-        anchor, reason, metrics = None, None, {}
-        if fiscal_year is not None:
-            matches = {(p.start, p.end): p for p in self._walk(anchors)
-                       if p.fiscal_year == fiscal_year and p.fiscal_period == "FY"}
-            if len(matches) == 1:
-                anchor = next(iter(matches.values()))
-                metrics = {name: self.observation(name, anchor) for name in self._walk(ANNUAL_COMPARISON_METRICS)}
-            else:
-                reason = ("Multiple stored annual reporting windows have this fiscal end-year; selection is ambiguous."
-                          if matches else "No stored annual reporting window for the requested fiscal end-year. Other years, quarterly and YTD observations are not substituted.")
-                metrics = {name: self.missing(name, reason) for name in self._walk(ANNUAL_COMPARISON_METRICS)}
-        return AnnualFinancialComparison(
-            ticker=self.company.ticker, company_name=self.company.name, company_cik=self.company.cik,
-            period=anchor, selection_policy=SELECTION_POLICY, metrics=metrics,
-            requested_fiscal_year=fiscal_year, fiscal_years=years, period_reason=reason,
-        )
-
-    @financial_reader
     def summary(self, kind="quarter"):
         anchors = self.reporting_periods(kind)
         anchor = max(anchors, key=lambda p: (p.end, p.start or date.min)) if anchors else None
@@ -526,6 +309,58 @@ class FinancialMetrics:
         return NormalizedFinancialSummary(ticker=self.company.ticker, company_name=self.company.name,
                                           company_cik=self.company.cik, period=anchor, requested_period=kind,
                                           selection_policy=SELECTION_POLICY, metrics=metrics)
+
+
+def _approval(ref):
+    return None if ref is None else engine.Approval(ref.permission, ref.approval_id, ref.version)
+
+
+class _DBPermissions:
+    """Source-specific operations retain the complete original eligible rows."""
+
+    def __init__(self, facade):
+        self.facade = facade
+
+    def inventory(self, names, kind, end):
+        f = self.facade
+        # Rejection diagnostics historically project the original rows at the
+        # time of that operation, rather than an earlier selected/base snapshot.
+        return tuple(f._capture_source(f.source(names[0], row),
+                     tuple(name for name in f._walk(names) if usable(row, METRICS[name])))
+                     for row in f._walk(f.authorization_facts(names, kind, end)))
+
+    def select_revenue(self, candidates):
+        if not scope_permissions.REVENUE_SELECTION_AUTHORIZATIONS:
+            return engine.ScopeDecision(False, "no_authorization")
+        f = self.facade
+        first = f._rows[candidates[0].reference]
+        kind = period_kind(first, METRICS["revenue"])
+        raw = f.authorization_sources(("revenue",), kind, first.period_end)
+        decision = scope_permissions.authorize_selection(scope_permissions.SourceIdentity.from_fact(first).period_scope(),
+                                                          raw, f.authorization_evidence)
+        selected = tuple(o for o in f._walk(candidates)
+                         if decision.accepted and scope_permissions.SourceIdentity.from_fact(f._rows[o.reference]) == decision.selected)
+        if decision.accepted:
+            f.selection_approvals[(kind, first.period_start, first.period_end)] = decision.ref
+        return engine.ScopeDecision(decision.accepted, decision.reason, _approval(decision.ref), selected)
+
+    def denominator(self, revenue, numerator, period):
+        if not scope_permissions.DENOMINATOR_AUTHORIZATIONS:
+            return engine.ScopeDecision(False, "no_authorization")
+        f = self.facade
+        revenue_row = next((row for row in f._walk(f.facts) if row.id == revenue.reference), None)
+        numerator_row = next((row for row in f._walk(f.facts) if row.id == numerator.reference), None)
+        if revenue_row is None or numerator_row is None:
+            return engine.ScopeDecision(False, "no_authorization")
+        decision = scope_permissions.authorize_denominator("net_margin",
+            scope_permissions.SourceIdentity.from_fact(revenue_row),
+            scope_permissions.SourceIdentity.from_fact(numerator_row),
+            f.authorization_sources(("revenue", "net_income"), period.kind, period.end), f.authorization_evidence)
+        return engine.ScopeDecision(decision.accepted, decision.reason, _approval(decision.ref))
+
+    def gross_margin(self, gross_profit, revenue):
+        f = self.facade
+        return f.reviewed_gross_margin_scope(f._project(gross_profit), f._project(revenue))
 
 
 @financial_reader

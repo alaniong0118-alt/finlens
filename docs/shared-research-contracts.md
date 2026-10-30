@@ -22,7 +22,7 @@ The [ExecPlan rules](../.agent/PLANS.md), [financial contracts](financial-metric
 |---|---|---|
 | Company, FinancialFact, FilingChunk, refresh/publication ORM records | [models.py](../backend/app/models.py) | Company has unique ticker and mandatory CIK; FinancialFact uses company_cik and stored numeric precision. These do not yet model arbitrary non-SEC issuers or private objects. |
 | FinancialPeriod, FactProvenance, MetricInput, NormalizedMetric, MetricComparison, AnnualFinancialComparison | [financial_metric_schemas.py](../backend/app/financial_metric_schemas.py) | Decimal values serialize as strings; fiscal dates, alternative sources, compatible inputs and unavailable reasons survive. FactProvenance requires integer fact_id and CIK: no invented external values may satisfy those fields. |
-| FinancialMetrics and load_financial_metrics | [financial_metrics_service.py](../backend/app/financial_metrics_service.py), [registry](../backend/app/financial_metric_registry.py) | Reuse reviewed metric selection/formulas; loader queries stored Company/FinancialFact and obtains reviewed original-evidence authorization. No existing public generic external-observation adapter is claimed. |
+| FinancialMetrics and load_financial_metrics | [DB facade](../backend/app/financial_metrics_service.py), [internal engine](../backend/app/financial_metric_engine.py), [registry](../backend/app/financial_metric_registry.py) | DB-only extraction candidate delegates selection/formulas to one engine; independent implementation review pending. Loader still queries stored Company/FinancialFact and obtains reviewed original-evidence authorization. No public generic external-observation adapter is claimed. |
 | FinancialReference, DiagnosticReference, EvidenceNode, InsightStatement, InsightsResponse | [financial_insights_schemas.py](../backend/app/financial_insights_schemas.py) | Closed F/D reference separation and scoped financial/diagnostic graph; diagnostic nodes never authorize a financial value. These are insights-specific, not an already generic bundle API. |
 | PublicationManifest, PublicationChunk, CompletePublication; two admission entries | [publication_admission.py](../backend/app/publication_admission.py), [reader_resource_policy.py](../backend/app/reader_resource_policy.py) | Tone's existing entry and the fixed strict Reader entry share complete integrity checks. Scalar detachment, pin zero, unselected-body/vector/digest validation and older intact publication semantics remain. Caller owns session/snapshot/cleanup. |
 | ArtifactPin, ObservationReview, EvidencePolicy and production-evidence loader | [sec_evidence_adapter.py](../backend/app/sec_evidence_adapter.py), [scope authorization](../backend/app/revenue_scope_authorizations.py) | Narrow reviewed original-byte/locator/policy binding; not a generic license to admit any issuer/table. No new registry approval or broader scope is created here. |
@@ -95,10 +95,61 @@ Minimum logical bridge: `ObservationRef` and `CalculationRef`, preserving the ex
 - Database observations refer to real FactProvenance IDs, entity, exact decimal value, unit/currency, scale, FinancialPeriod, basis and source/authorization lineage. External observations refer to session artifact/locator identities and an independently reviewed admission result; they do not mint fact IDs.
 - Calculations reference admitted operands, reviewed metric/formula/selection versions, period/basis checks, precision/rounding policy and exact result or explained unavailable/not-applicable reason. Alternatives/rejections remain diagnostics. A D/candidate reference cannot become an F/value reference merely because the model or UI cites it.
 - Reuse FinancialMetrics/registry semantics and existing market return/alignment functions. Monetary/financial values retain Decimal or existing exact rational behavior; do not round into binary floats before admission. Statistical simulation/ML may use an explicitly reviewed finite numerical method, with pins/seed/precision, without treating its estimates as reported facts.
-- The current schemas require DB IDs/CIKs and the loader performs DB reads. A pure admitted-input bridge for external/non-SEC observations is **not implemented**. Its extraction/reuse boundary must be reviewed before integration: no duck-typed fake ORM rows, no parallel financial engine, no widened authorization registry.
+- The current public schemas require DB IDs/CIKs and the loader performs DB reads. The bounded DB-only engine extraction below is an implementation candidate, pending independent review. An admitted-input bridge for external/non-SEC observations is **not implemented**: no duck-typed fake ORM rows, parallel financial engine or widened authorization registry.
 - New currencies, accounting standards, dimensions, ratio definitions, FX policies or economic-scope mappings require reviewed semantics/fixtures; a generic schema does not make all concepts calculable.
 
 Consumers include comparisons, portfolios (including the explicit 10a historical VaR/CVaR specification), optimization, simulations/stress, risk indicators and forecasts. These consume pinned inputs and distinguish reported, derived and estimated outputs. They do not use an LLM as a calculator or issue personalized allocation/trading instructions.
+
+#### C5 DB-only engine extraction candidate — 2026-10-30
+
+[FinancialMetricEngine](../backend/app/financial_metric_engine.py) holds the existing
+selection, fiscal-period reasoning, precision-28 Decimal formulas and comparison
+rules. Its frozen observations, periods, operand references and result records
+are immediately consumed by the existing FinancialMetrics facade; they are internal
+DB-adapter records, not approved external C5 ObservationRef/CalculationRef schemas.
+References retain real fact IDs and no source/session admission is issued by
+constructing an engine record. The engine imports only standard-library code and
+the existing metric registry, with no I/O or operational dependencies.
+
+The facade preserves original company-scoped rows, public response models,
+projected `.base` (including selected negative CapEx diagnostics), `.source()` and
+helper exports. Eligibility is checked against the original DB source fields
+before conversion. Original-row mappings and narrow DB permission operations
+retain complete same-end/kind authorization inventories, including differing
+starts; the existing evaluator/registries, pinned gross-margin guard and distinct
+alternative ordering remain unchanged. Missing DB fields do not establish verified
+dimensions or consolidated scope. Refresh conflict admission, ordinary ID-ending
+selection ranking, stricter authorization conflict rules and Insights support
+rejection retain their separate owners.
+
+The focused P2 correction captures every source-projection scalar alongside each
+eligible observation, deriving its value/period from that same capture. Selected
+and alternative financial provenance projects from this immutable snapshot even
+if original rows later change. Original rows remain separate for the historical
+authorization and raw-diagnostic operations, whose current inventories are still
+projected when those operations reject evidence. `calculate()` preserves submitted
+source metadata through its source-pair/coverage checks instead of replacing it
+through a matching fact ID. Previous input ancestry is not a new local-row lookup
+requirement. These helper conversions grant no source admission or new permission.
+Baseline-sensitive post-construction and same-ID metadata mutation regressions
+cover both corrections; focused independent re-review remains pending.
+
+Conversion, delegated work and public projection participate in the existing
+budget and FinancialMetrics lifecycle entry/exit checks. This adds no session
+caps to DB datasets. Public DB serialization, source metadata/URLs and Decimal
+behavior are checked against immutable baseline `6838af1d9164979daebb179144d67cd154da020e`;
+the nine fixed fixture fingerprints were frozen before extraction. Synthetic
+mutation controls check that incorrect tie-breaking, total preference, formulas,
+authorization inventories and gross-margin guards are detected.
+
+See the [bounded implementation record](exec-plans/active/2026-10-30-c5-financial-input-reuse.md)
+for exact offline commands/results and unexecuted gates. This candidate introduces
+no session module/API, new formulas, source policies, acquisition or activation.
+Ownership, rights, real-source/native custody, extraction verification, financial
+admission and session/runtime delivery remain separate prerequisites; C1
+offline-injected/unverified references cannot enter financial output. U3/U4 remain
+incomplete end to end. Independent implementation review and manual Git gates
+remain pending.
 
 #### Existing observation, conflict and comparability identities
 

@@ -272,6 +272,7 @@ assert 'app.config' not in sys.modules and 'app.database' not in sys.modules
     def test_financial_consumers_import_without_sec_acquisition(self):
         self.probe(READ_SETUP + '''
 allowed_app.update({'app.financial_metrics_service', 'app.financial_insights_service',
+    'app.financial_metric_engine',
     'app.financial_metric_registry', 'app.financial_metric_schemas',
     'app.financial_insights_contract', 'app.financial_insights_schemas',
     'app.revenue_scope_authorizations', 'app.sec_evidence_adapter',
@@ -303,6 +304,11 @@ assert not (set(sys.modules) & {'app.database', 'app.models', 'app.sec_client', 
         moves = {'sec_client': {'build_filing_url', 'build_filing_raw_url'},
                  'embedding_service': {'validate_embedding'}}
         for name, source in self.sources.items():
+            if name == 'financial_metrics_service':
+                # C5 intentionally extracts this module. Its fixed 6838af1
+                # serialization oracle and actual delegation tests live in
+                # test_financial_metrics.py, rather than a whole-module AST lock.
+                continue
             original = ast.parse(source)
             if name in moves:
                 original.body = [n for n in original.body
@@ -333,6 +339,35 @@ assert not (set(sys.modules) & {'app.database', 'app.models', 'app.sec_client', 
             self.assertEqual({n.name for n in extracted}, moves[old])
             for node in extracted:
                 self.assertEqual(ast.dump(node), ast.dump(baseline[node.name]))
+
+    def test_financial_engine_import_and_execution_need_no_operational_modules(self):
+        self.probe('''
+allowed_app.update({'app.financial_metric_engine', 'app.financial_metric_registry'})
+from app.financial_metric_engine import FinancialMetricEngine, Observation, Metric
+from dataclasses import FrozenInstanceError
+from datetime import date
+from decimal import Decimal
+class Denied:
+    def __getattr__(self, name):
+        raise AssertionError('No permission operation needed for approved total revenue')
+row = Observation(7, 'Revenues', Decimal('100'), 'USD', date(2025,1,1),
+    date(2025,12,31), 'annual', date(2026,2,1), '10-K', '0000000001-26-000001', ('revenue',))
+engine = FinancialMetricEngine((row,), Denied())
+point = engine.observation('revenue', engine.period('annual', row.start, row.end))
+assert point.value == Decimal('100') and point.provenance[0].observation is row
+for obj, field in ((row, 'value'), (point, 'value'), (point.period, 'end'),
+                   (point.provenance[0], 'metric')):
+    try:
+        setattr(obj, field, None)
+    except FrozenInstanceError:
+        pass
+    else:
+        raise AssertionError('Mutable internal observation/result')
+assert not attempts
+assert not (set(sys.modules) & {'app.models', 'app.database', 'app.config',
+    'app.sec_client', 'app.sec_evidence_adapter', 'app.revenue_scope_authorizations',
+    'app.activation_lifecycle', 'sqlalchemy', 'dotenv', 'bs4', 'pydantic'})
+''')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 """SEC-like observations, real ORM fixtures, no network or AI calls."""
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import Mock
 
@@ -617,3 +617,394 @@ def test_http_history_verification_checks_response_body(db, damage):
         payload["ticker"] = "OTHER"
     with pytest.raises(AssertionError):
         verify_http_history(payload, expected, {row.id: row})
+
+
+# C5: supplied ORM observations only. These tests never open a database. The
+# fingerprints were frozen BEFORE extraction against this immutable commit.
+C5_BASELINE = "6838af1d9164979daebb179144d67cd154da020e"
+C5_FINGERPRINTS = {
+    "standard": "7746ca4fe3d4862d5328a7d8961d904261ce97ef8952a0ece4fdb753088a4ffe",
+    "rank": "f4e36126b5952ddd16505d413ddb2c2993e771b6b72e0bcecb139a584f996017",
+    "negative_capex": "2ababdefd505f022cca45efc50a7899d5e224ee2506b2462c9e6a4864bfaa3c0",
+    "bank": "7980c58dcd02ae7a7e68338124d4edccd4d67fbac0dadf68fb3263d562bfc42b",
+    "ambiguous": "a2d97be95132ab967740f4a6fad1b5da340cd839dc884091f0388ddba1545aa7",
+    "bank_conflict": "30e169bce312b8feffc03528c0969dc8dc9bdcd7500abd4f0e5032fe96c9bf14",
+    "basis_change": "1685ee50eca9cfa61ce94c4d0a9274bc6bd9a27ca1474baf29171ae94cb3284f",
+    "week": "e68fba1cb7b6e890f291f09d71101120bb8c7ae0364f0b90c0e6fe6d759d9fa2",
+    "pinned": "e573e07b29e7f1dbc9634c8c9862ddffefed2010a82d58247501aba5e0a40287",
+}
+
+
+def c5_reference():
+    import os
+    import subprocess
+    from types import ModuleType
+    from pathlib import Path
+    source = subprocess.run(
+        ["git", "show", f"{C5_BASELINE}:backend/app/financial_metrics_service.py"],
+        cwd=Path(__file__).resolve().parents[2], env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        capture_output=True, text=True, check=True).stdout
+    module = ModuleType("c5_immutable_financial_reference")
+    exec(compile(source, f"{C5_BASELINE}:financial_metrics_service.py", "exec"), module.__dict__)
+    return module.FinancialMetrics
+
+
+def c5_rows(case):
+    from datetime import datetime
+    from types import SimpleNamespace
+    company = SimpleNamespace(cik="0000000001", ticker="TEST", name="C5 synthetic issuer")
+    rows = []
+
+    def row(concept="Revenues", value="100", year=2025, **changes):
+        fields = dict(id=len(rows)+1, company_cik=company.cik, metric=concept,
+            source="SEC Company Facts API: " + concept, value=Decimal(value), unit="USD",
+            period_start=date(year, 1, 1), period_end=date(year, 12, 31), period_type="annual",
+            fiscal_year=2099, fiscal_period="Q3", form="10-K", filed=date(year+1, 2, 1),
+            accession_number=f"0000000001-{year % 100 + 1:02d}-000001", frame=None,
+            created_at=datetime(2026, 3, 4, 5, 6, 7, 123456))
+        fields.update(changes)
+        item = FinancialFact(**fields)
+        rows.append(item)
+        return item
+
+    for year, revenue in ((2024, "100"), (2025, "120")):
+        for concept, value in (("Revenues", revenue), ("GrossProfit", "40"),
+                ("OperatingIncomeLoss", "20"), ("NetIncomeLoss", "-10"),
+                ("NetCashProvidedByUsedInOperatingActivities", "80"),
+                ("PaymentsToAcquirePropertyPlantAndEquipment", "30")):
+            row(concept, value, year)
+        row("EarningsPerShareDiluted", "1.23456789", year, unit="USD/shares")
+        row("Assets", "500", year, period_start=None)
+    if case == "rank":
+        row("Revenues", "121")  # Same vintage, conflicting value: general selection ranks IDs.
+        row("Revenues", "122", frame="CY2025", fiscal_year=2025, fiscal_period="FY")
+        row("RevenueFromContractWithCustomerExcludingAssessedTax", "999", filed=date(2026, 3, 1))
+        row("Revenues", "777", source="untrusted: Revenues")
+        row("Revenues", "888", company_cik="0000000002")
+    elif case == "negative_capex":
+        row("PaymentsToAcquirePropertyPlantAndEquipment", "-30")
+    elif case == "bank":
+        rows = []
+        row("RevenuesNetOfInterestExpense", "100")
+        row("NetIncomeLoss", "20")
+        row("GrossProfit", "40")
+    elif case == "ambiguous":
+        rows = []
+        row("RevenueFromContractWithCustomerExcludingAssessedTax", "100")
+        row("SalesRevenueNet", "100")
+        row("NetIncomeLoss", "20")
+    elif case == "bank_conflict":
+        row("RevenuesNetOfInterestExpense", "120")
+    elif case == "basis_change":
+        rows[0].source = "SEC Company Facts API: SalesRevenueNet"
+    elif case == "week":
+        rows = []
+        row(year=2024, period_start=date(2023, 10, 1), period_end=date(2024, 9, 28))
+        row(value="110", year=2025, period_start=date(2024, 9, 29), period_end=date(2025, 10, 4))
+        row(value="30", year=2025, period_start=date(2024, 12, 29), period_end=date(2025, 3, 29), form="10-Q")
+        row(value="60", year=2025, period_start=date(2024, 9, 29), period_end=date(2025, 3, 29), form="10-Q")
+    elif case == "pinned":
+        company.cik = "0000320193"
+        rows = []
+        common = dict(period_start=date(2026, 3, 29), period_end=date(2026, 6, 27),
+            form="10-Q", filed=date(2026, 7, 31), accession_number="0000320193-26-000020")
+        row("RevenueFromContractWithCustomerExcludingAssessedTax", "109417000000", **common)
+        row("GrossProfit", "54770000000", **common)
+    elif case != "standard":
+        raise AssertionError(case)
+    return company, rows
+
+
+def c5_payload(model):
+    from app.financial_metric_registry import METRICS
+    from app.financial_metric_schemas import FiscalPeriodRequest
+    payload = {}
+    for kind in ("annual", "quarter", "half_year", "nine_months", "instant"):
+        payload[f"summary:{kind}"] = model.summary(kind).model_dump(mode="json")
+        for metric in METRICS:
+            payload[f"history:{metric}:{kind}"] = model.history(metric, kind).model_dump(mode="json")
+    for year in (None, 2024, 2025, 2026):
+        payload[f"annual:{year}"] = model.annual_comparison(year).model_dump(mode="json")
+    for metric in METRICS:
+        for quarter in (None, 1):
+            earlier = FiscalPeriodRequest(fiscal_year=2024, quarter=quarter)
+            later = FiscalPeriodRequest(fiscal_year=2025, quarter=quarter)
+            payload[f"fiscal:{metric}:{quarter}"] = model.fiscal_observation(metric, later).model_dump(mode="json")
+            payload[f"comparison:{metric}:{quarter}"] = model.compare_fiscal(metric, earlier, later).model_dump(mode="json")
+    payload["base"] = {name: [p.model_dump(mode="json") for p in points] for name, points in model.base.items()}
+    return payload
+
+
+def c5_fingerprint(payload):
+    import hashlib
+    import json
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@pytest.mark.parametrize("case", ["standard", "rank", "negative_capex", "bank", "ambiguous",
+                                  "bank_conflict", "basis_change", "week", "pinned"])
+def test_c5_immutable_baseline_serialization(case):
+    company, rows = c5_rows(case)
+    expected = c5_payload(c5_reference()(company, rows))
+    assert c5_fingerprint(expected) == C5_FINGERPRINTS[case]
+    assert c5_payload(FinancialMetrics(company, rows)) == expected
+    assert c5_payload(FinancialMetrics(company, list(reversed(rows)))) == expected
+
+
+def test_c5_independent_selection_and_diagnostic_contracts():
+    company, rows = c5_rows("rank")
+    model = FinancialMetrics(company, rows)
+    revenue = model.summary("annual").metrics["revenue"]
+    assert revenue.value == Decimal("122")
+    assert [p.fact_id for p in revenue.provenance] == [18]
+    assert [p.fact_id for p in revenue.alternatives] == [17, 9, 19]
+    assert model.facts == rows[:-1] and all(a is b for a, b in zip(model.facts, rows))
+    assert model.source("revenue", rows[17]) == revenue.provenance[0]
+    company, rows = c5_rows("negative_capex")
+    model = FinancialMetrics(company, rows)
+    assert model.base["capital_expenditures"][-1].value == Decimal("-30")
+    assert model.summary("annual").metrics["free_cash_flow"].value is None
+    company, rows = c5_rows("standard")
+    metrics = FinancialMetrics(company, rows).summary("annual").metrics
+    assert metrics["free_cash_flow"].value == Decimal("50")
+    assert metrics["gross_margin"].value == Decimal("0.3333333333333333333333333333")
+    assert metrics["revenue_growth_yoy"].value == Decimal(".2")
+
+
+@pytest.mark.parametrize("path", ["selection", "denominator"])
+@pytest.mark.parametrize("changed_start", [False, True])
+def test_c5_authorization_parity_complete_original_inventory(monkeypatch, path, changed_start):
+    from test_revenue_scope_authorizations import (
+        COMPANY, selection_fixture, denominator_fixture, fact,
+    )
+    rows, proofs, approval = (selection_fixture if path == "selection" else denominator_fixture)(monkeypatch)
+    if changed_start:
+        rows.append(fact(3, period_start=date(2025, 1, 2)))
+    old, new = c5_reference()(COMPANY, rows, authorization_evidence=proofs), FinancialMetrics(COMPANY, rows, authorization_evidence=proofs)
+    assert c5_payload(new) == c5_payload(old)
+    assert new.selection_approvals == old.selection_approvals
+    assert new.selection_rejections == old.selection_rejections
+    point = next(p for p in new.history("revenue" if path == "selection" else "net_margin").history
+                 if p.period.start == date(2025, 1, 1))
+    if changed_start:
+        assert point.status == "unavailable" and "candidate_manifest_changed" in point.reason
+        assert [p.fact_id for p in point.alternatives] == [1, 2, 3]
+    else:
+        assert point.scope_authorization.approval_id == approval.ref.approval_id
+
+
+@pytest.mark.parametrize("value", ["0", "-10"])
+def test_c5_nonpositive_denominators_keep_exact_baseline_reasons(value):
+    company, rows = c5_rows("standard")
+    rows[0].value = rows[8].value = Decimal(value)
+    model = FinancialMetrics(company, rows)
+    assert c5_payload(model) == c5_payload(c5_reference()(company, rows))
+    metrics = model.summary("annual").metrics
+    for name in ("gross_margin", "net_margin", "operating_margin", "revenue_growth_yoy"):
+        assert metrics[name].value is None and "positive" in metrics[name].reason
+
+
+@pytest.mark.parametrize("rounding", ["ROUND_DOWN", "ROUND_UP", "ROUND_HALF_EVEN"])
+def test_c5_precision_28_preserves_ambient_rounding_without_quantization(rounding):
+    from decimal import localcontext
+    company, rows = c5_rows("standard")
+    rows[8].value, rows[9].value = Decimal("7"), Decimal("2")
+    with localcontext() as context:
+        context.prec, context.rounding = 6, rounding
+        point = FinancialMetrics(company, rows).summary("annual").metrics["gross_margin"]
+        assert context.prec == 6 and context.rounding == rounding
+        assert point == c5_reference()(company, rows).summary("annual").metrics["gross_margin"]
+        with localcontext() as expected_context:
+            expected_context.prec = 28
+            assert point.value == Decimal("2") / Decimal("7")
+        assert len(point.value.as_tuple().digits) == 28
+
+
+@pytest.mark.parametrize("field,value", [
+    ("source", "untrusted: Revenues"), ("unit", "EUR"), ("form", "8-K"),
+    ("accession_number", "invalid"), ("filed", date(2024, 1, 1)),
+    ("value", Decimal("NaN")), ("period_start", None),
+])
+def test_c5_source_eligibility_is_preserved_before_conversion(field, value):
+    company, rows = c5_rows("standard")
+    for fact in rows:
+        setattr(fact, field, value)
+    model = FinancialMetrics(company, rows)
+    assert c5_payload(model) == c5_payload(c5_reference()(company, rows))
+    if field != "period_start":
+        assert model.summary("annual").metrics["revenue"].value is None
+
+
+def test_c5_pinned_exception_retains_raw_conflict_and_single_pair_guards():
+    from copy import copy
+    company, rows = c5_rows("pinned")
+    model = FinancialMetrics(company, rows)
+    summary = model.summary().metrics
+    gross, revenue = summary["gross_profit"], summary["revenue"]
+    assert summary["gross_margin"].value == Decimal("0.5005620698794520047159033788")
+    changed_value = gross.model_copy(update={"value": Decimal("54770000001")})
+    assert model.calculate("gross_margin", (changed_value, revenue), revenue.period, ("gross_profit", "revenue")).value is None
+    gross.provenance.append(gross.provenance[0].model_copy())
+    assert model.calculate("gross_margin", (gross, revenue), revenue.period, ("gross_profit", "revenue")).value is None
+    conflict = copy(rows[1])
+    conflict.id = 3
+    conflict.value = Decimal("54770000001")
+    conflict.frame = "CY2026Q2"
+    changed = rows + [conflict]
+    assert c5_payload(FinancialMetrics(company, changed)) == c5_payload(c5_reference()(company, changed))
+    assert FinancialMetrics(company, changed).summary().metrics["gross_margin"].value is None
+
+
+@pytest.mark.parametrize("decision", ["fact_id_tie", "total_preference", "formula", "changed_start_inventory", "pinned_conflict"])
+def test_c5_decision_mutation_controls_are_detected(monkeypatch, decision):
+    """Each intentional wrong decision must trip an independent contract test.
+
+    Mutations affect only this test process, never production files or goldens.
+    """
+    from dataclasses import replace
+    from app import financial_metric_engine as engine
+    if decision == "fact_id_tie":
+        original_sorted = sorted
+        def wrong_sorted(values, *, key=None, reverse=False):
+            values = list(values)
+            if values and key is not None:
+                probe = key(values[0])
+                if isinstance(probe, tuple) and len(probe) == 6:
+                    actual_key = key
+                    key = lambda item: (*actual_key(item)[:-1], -actual_key(item)[-1])
+            return original_sorted(values, key=key, reverse=reverse)
+        monkeypatch.setattr(engine, "sorted", wrong_sorted, raising=False)
+        check = test_c5_independent_selection_and_diagnostic_contracts
+    elif decision == "total_preference":
+        monkeypatch.setattr(engine.FinancialMetricEngine, "revenue_candidates", lambda self, candidates: candidates)
+        check = test_c5_independent_selection_and_diagnostic_contracts
+    elif decision == "formula":
+        original = engine.FinancialMetricEngine.calculate
+        def wrong_formula(*args):
+            point = original(*args)
+            return replace(point, value=point.value+1) if point.value is not None else point
+        monkeypatch.setattr(engine.FinancialMetricEngine, "calculate", wrong_formula)
+        check = test_c5_independent_selection_and_diagnostic_contracts
+    elif decision == "changed_start_inventory":
+        original = FinancialMetrics.authorization_facts
+        def incomplete_inventory(self, *args):
+            return [f for f in original(self, *args) if f.period_start == date(2025, 1, 1)]
+        monkeypatch.setattr(FinancialMetrics, "authorization_facts", incomplete_inventory)
+        check = lambda: test_c5_authorization_parity_complete_original_inventory(monkeypatch, "selection", True)
+    else:
+        monkeypatch.setattr(FinancialMetrics, "reviewed_gross_margin_scope", lambda *args: True)
+        def check():
+            from copy import copy
+            company, rows = c5_rows("pinned")
+            conflict = copy(rows[1])
+            conflict.id, conflict.value = 3, Decimal("54770000001")
+            conflict.frame = "CY2026Q2"
+            point = FinancialMetrics(company, rows + [conflict]).summary().metrics["gross_margin"]
+            assert point.status == "unavailable" and point.value is None
+    with pytest.raises(AssertionError):
+        check()
+
+
+@pytest.mark.parametrize("role,index", [("selected", 17), ("ranked_alternative", 16), ("excluded_alternative", 18)])
+@pytest.mark.parametrize("field,value", [
+    ("value", Decimal("9999")), ("period_start", date(2025, 1, 2)),
+    ("period_end", date(2025, 12, 30)), ("filed", date(2026, 4, 1)),
+    ("source", "SEC Company Facts API: SalesRevenueNet"),
+    ("accession_number", "0000000001-26-000099"), ("unit", "EUR"),
+    ("metric", "changed stored metric"), ("frame", "changed frame"),
+    ("fiscal_year", 2025), ("fiscal_period", "FY"),
+    ("created_at", datetime(2026, 5, 6, 7, 8, 9)),
+])
+def test_c5_p2_snapshot_matches_baseline_after_original_row_mutation(role, index, field, value):
+    company, rows = c5_rows("rank")
+    old, new = c5_reference()(company, rows), FinancialMetrics(company, rows)
+    before = c5_payload(old)
+    assert c5_payload(new) == before
+    setattr(rows[index], field, value)
+    assert new.facts[index] is old.facts[index] is rows[index]
+    # Retained originals are live for the original authorization/diagnostic helpers.
+    assert new.source("revenue", rows[index]) == old.source("revenue", rows[index])
+    assert c5_payload(old) == before
+    assert c5_payload(new) == before
+    base = new.base["revenue"][-1]
+    observed = new.observation("revenue", base.period)
+    assert observed == base == old.observation("revenue", base.period)
+    assert observed.value == observed.provenance[0].value == Decimal("122")
+    assert [s.value for s in observed.alternatives] == [Decimal("121"), Decimal("120"), Decimal("999")]
+
+
+@pytest.mark.parametrize("operand", ["gross_profit", "revenue"])
+@pytest.mark.parametrize("field,value,available", [
+    ("accession_number", "0000320193-26-000099", False),
+    ("original_concept", "SalesRevenueNet", False),
+    ("period_start", date(2026, 3, 30), False), ("period_end", date(2026, 6, 26), False),
+    ("value", Decimal("1"), False), ("unit", "EUR", False),
+    ("company_cik", "0000000002", False), ("form", "10-Q/A", False),
+    ("filed", date(2026, 8, 1), False),
+    ("source", "changed supplied source annotation", True),
+    ("frame", "changed supplied frame", True),
+    ("stored_at", datetime(2026, 8, 1, 1, 2, 3), True),
+])
+def test_c5_p2_helper_preserves_same_id_submitted_provenance(operand, field, value, available):
+    company, rows = c5_rows("pinned")
+    old, new = c5_reference()(company, rows), FinancialMetrics(company, rows)
+    supplied = old.summary().metrics
+    gross, revenue = supplied["gross_profit"].model_copy(deep=True), supplied["revenue"].model_copy(deep=True)
+    changed = gross if operand == "gross_profit" else revenue
+    original_id = changed.provenance[0].fact_id
+    changed.provenance[0] = changed.provenance[0].model_copy(update={field: value})
+    assert changed.provenance[0].fact_id == original_id
+    args = ("gross_margin", (gross, revenue), revenue.period, ("gross_profit", "revenue"))
+    expected = old.calculate(*args)
+    assert (expected.status == "available") is available
+    actual = new.calculate(*args)
+    assert actual == expected
+    if available:
+        assert getattr(actual.provenance[0 if operand == "gross_profit" else 1], field) == value
+
+
+def test_c5_p2_legitimate_helper_inputs_need_no_local_row_or_input_ancestry_lookup():
+    from app.financial_metric_schemas import MetricInput
+    company, rows = c5_rows("standard")
+    supplied = c5_reference()(company, rows).summary("annual").metrics
+    cash, capex = supplied["operating_cash_flow"], supplied["capital_expenditures"]
+    cash.inputs = [MetricInput(role="prior derivation", metric=cash.metric, value=cash.value,
+                              unit=cash.unit, period=cash.period, fact_ids=[cash.provenance[0].fact_id])]
+    args = ("free_cash_flow", (cash, capex), cash.period, (cash.metric, capex.metric))
+    expected = c5_reference()(company, []).calculate(*args)
+    assert expected.value == Decimal("50")
+    assert FinancialMetrics(company, []).calculate(*args) == expected
+
+
+@pytest.mark.parametrize("field,value", [
+    ("value", Decimal("101")), ("period_start", date(2025, 1, 2)),
+    ("source", "SEC Company Facts API: SalesRevenueNet"),
+    ("accession_number", "0000000001-25-000099"),
+])
+def test_c5_p2_authorization_diagnostics_still_use_original_rows(monkeypatch, field, value):
+    from test_revenue_scope_authorizations import COMPANY, denominator_fixture
+    rows, proofs, _ = denominator_fixture(monkeypatch)
+    old = c5_reference()(COMPANY, rows, authorization_evidence=proofs)
+    new = FinancialMetrics(COMPANY, rows, authorization_evidence=proofs)
+    assert old.summary().metrics["net_margin"].status == new.summary().metrics["net_margin"].status == "available"
+    setattr(rows[0], field, value)
+    assert c5_payload(new) == c5_payload(old)
+    expected, actual = old.summary().metrics["net_margin"], new.summary().metrics["net_margin"]
+    assert actual == expected and actual.status == "unavailable"
+    if actual.alternatives:
+        # Rejection diagnostics retain the original operation's live raw inventory;
+        # they must not be replaced by the selected/base construction snapshot.
+        assert actual.alternatives[0] == old.source("revenue", rows[0])
+
+
+@pytest.mark.parametrize("local_indices", [(), (0,), (1,)])
+def test_c5_p2_missing_local_authorization_operand_keeps_baseline_unavailable(monkeypatch, local_indices):
+    from test_revenue_scope_authorizations import COMPANY, denominator_fixture
+    rows, proofs, _ = denominator_fixture(monkeypatch)
+    supplied = c5_reference()(COMPANY, rows, authorization_evidence=proofs).summary().metrics
+    args = ("net_margin", (supplied["net_income"], supplied["revenue"]),
+            supplied["revenue"].period, ("net_income", "revenue"))
+    local = [rows[i] for i in local_indices]
+    expected = c5_reference()(COMPANY, local, authorization_evidence=proofs).calculate(*args)
+    assert expected.status == "unavailable"
+    assert FinancialMetrics(COMPANY, local, authorization_evidence=proofs).calculate(*args) == expected
