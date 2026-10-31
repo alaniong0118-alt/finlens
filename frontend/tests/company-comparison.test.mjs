@@ -672,7 +672,7 @@ for (const [label, geometry, expected] of [
   ['touch focus exclusion', { visible: false }, 0],
 ]) test(`comparison keyboard focus reveal: ${label}`, async ctx => {
   const app = await focusTable(ctx, geometry.total === 960 ? 4 : 2);
-  const target = app.scroller.querySelector('summary');
+  const target = app.scroller.querySelector('tbody td summary');
   const requestCount = app.requests.length;
   const beforeSelection = [...app.host.querySelectorAll('.comparison-picker select')].map(el => el.value);
   const geo = focusGeometry(ctx, app.scroller, target, geometry);
@@ -703,7 +703,7 @@ for (const [label, selector] of [
   ['source link', '.provenance .source-record a'],
 ]) test(`comparison focus reveal covers ${label} without moving focus or fetching`, async ctx => {
   const app = await focusTable(ctx);
-  app.scroller.querySelector('.provenance').open = true;
+  app.scroller.querySelector('tbody td .provenance').open = true;
   const target = app.scroller.querySelector(selector);
   assert.ok(target);
   const count = app.requests.length;
@@ -735,7 +735,7 @@ for (const [label, geometry, expectedY, expectedX = 0] of [
   ['four-company combined reveal', { top: 840, initial: 299, x: 307, width: 176, total: 960 }, 547, 433],
 ]) test(`comparison vertical keyboard reveal: ${label}`, async ctx => {
   const app = await focusTable(ctx, geometry.total === 960 ? 4 : 2);
-  const target = app.scroller.querySelector('summary');
+  const target = app.scroller.querySelector('tbody td summary');
   const requestCount = app.requests.length;
   const selections = [...app.host.querySelectorAll('select')].map(el => el.value);
   const headers = [...app.scroller.querySelectorAll('thead th')].map(el => el.textContent);
@@ -1069,4 +1069,229 @@ with patch('app.database.engine.connect', Mock(side_effect=AssertionError('Live 
   const mislabeled = structuredClone(result);
   mislabeled.metrics.revenue_growth_yoy.inputs[1].period.fiscal_year = 2023;
   assert.throws(() => contract.validateAnnualResponse(mislabeled, issuer, 2024), e => e.code === 'INVALID_RESPONSE');
+});
+
+function inspector(app, metric = 'revenue') {
+  const row = app.host.querySelectorAll('tbody tr')[contract.COMPARISON_METRICS.indexOf(metric)];
+  return row?.querySelector('th details');
+}
+
+test('metric diagnostics distinguish observed differences, missing metadata, exclusions and unverified columns', () => {
+  const a = response('AAA', 2025);
+  const b = response('BBB', 2025, { basis: 'customer_contract', period: { start: '2024-09-29', end: '2025-09-27' } });
+  assert.deepEqual(contract.metricComparability('revenue', [a, b]), {
+    windowsDiffer: true, missingWindow: false, basesDiffer: true, basisUnknown: false, excluded: 0, unverified: 0,
+  });
+  delete b.metrics.revenue.revenue_basis;
+  assert.equal(contract.validateAnnualResponse(b, company('BBB'), 2025), b);
+  assert.deepEqual(contract.metricComparability('revenue', [a, b]), {
+    windowsDiffer: true, missingWindow: false, basesDiffer: false, basisUnknown: true, excluded: 0, unverified: 0,
+  });
+  assert.deepEqual(contract.metricComparability('revenue', [a, missing('BBB', 2025), undefined]), {
+    windowsDiffer: false, missingWindow: true, basesDiffer: false, basisUnknown: true, excluded: 1, unverified: 1,
+  });
+  assert.deepEqual(contract.metricComparability('gross_margin', [a, b]), {
+    windowsDiffer: true, missingWindow: false, basesDiffer: false, basisUnknown: true, excluded: 2, unverified: 0,
+  });
+  assert.equal(contract.metricComparability('operating_cash_flow', [a, b]).basisUnknown, false,
+    'Do not assign revenue-basis eligibility to unrelated cash-flow metrics');
+  assert.equal(contract.metricComparability('operating_cash_flow', [a, b]).basesDiffer, false,
+    'Do not borrow the revenue row basis for another metric');
+});
+
+test('row inspector groups exact company periods and raw bases without changing values, sources, pins or copy notes', async ctx => {
+  const writes = []; clipboard(ctx, async text => { writes.push(text); });
+  const app = await mount(ctx); await app.select(); await app.discovery(['AAA', 'BBB'], [2025], [0, 1]);
+  const a = response('AAA', 2025);
+  const b = response('BBB', 2025, { basis: 'customer_contract', period: { start: '2024-09-29', end: '2025-09-27' } });
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), a);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), b);
+  const panel = inspector(app);
+  assert.equal(panel.open, false);
+  assert.equal(panel.querySelector('summary').textContent, 'Inspect Revenue comparability');
+  const count = app.requests.length;
+  await act(async () => panel.querySelector('summary').click());
+  assert.equal(panel.open, true);
+  assert.match(panel.textContent, /Reported date ranges differ within this row/);
+  assert.match(panel.textContent, /Reported revenue-basis labels differ/);
+  const participants = panel.querySelectorAll('.source-record');
+  assert.equal(participants.length, 2);
+  assert.match(participants[0].textContent, /AAAAvailableReporting period: 2025-01-01 – 2025-12-31 · FY2025 FY/);
+  assert.match(participants[1].textContent, /BBBAvailableReporting period: 2024-09-29 – 2025-09-27 · FY2025 FY/);
+  assert.match(participants[0].textContent, /Metric revenue basis: total_revenue/);
+  assert.match(participants[1].textContent, /Metric revenue basis: customer_contract/);
+  assert.match(app.host.textContent, /Reporting windows differ/);
+  assert.match(app.host.textContent, /Revenue economic bases differ/);
+  assert.equal(app.host.querySelectorAll('tbody td').length, 22);
+  for (const [i, ticker] of ['AAA', 'BBB'].entries()) {
+    const cell = app.host.querySelector(`tbody tr td:nth-child(${i + 2})`);
+    assert.equal(cell.querySelector('.metric-value').textContent, '$1B');
+    assert.match(cell.querySelector('details').textContent, /Exact API value: 1000000000 USD/);
+    assert.equal(cell.querySelector('a').href, `https://www.sec.gov/Archives/edgar/data/${i + 1}/filing.htm`);
+    assert.equal(app.request(ticker, 'financials/annual?fiscal_year=2025').options.headers['X-FinLens-Data-Version'], String(i));
+  }
+  await act(async () => noteButton(app).click());
+  assert.deepEqual(writes, [notes.serializeResearchNote('revenue', 2025, [
+    { company: company('AAA'), version: 0, result: a }, { company: company('BBB'), version: 1, result: b },
+  ])]);
+  assert.equal(app.requests.length, count);
+  await act(async () => panel.querySelector('summary').click());
+  assert.equal(panel.open, false);
+});
+
+test('missing periods and exclusion reasons remain exact inert text for every selected participant', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  const rawPeriod = 'unknown_window_v9  <img src=x onerror="alert(1)">\nDo not substitute.';
+  const rawMetric = 'basis_rule_NEW_v7  <script>run()</script>\nkeep_original_reason';
+  const a = response('AAA', 2025); const b = missing('BBB', 2025, rawPeriod);
+  a.metrics.gross_margin.status = 'not_applicable'; a.metrics.gross_margin.reason = rawMetric;
+  b.metrics.gross_margin.reason = 'new_exclusion_code__not_translated';
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), a);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), b);
+  const panel = inspector(app, 'gross_margin');
+  assert.match(panel.textContent, /A reporting period is missing/);
+  assert.match(panel.textContent, /2 of 2 companies have unavailable or not-applicable values/);
+  const participants = panel.querySelectorAll('.source-record');
+  assert.match(participants[0].textContent, /Not applicable — excluded/);
+  assert.match(participants[1].textContent, /Unavailable — no value included/);
+  assert.match(participants[1].textContent, /Unknown — no reporting period supplied/);
+  const reasons = [...panel.querySelectorAll('p > span')].map(span => span.textContent);
+  assert.deepEqual(reasons, [rawMetric, rawPeriod, b.metrics.gross_margin.reason]);
+  assert.equal(panel.querySelector('img, script'), null);
+  assert.equal(app.host.querySelectorAll('tbody tr').length, 11);
+  assert.equal(noteButton(app, 'Gross margin').disabled, false, 'Verified unavailable/excluded columns retain existing export eligibility');
+  assert.equal(app.requests.length, 6);
+});
+
+test('unknown metric basis stays unknown; matching labels never claim equivalent accounting scope', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  const a = response('AAA', 2025); const b = response('BBB', 2025);
+  delete b.metrics.revenue.revenue_basis;
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), a);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), b);
+  const panel = inspector(app);
+  assert.match(panel.textContent, /Revenue basis is unknown/);
+  assert.match(panel.querySelectorAll('.source-record')[1].textContent, /Metric revenue basis: Unknown — not supplied/);
+  assert.doesNotMatch(panel.textContent, /Reported date ranges differ|Reported revenue-basis labels differ/);
+  assert.match(panel.textContent, /Matching dates, units or basis labels do not establish equivalent accounting scope/);
+  assert.match(panel.textContent, /Industry and share-basis eligibility are not established/);
+  const same = contract.metricComparability('revenue', [a, response('BBB', 2025)]);
+  assert.deepEqual(same, { windowsDiffer: false, missingWindow: false, basesDiffer: false, basisUnknown: false, excluded: 0, unverified: 0 });
+  assert.equal(Object.hasOwn(same, 'equivalent'), false);
+});
+
+test('derived inspector uses only its own returned revenue operands and retains separate prior/current dates', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  const make = ticker => {
+    const result = response(ticker, 2025, { basis: 'net_interest' });
+    const current = result.metrics.revenue.provenance[0];
+    const prior = { ...current, fact_id: 100, period_start: '2024-01-01', period_end: '2024-12-31' };
+    result.metrics.revenue_growth_yoy = { ...result.metrics.revenue_growth_yoy, status: 'available', reason: null,
+      value: '0.25', provenance: [current, prior], inputs: [
+        { role: 'current', metric: 'revenue', unit: 'USD', value: '100', fact_ids: [current.fact_id], period: result.period, revenue_basis: 'total_revenue' },
+        { role: 'prior', metric: 'revenue', unit: 'USD', value: '80', fact_ids: [100],
+          period: { ...result.period, start: '2024-01-01', end: '2024-12-31', fiscal_year: 2024 }, revenue_basis: 'total_revenue' },
+      ] };
+    return result;
+  };
+  const a = make('AAA'); const b = make('BBB');
+  b.metrics.revenue_growth_yoy.inputs[0].revenue_basis = 'future_basis__literal';
+  delete b.metrics.revenue_growth_yoy.inputs[1].revenue_basis;
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), a);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), b);
+  const panel = inspector(app, 'revenue_growth_yoy');
+  assert.match(panel.textContent, /Reported revenue-basis labels differ/);
+  assert.match(panel.textContent, /Revenue basis is unknown/);
+  assert.match(panel.textContent, /Operand: current · revenueOperand reporting period: 2025-01-01 – 2025-12-31/);
+  assert.match(panel.textContent, /Operand: prior · revenueOperand reporting period: 2024-01-01 – 2024-12-31/);
+  assert.match(panel.textContent, /Operand revenue basis: future_basis__literal/);
+  assert.match(panel.textContent, /Operand revenue basis: Unknown — not supplied for this operand/);
+  assert.doesNotMatch(panel.textContent, /net_interest/, 'Never borrow the other metric basis');
+  assert.equal(app.host.querySelectorAll('tbody tr')[1].querySelector('.metric-value').textContent, '25%');
+  assert.equal(app.requests.length, 6);
+});
+
+test('unverified response remains an unknown inspector participant and copy stays disabled', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), response('AAA', 2025), '9');
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), response('BBB', 2025));
+  const panel = inspector(app);
+  assert.match(panel.textContent, /1 of 2 company responses could not be verified/);
+  const failed = panel.querySelector('.source-record');
+  assert.match(failed.textContent, /AAAFinancial evidence not verified: Published data changed/);
+  assert.doesNotMatch(failed.textContent, /Reporting period:|Metric revenue basis:|Available/);
+  assert.equal(noteButton(app).disabled, true);
+  assert.equal(app.requests.length, 6);
+});
+
+test('all eleven inspectors include four companies without claiming equivalence or adding requests', async ctx => {
+  const app = await focusTable(ctx, 4);
+  const disclosures = [...app.host.querySelectorAll('tbody th details')];
+  assert.equal(disclosures.length, 11);
+  for (const [index, panel] of disclosures.entries()) {
+    assert.equal(panel.querySelectorAll('.source-record').length, 4);
+    assert.equal(panel.querySelector('summary').textContent, `Inspect ${['Revenue', 'Revenue YoY', 'Operating margin', 'Net margin', 'Operating cash flow', 'Capital expenditures', 'Free cash flow', 'Gross profit', 'Operating income', 'Net income', 'Gross margin'][index]} comparability`);
+    assert.equal(panel.open, false);
+    assert.match(panel.textContent, /Matching dates, units or basis labels do not establish/);
+  }
+  assert.equal(app.host.querySelectorAll('tbody td').length, 44);
+  assert.equal(app.requests.length, 12);
+});
+
+test('inspector focus uses existing reveal policy and a fiscal-year change discards old disclosure content', async ctx => {
+  const app = await focusTable(ctx);
+  const panel = inspector(app); const target = panel.querySelector('summary');
+  const geo = focusGeometry(ctx, app.scroller, target, { top: -0.15625, initialY: 500 });
+  await act(async () => target.focus());
+  assert.equal(document.activeElement, target);
+  assert.equal(geo.position(), 73); assert.equal(geo.pageY(), 492);
+  await act(async () => target.click()); assert.equal(panel.open, true);
+  await app.change('#comparison-year', 2024);
+  assert.equal(app.host.querySelector('table'), null);
+  assert.equal(panel.isConnected, false);
+  for (const ticker of ['AAA', 'BBB']) await app.release(app.request(ticker, 'financials/annual?fiscal_year=2024'), response(ticker, 2024));
+  const next = inspector(app);
+  assert.equal(next.open, false);
+  assert.match(next.textContent, /2024-01-01 – 2024-12-31/);
+  assert.doesNotMatch(next.textContent, /2025-01-01|2025-12-31/);
+  assert.equal(app.requests.length, 8);
+});
+
+test('malformed operand metric is contained as an unverified column while the valid peer remains visible', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  const malformed = response('AAA', 2025);
+  malformed.metrics.free_cash_flow.inputs = [{ role: 'operating_cash_flow', metric: { unexpected: 'value' },
+    value: '-7', unit: 'USD', period: malformed.period, fact_ids: [malformed.metrics.operating_cash_flow.provenance[0].fact_id] }];
+  assert.throws(() => contract.validateAnnualResponse(malformed, company('AAA'), 2025), e => e.code === 'INVALID_RESPONSE');
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), malformed);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), response('BBB', 2025));
+  assert.equal(app.host.querySelectorAll('tbody tr').length, 11, 'Rendering survives the malformed column');
+  assert.match(app.host.querySelector('tbody td').textContent, /does not match this company/);
+  assert.equal(app.host.querySelector('tbody td:nth-child(3) .metric-value').textContent, '$1B');
+  const panel = inspector(app, 'free_cash_flow');
+  assert.match(panel.textContent, /1 of 2 company responses could not be verified/);
+  assert.match(panel.querySelector('.source-record').textContent, /AAAFinancial evidence not verified/);
+  assert.match(panel.querySelectorAll('.source-record')[1].textContent, /BBBAvailable/);
+  assert.equal(noteButton(app).disabled, true);
+  assert.equal(noteButton(app, 'Free cash flow').disabled, true);
+  assert.equal(app.requests.length, 6);
+});
+
+test('unknown string operand metric is accepted verbatim and rendered only as inert text', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  const result = response('AAA', 2025);
+  const raw = 'future_metric__v9  <img src=x onerror="run()">\nretain_label';
+  result.metrics.free_cash_flow.inputs = [{ role: 'operating_cash_flow', metric: raw,
+    value: '-7', unit: 'USD', period: result.period, fact_ids: [result.metrics.operating_cash_flow.provenance[0].fact_id] }];
+  assert.equal(contract.validateAnnualResponse(result, company('AAA'), 2025), result);
+  assert.equal(result.metrics.free_cash_flow.inputs[0].metric, raw);
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), result);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), response('BBB', 2025));
+  const panel = inspector(app, 'free_cash_flow');
+  const operand = [...panel.querySelectorAll('p')].find(p => p.textContent.startsWith('Operand: '));
+  assert.equal(operand.textContent, `Operand: operating_cash_flow · ${raw}`);
+  assert.equal(panel.querySelector('img'), null);
+  assert.doesNotMatch(panel.textContent, /company responses could not be verified/);
+  assert.equal(noteButton(app).disabled, false);
+  assert.equal(app.requests.length, 6);
 });

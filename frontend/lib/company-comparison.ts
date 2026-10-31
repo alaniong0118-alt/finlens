@@ -73,7 +73,7 @@ export function validateAnnualResponse(result: AnnualFinancialComparison, compan
     } else if (point.value !== null || !point.reason) reject();
     for (const input of point.inputs) {
       const prior = name === "revenue_growth_yoy" && input.role === "prior";
-      if (!input.period || (prior ? !comparablePriorAnnual(input.period, result.period)
+      if (typeof input.metric !== "string" || !input.period || (prior ? !comparablePriorAnnual(input.period, result.period)
           : !annualPeriod(input.period, year) || !sameWindow(input.period, result.period)) || input.unit !== "USD"
           || !Array.isArray(input.fact_ids) || input.fact_ids.length === 0) reject();
     }
@@ -97,4 +97,29 @@ export function validateAnnualResponse(result: AnnualFinancialComparison, compan
 export function reportingWindowsDiffer(results: AnnualFinancialComparison[]): boolean {
   const windows = results.filter(r => r.period !== null).map(r => `${r.period!.start}/${r.period!.end}`);
   return new Set(windows).size > 1;
+}
+
+// Diagnostics describe returned metadata, never financial equivalence. Call only
+// with the current, validated columns; an absent result stays explicitly unknown.
+export function metricComparability(metric: typeof COMPARISON_METRICS[number], results: (AnnualFinancialComparison | undefined)[]) {
+  const points = results.flatMap(result => result ? [result.metrics[metric]] : []);
+  const windows = points.flatMap(point => point.period ? [`${point.period.start}/${point.period.end}`] : []);
+  const revenueDependent = ["revenue", "revenue_growth_yoy", "operating_margin", "net_margin", "gross_margin"].includes(metric);
+  const reportedBasis = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+  const bases = points.flatMap(point => [point.revenue_basis, ...point.inputs
+    .filter(input => input.metric === "revenue").map(input => input.revenue_basis)].filter(reportedBasis));
+  const unverified = results.filter(result => !result).length;
+  const basisUnknown = revenueDependent && (unverified > 0 || points.some(point => {
+    const inputs = point.inputs.filter(input => input.metric === "revenue");
+    return (!reportedBasis(point.revenue_basis) && inputs.length === 0)
+      || inputs.some(input => !reportedBasis(input.revenue_basis));
+  }));
+  return {
+    windowsDiffer: new Set(windows).size > 1,
+    missingWindow: points.some(point => point.period === null),
+    basesDiffer: new Set(bases).size > 1,
+    basisUnknown,
+    excluded: points.filter(point => point.status !== "available").length,
+    unverified,
+  };
 }

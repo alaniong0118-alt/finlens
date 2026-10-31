@@ -1,14 +1,57 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { describeApiError, FinLensApiError, getAnnualFinancials, getFreshness, versionedController,
-  type AnnualFinancialComparison, type Company } from "@/lib/finlens-api";
-import { COMPARISON_METRICS, comparisonYears, reportingWindowsDiffer, validCompanySelection, validateAnnualResponse } from "@/lib/company-comparison";
+  type AnnualFinancialComparison, type Company, type FinancialPeriod } from "@/lib/finlens-api";
+import { COMPARISON_METRICS, comparisonYears, metricComparability, reportingWindowsDiffer, validCompanySelection, validateAnnualResponse } from "@/lib/company-comparison";
 import { formatMetric, METRIC_LABELS, periodLabel } from "@/lib/research";
 import { MetricProvenance } from "@/components/financial-research";
 import { serializeResearchNote } from "@/lib/research-note";
 
 type CompanyScope = { company: Company; version: number | null; years: number[]; error?: string };
 type Column = CompanyScope & { result?: AnnualFinancialComparison };
+
+function inspectionPeriod(period: FinancialPeriod | null | undefined): string {
+  return period ? `${period.start ?? "Unknown start"} – ${period.end} · FY${period.fiscal_year ?? "unknown"} ${period.fiscal_period ?? ""}`
+    : "Unknown — no reporting period supplied";
+}
+
+function ComparabilityInspector({ metric, columns }: { metric: typeof COMPARISON_METRICS[number]; columns: Column[] }) {
+  const diagnostics = metricComparability(metric, columns.map(column => column.result));
+  return <details className="provenance">
+    <summary>Inspect {METRIC_LABELS[metric]} comparability</summary>
+    <div className="details-body">
+      {diagnostics.windowsDiffer && <p>Reported date ranges differ within this row.</p>}
+      {diagnostics.missingWindow && <p>A reporting period is missing. No substitute window is used.</p>}
+      {diagnostics.basesDiffer && <p>Reported revenue-basis labels differ within this row. Equivalence is not established.</p>}
+      {diagnostics.basisUnknown && <p>Revenue basis is unknown for at least one company or revenue operand.</p>}
+      {diagnostics.excluded > 0 && <p>{diagnostics.excluded} of {columns.length} companies have unavailable or not-applicable values. Their reasons remain below.</p>}
+      {diagnostics.unverified > 0 && <p>{diagnostics.unverified} of {columns.length} company responses could not be verified. Their comparability is unknown.</p>}
+      <p>Matching dates, units or basis labels do not establish equivalent accounting scope. Industry and share-basis eligibility are not established by this response.</p>
+      {columns.map(column => {
+        const result = column.result;
+        const point = result?.metrics[metric];
+        return <div className="source-record" key={column.company.cik}>
+          <strong>{column.company.ticker}</strong>
+          {point && result ? <>
+            <p>{point.status === "available" ? "Available" : point.status === "not_applicable" ? "Not applicable — excluded" : "Unavailable — no value included"}</p>
+            <p className="wrap-anywhere">Reporting period: {inspectionPeriod(point.period)}</p>
+            {result.period_reason && <p>Period reason: <span style={{ whiteSpace: "pre-wrap" }}>{result.period_reason}</span></p>}
+            {point.reason && <p>Metric reason: <span style={{ whiteSpace: "pre-wrap" }}>{point.reason}</span></p>}
+            <p>Reported unit: {point.unit}{point.unit === "ratio" ? " · displayed as percent; no currency conversion" : " · no currency conversion"}</p>
+            <p>Metric revenue basis: {point.revenue_basis || "Unknown — not supplied for this metric"}</p>
+            {point.inputs.map((input, index) => <div key={index}>
+              <p>Operand: {input.role} · {input.metric}</p>
+              <p className="wrap-anywhere">Operand reporting period: {inspectionPeriod(input.period)}</p>
+              <p>Operand unit: {input.unit}</p>
+              {(input.metric === "revenue" || input.revenue_basis) && <p>Operand revenue basis: {input.revenue_basis || "Unknown — not supplied for this operand"}</p>}
+            </div>)}
+            <p>Selected and alternative observations remain in this company&apos;s sources and details.</p>
+          </> : <p>Financial evidence not verified: {column.error ?? "No verified response available."}</p>}
+        </div>;
+      })}
+    </div>
+  </details>;
+}
 
 function revealComparisonFocus(event: FocusEvent<HTMLDivElement>) {
   const scroller = event.currentTarget;
@@ -226,6 +269,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
             {column.version !== null && <span>Publication {column.version}</span>}
           </th>)}</tr></thead>
           <tbody>{COMPARISON_METRICS.map(metric => <tr key={metric}><th scope="row">{METRIC_LABELS[metric]}
+            <ComparabilityInspector key={requestKey} metric={metric} columns={columns} />
             <button type="button" className="secondary-button" aria-label={`Copy research note for ${METRIC_LABELS[metric]}`}
               disabled={!copyEligible || copyFeedback?.owner === copyOwner && copyFeedback.pending} onClick={() => copyNote(metric)}>Copy Research Note</button>
             <span role="status" aria-live="polite">{copyFeedback?.owner === copyOwner && copyFeedback.metric === metric ? copyFeedback.message : ""}</span>
