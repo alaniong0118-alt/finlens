@@ -58,6 +58,56 @@ export function annual(ticker: string, year: number | null): AnnualFinancialComp
   }));
   return { ...base, requested_period: 'annual', requested_fiscal_year: year, fiscal_years: [2025, 2024], period: year === null ? null : period('annual', year), period_reason: null, metrics: points };
 }
+
+// Opt-in annual comparison only. Default catalog, observations and publications
+// above remain unchanged; these additional issuers cannot enter other workflows.
+export const comparisonCompanies: Company[] = [...companies,
+  { id: 900003, ticker: 'CCC', name: 'Synthetic Gamma', cik: '0000900003', exchange: 'TEST', has_indexed_filing: false, indexed_filing_count: 0 },
+  { id: 900004, ticker: 'DDD', name: 'Synthetic Delta', cik: '0000900004', exchange: 'TEST', has_indexed_filing: false, indexed_filing_count: 0 },
+];
+export const comparisonPins: Readonly<Record<string, number>> = Object.freeze({ AAA: 0, BBB: 1, CCC: 4, DDD: 7 });
+export const comparisonUnknownReason = 'synthetic_unknown_rule__v9 <em>literal text</em>\nKeep this reason unchanged.';
+export const comparisonPeriodReason = 'synthetic_window_unknown__v3 — no annual window supplied.';
+export function comparisonCompany(ticker: string): Company {
+  const issuer = comparisonCompanies.find(item => item.ticker === ticker);
+  if (!issuer) throw new Error(`Unknown synthetic comparison issuer ${ticker}`);
+  return issuer;
+}
+export function comparisonAnnual(ticker: string, year: number | null): AnnualFinancialComparison {
+  const issuer = comparisonCompany(ticker);
+  if (year !== null && year !== 2025 && year !== 2024) throw new Error('Unsupported synthetic comparison year');
+  const result = annual(ticker === 'BBB' ? 'BBB' : 'AAA', year);
+  Object.assign(result, { ticker, company_cik: issuer.cik, company_name: issuer.name });
+  if (year === null) return result;
+  if (ticker === 'DDD') {
+    result.period = null; result.period_reason = comparisonPeriodReason;
+    for (const point of Object.values(result.metrics)) Object.assign(point, {
+      period: null, status: 'unavailable', value: null, reason: comparisonPeriodReason, provenance: [], alternatives: [], inputs: [],
+    });
+    return result;
+  }
+  const window = ticker === 'BBB' ? { ...period('annual', year), start: `${year - 1}-09-29`, end: `${year}-09-27` } : period('annual', year);
+  result.period = window;
+  for (const [index, point] of Object.values(result.metrics).entries()) {
+    point.period = window;
+    if (ticker === 'CCC' && point.metric === 'revenue') point.value = year === 2025 ? '3000000000' : '2500000000';
+    point.provenance = point.provenance.map(source => ({ ...source,
+      fact_id: issuer.id * 100 + index, company_cik: issuer.cik, value: point.value!,
+      period_start: window.start, period_end: window.end,
+      accession_number: `${issuer.cik}-26-000001`,
+      sec_url: `https://www.sec.gov/Archives/edgar/data/${Number(issuer.cik)}/${issuer.cik}26000001/synthetic.htm`,
+    }));
+  }
+  if (ticker !== 'CCC') result.metrics.revenue.revenue_basis = ticker === 'AAA' ? 'total_revenue' : 'customer_contract';
+  result.metrics.gross_margin.reason = ticker === 'BBB' ? 'synthetic_exclusion__not_translated' : comparisonUnknownReason;
+  if (ticker === 'BBB') result.metrics.gross_margin.status = 'not_applicable';
+  return result;
+}
+export function comparisonFreshness(ticker: string, version: number): CompanyFreshness {
+  comparisonCompany(ticker);
+  return { ...freshness('AAA', version), ticker, latest_indexed_filing: null, scope: 'Synthetic annual comparison publication only.' };
+}
+
 export function freshness(ticker: string, version: number): CompanyFreshness {
   const stream = { status: 'current' as const, last_checked_at: '2026-10-13T00:00:00Z', last_successful_sync_at: '2026-10-12T00:00:00Z', latest_source_filing_date: '2026-02-01', last_error: null, failure_stage: null, pending_targets: [], inventory_complete: true };
   return { ticker, data_version: version, facts_version: version, evidence_version: version, status: 'current', facts: { ...stream }, evidence: { ...stream }, latest_indexed_filing: { accession_number: accession(ticker), form: '10-K', filed: '2026-02-01' }, migration_required: false, scope: 'Synthetic publications only.' };

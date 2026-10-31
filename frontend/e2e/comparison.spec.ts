@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { test, expect, origin, type ApiRequest, type Scenario } from './fixtures/browser';
 import * as data from './fixtures/data';
 
@@ -12,6 +12,178 @@ function metricRow(page: Page, label: string) {
 }
 const revenueCopy = (page: Page) => page.getByRole('button', { name: 'Copy research note for Revenue', exact: true });
 const copyFeedback = (page: Page) => metricRow(page, 'Revenue').getByRole('status');
+
+function inspector(page: Page, label: string) {
+  return metricRow(page, label).getByRole('rowheader').locator('details').first();
+}
+function comparisonResponses(scenario: Scenario) {
+  scenario.overrides.push(request => {
+    if (!['AAA', 'BBB'].includes(request.ticker ?? '') || request.path !== `/companies/${request.ticker}/financials/annual`) return;
+    return { body: data.comparisonAnnual(request.ticker!, request.query.has('fiscal_year') ? Number(request.query.get('fiscal_year')) : null) };
+  });
+}
+function consoleErrors(page: Page) {
+  const errors: string[] = [];
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  return errors;
+}
+async function tabTo(page: Page, target: Locator) {
+  // The caller anchors on the scroll region, never on the target control.
+  for (let step = 0; step < 80; step++) {
+    await page.keyboard.press('Tab');
+    if (await target.evaluate(element => element === document.activeElement)) return;
+  }
+  throw new Error('Comparison control was not reachable through native Tab navigation');
+}
+async function expectComparisonFocus(control: Locator) {
+  await expect(control).toBeFocused();
+  const focused = await control.evaluate(element => {
+    const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+    const scroller = element.closest('.comparison-scroll')!;
+    const bounds = scroller.getBoundingClientRect();
+    const extent = parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset));
+    const top = visualViewport?.offsetTop ?? 0, bottom = top + (visualViewport?.height ?? innerHeight);
+    return { visible: element.matches(':focus-visible'), outline: style.outlineStyle,
+      width: parseFloat(style.outlineWidth), distinct: style.outlineColor !== style.backgroundColor,
+      unclipped: rect.left - extent >= Math.max(0, bounds.left + scroller.clientLeft)
+        && rect.right + extent <= Math.min(innerWidth, bounds.left + scroller.clientLeft + scroller.clientWidth)
+        && rect.top - extent >= top && rect.bottom + extent <= bottom };
+  });
+  expect(focused.visible).toBe(true); expect(focused.width).toBeGreaterThan(0);
+  expect(focused.outline).not.toBe('none'); expect(focused.distinct).toBe(true); expect(focused.unclipped).toBe(true);
+}
+async function expectComparisonTextReadable(text: Locator) {
+  await text.scrollIntoViewIfNeeded();
+  // Reveal the whole paragraph around a wrapped inline reason before measuring
+  // the original span. Native nearest-edge scrolling can leave it at the edge.
+  await text.evaluate(element => {
+    if (element.matches('p > span')) element.closest('p')!.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  });
+  await expect(text).toBeVisible();
+  const geometry = await text.evaluate(element => {
+    const rect = element.getBoundingClientRect(), scroller = element.closest('.comparison-scroll')!;
+    const bounds = scroller.getBoundingClientRect();
+    const clip = { left: Math.max(0, bounds.left + scroller.clientLeft),
+      right: Math.min(innerWidth, bounds.left + scroller.clientLeft + scroller.clientWidth), top: 0, bottom: innerHeight };
+    const checks = { positiveWidth: rect.width > 0, positiveHeight: rect.height > 0,
+      withinLeft: rect.left >= clip.left, withinRight: rect.right <= clip.right,
+      withinTop: rect.top >= clip.top, withinBottom: rect.bottom <= clip.bottom };
+    const namedRect = (value: DOMRect) => ({ left: value.left, right: value.right, top: value.top,
+      bottom: value.bottom, width: value.width, height: value.height });
+    const style = getComputedStyle(element);
+    return { textRect: namedRect(rect), scrollerRect: namedRect(bounds), clip,
+      viewport: { width: innerWidth, height: innerHeight, visual: visualViewport && {
+        offsetLeft: visualViewport.offsetLeft, offsetTop: visualViewport.offsetTop,
+        width: visualViewport.width, height: visualViewport.height, scale: visualViewport.scale } },
+      scroll: { x: scrollX, y: scrollY, left: scroller.scrollLeft, top: scroller.scrollTop },
+      textStyle: { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight,
+        whiteSpace: style.whiteSpace, overflowWrap: style.overflowWrap }, checks,
+      failedChecks: Object.entries(checks).filter(([, passed]) => !passed).map(([name]) => name) };
+  });
+  expect(geometry.failedChecks, `Comparison text must be fully contained: ${JSON.stringify(geometry)}`).toEqual([]);
+}
+
+test('annual comparability inspector: native disclosure, keyboard and readable limits @desktop-only', async ({ page, scenario }) => {
+  const errors = consoleErrors(page); comparisonResponses(scenario);
+  await scenario.open(); await scenario.ready(); await selectPair(page);
+  await expect(revenueCopy(page)).toBeEnabled(); // Selected annual responses have settled.
+  const table = page.getByRole('region', { name: 'Annual company comparison table', exact: true });
+  const revenue = inspector(page, 'Revenue'), summary = revenue.locator('summary');
+  const before = scenario.ledger.length;
+  await expect(revenue).not.toHaveAttribute('open');
+  await table.focus(); await page.keyboard.press('Tab');
+  await expectComparisonFocus(summary);
+  await page.keyboard.press('Enter'); await expect(revenue).toHaveAttribute('open', '');
+  await expect(revenue).toContainText('Reported date ranges differ within this row.');
+  await expect(revenue).toContainText('Reported revenue-basis labels differ within this row.');
+  const issuers = revenue.locator('.source-record');
+  await expect(issuers).toHaveCount(2);
+  for (const [index, dates, basis] of [
+    [0, '2025-01-01 – 2025-12-31', 'total_revenue'],
+    [1, '2024-09-29 – 2025-09-27', 'customer_contract'],
+  ] as const) {
+    await expectComparisonTextReadable(issuers.nth(index).getByText(`Reporting period: ${dates} · FY2025 FY`, { exact: true }));
+    await expectComparisonTextReadable(issuers.nth(index).getByText(`Metric revenue basis: ${basis}`, { exact: true }));
+  }
+  await table.focus(); await page.keyboard.press('Tab'); await expectComparisonFocus(summary);
+  await page.keyboard.press('Space'); await expect(revenue).not.toHaveAttribute('open');
+  await page.keyboard.press('Tab'); await expect(revenueCopy(page)).toBeFocused();
+  await page.keyboard.press('Shift+Tab'); await expectComparisonFocus(summary);
+  await summary.click(); await expect(revenue).toHaveAttribute('open', '');
+  await summary.click(); await expect(revenue).not.toHaveAttribute('open');
+  const margin = inspector(page, 'Gross margin'), marginSummary = margin.locator('summary');
+  await table.focus(); await tabTo(page, marginSummary); await expectComparisonFocus(marginSummary);
+  await page.keyboard.press('Enter'); await expect(margin).toHaveAttribute('open', '');
+  await expectComparisonTextReadable(margin.getByText('Revenue basis is unknown for at least one company or revenue operand.', { exact: true }));
+  const reason = margin.locator('.source-record').nth(0).locator('p > span');
+  await expectComparisonTextReadable(reason);
+  expect(await reason.textContent()).toBe(data.comparisonUnknownReason);
+  await expect(margin.locator('em, script, img')).toHaveCount(0);
+  await expectComparisonTextReadable(margin.getByText('Not applicable — excluded', { exact: true }));
+  await expect(metricRow(page, 'Gross margin').getByRole('cell').nth(0).locator('.metric-value')).toHaveText('Unavailable');
+  await expect(metricRow(page, 'Gross margin').getByRole('cell').nth(1).locator('.metric-value')).toHaveText('Not applicable');
+  expect(scenario.ledger).toHaveLength(before);
+  expect(errors).toEqual([]); expect(scenario.violations).toEqual([]);
+});
+
+test('annual comparability inspector: four-company scrolling and touch at 390px @mobile-only', async ({ page, scenario }) => {
+  scenario.enableFourCompanyComparison(); comparisonResponses(scenario);
+  const errors = consoleErrors(page);
+  await scenario.open(); await scenario.ready();
+  expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
+  const selectionStart = scenario.ledger.length;
+  await page.getByRole('button', { name: 'Add company', exact: true }).click();
+  await page.getByRole('button', { name: 'Add company', exact: true }).click();
+  for (const [index, ticker] of ['AAA', 'BBB', 'CCC', 'DDD'].entries()) await page.getByLabel(`Company ${index + 1}`, { exact: true }).selectOption(ticker);
+  await expect(revenueCopy(page)).toBeEnabled();
+  const table = page.getByRole('region', { name: 'Annual company comparison table', exact: true });
+  await expect(table.getByRole('columnheader')).toHaveCount(5);
+  for (const [index, ticker] of ['AAA', 'BBB', 'CCC', 'DDD'].entries()) {
+    await expect(table.getByRole('columnheader').nth(index + 1)).toContainText(`Publication ${data.comparisonPins[ticker]}`);
+    const calls = scenario.ledger.slice(selectionStart).filter(call => call.ticker === ticker);
+    expect(calls.map(call => [call.path, call.pin, call.query.toString()])).toEqual([
+      [`/companies/${ticker}/freshness`, undefined, ''],
+      [`/companies/${ticker}/financials/annual`, String(data.comparisonPins[ticker]), ''],
+      [`/companies/${ticker}/financials/annual`, String(data.comparisonPins[ticker]), 'fiscal_year=2025'],
+    ]);
+  }
+  const before = scenario.ledger.length;
+  const revenue = inspector(page, 'Revenue'), summary = revenue.locator('summary');
+  await summary.tap(); await expect(revenue).toHaveAttribute('open', '');
+  await expect(revenue.locator('.source-record')).toHaveCount(4);
+  await expectComparisonTextReadable(revenue.locator('.source-record').nth(0).getByText('Metric revenue basis: total_revenue', { exact: true }));
+  const firstY = await page.evaluate(() => scrollY);
+  await expectComparisonTextReadable(revenue.locator('.source-record').nth(2).getByText('Metric revenue basis: Unknown — not supplied for this metric', { exact: true }));
+  const delta = revenue.locator('.source-record').nth(3);
+  await expectComparisonTextReadable(delta.getByText('Reporting period: Unknown — no reporting period supplied', { exact: true }));
+  const periodReason = delta.locator('p > span').first();
+  await expectComparisonTextReadable(periodReason); expect(await periodReason.textContent()).toBe(data.comparisonPeriodReason);
+  expect(await page.evaluate(() => scrollY)).toBeGreaterThan(firstY);
+  await table.scrollIntoViewIfNeeded();
+  expect(await table.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+  // Exercise horizontal scroll positioning, then native operation in the last
+  // company column. This does not claim physical-device swipe acceptance.
+  await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  expect(await table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  const lastSource = metricRow(page, 'Revenue').getByRole('cell').nth(3).locator('details');
+  await lastSource.locator('summary').tap(); await expect(lastSource).toHaveAttribute('open', '');
+  await expectComparisonTextReadable(lastSource.getByText('No compatible source selected for this period.', { exact: true }));
+  await lastSource.locator('summary').tap(); await expect(lastSource).not.toHaveAttribute('open');
+  await table.focus(); await page.keyboard.press('Tab'); await expectComparisonFocus(summary);
+  await page.keyboard.press('Space'); await expect(revenue).not.toHaveAttribute('open');
+  await summary.tap(); await expect(revenue).toHaveAttribute('open', '');
+  await summary.tap(); await expect(revenue).not.toHaveAttribute('open');
+  const margin = inspector(page, 'Gross margin');
+  await margin.locator('summary').tap();
+  const unknown = margin.locator('.source-record').nth(0).locator('p > span');
+  await expectComparisonTextReadable(unknown); expect(await unknown.textContent()).toBe(data.comparisonUnknownReason);
+  await expect(margin.locator('em, script, img')).toHaveCount(0);
+  await expectComparisonTextReadable(margin.getByText('Not applicable — excluded', { exact: true }));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  expect(scenario.ledger).toHaveLength(before);
+  expect(errors).toEqual([]); expect(scenario.violations).toEqual([]);
+});
+
 test('comparison uses independent zero and one pins, distinct selections and annual switching', async ({ page, scenario }) => {
   await scenario.open(); await scenario.ready(); await selectPair(page);
   const table = page.getByRole('region', { name: 'Annual company comparison table', exact: true });
@@ -221,8 +393,13 @@ test('native Clipboard exact Markdown and keyboard Enter/Space @desktop-only', a
   await openCopyComparison(page, scenario); await nativeClipboard(context, page);
   const table = page.getByRole('region', { name: 'Annual company comparison table', exact: true });
   const button = revenueCopy(page);
-  await table.focus(); await page.keyboard.press('Tab');
-  await expect(button).toBeFocused();
+  const inspectorSummary = inspector(page, 'Revenue').locator('summary');
+  const enterCopyByKeyboard = async () => {
+    await table.focus(); await page.keyboard.press('Tab');
+    await expect(inspectorSummary).toBeFocused();
+    await page.keyboard.press('Tab'); await expect(button).toBeFocused();
+  };
+  await enterCopyByKeyboard();
   const focus = await button.evaluate(element => {
     const style = getComputedStyle(element); const rect = element.getBoundingClientRect();
     const extent = parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset));
@@ -235,8 +412,7 @@ test('native Clipboard exact Markdown and keyboard Enter/Space @desktop-only', a
   for (const key of ['Enter', 'Space']) {
     // Re-enter the table by native Tab after each write; temporary disabling
     // may release focus, so a second activation must not depend on retention.
-    await table.focus(); await page.keyboard.press('Tab');
-    await expect(button).toBeFocused();
+    await enterCopyByKeyboard();
     await expectNativeCopy(page, scenario, EXPECTED_REVENUE_2025, () => page.keyboard.press(key));
   }
 });

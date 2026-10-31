@@ -21,12 +21,18 @@ export class Scenario {
   ledger: ApiRequest[] = [];
   violations: string[] = [];
   failures: string[] = [];
+  private fourCompanyComparison = false;
   private gates: ReturnType<typeof gate>[] = [];
   private violate(message: string) {
     if (this.violations.length < 100) this.violations.push(message);
     else this.violations[99] = 'Violation diagnostic limit exceeded';
   }
   constructor(private context: BrowserContext, readonly page: Page) {}
+  enableFourCompanyComparison() {
+    if (this.ledger.length || this.fourCompanyComparison) throw new Error('Enable the comparison inventory once, before navigation');
+    this.fourCompanyComparison = true;
+    this.versions = { ...data.comparisonPins };
+  }
   count(path: string) { return this.ledger.filter(item => item.path === path).length; }
   hold(predicate: (request: ApiRequest) => boolean, reply?: (request: ApiRequest) => Reply) {
     const barrier = gate(); this.gates.push(barrier);
@@ -114,6 +120,17 @@ export class Scenario {
       return;
     }
     if (!ticker) throw new Error(`Unknown API route ${path}`);
+    if (this.fourCompanyComparison && (ticker === 'CCC' || ticker === 'DDD')) {
+      // Extra issuers have no snapshot/evidence/insights/research routes. Exact
+      // identity, query and independently declared pin checks precede overrides.
+      if (method !== 'GET' || body !== null) throw new Error('Invalid comparison-only request method/body');
+      if (path === `/companies/${ticker}/freshness` && !params && pin === undefined) return;
+      if (path === `/companies/${ticker}/financials/annual`
+          && (!params || params === 'fiscal_year' && ['2025', '2024'].includes(query.get('fiscal_year')!))
+          && Number.isSafeInteger(this.versions[ticker]) && this.versions[ticker] >= 0
+          && pin === String(this.versions[ticker])) return;
+      throw new Error(`Invalid comparison-only route, query or publication pin ${path}`);
+    }
     data.company(ticker);
     const suffix = path.slice(`/companies/${ticker}/`.length);
     if (suffix === 'freshness') {
@@ -148,10 +165,15 @@ export class Scenario {
   }
   defaultReply(item: ApiRequest): Reply {
     const { path, ticker, query, pin, body } = item;
-    if (path === '/companies') return { body: data.companies };
+    if (path === '/companies') return { body: this.fourCompanyComparison ? data.comparisonCompanies : data.companies };
     if (path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' } };
     const issuer = ticker!;
     const version = this.versions[issuer];
+    if (this.fourCompanyComparison && (issuer === 'CCC' || issuer === 'DDD')) {
+      this.validateRequest(item);
+      if (path === `/companies/${issuer}/freshness`) return { body: data.comparisonFreshness(issuer, version), version: null };
+      return { body: data.comparisonAnnual(issuer, query.has('fiscal_year') ? Number(query.get('fiscal_year')) : null) };
+    }
     if (path.endsWith('/freshness')) return { body: data.freshness(issuer, version), version: null };
     if (pin !== String(version)) return { status: 409, code: 'DATA_VERSION_CHANGED', version: String(version) };
     if (path === `/companies/${issuer}/financials/insights`) {

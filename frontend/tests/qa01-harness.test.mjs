@@ -36,6 +36,79 @@ const { financialInsightsFixture } = load('e2e/fixtures/financial-insights.ts');
 const { browserFinancialInsights } = load('e2e/fixtures/financial-insights-browser.ts');
 const { Scenario } = load('e2e/fixtures/browser.ts');
 
+// Exercise the actual browser helper without importing/registering Playwright
+// tests. Synthetic rectangles verify its predicate and diagnostics, not layout.
+const comparisonSpec = ts.createSourceFile('comparison.spec.ts',
+  readFileSync(resolve(frontend, 'e2e/comparison.spec.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+const readabilityHelper = comparisonSpec.statements.find(statement => ts.isFunctionDeclaration(statement)
+  && statement.name?.text === 'expectComparisonTextReadable');
+assert.ok(readabilityHelper, 'Expected the actual comparison readability helper');
+const readabilityCode = ts.transpileModule(readabilityHelper.getText(comparisonSpec), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022 },
+}).outputText;
+function readabilityFixture({ inline = true, visible = true, rect = {} } = {}) {
+  const calls = [], messages = [];
+  const textRect = { left: 110, right: 200, top: 350, bottom: 400, width: 90, height: 50, ...rect };
+  const paragraph = { scrollIntoView: options => calls.push(['center-paragraph', JSON.parse(JSON.stringify(options))]) };
+  const scroller = { clientLeft: 1, clientWidth: 244, scrollLeft: 0, scrollTop: 0,
+    getBoundingClientRect: () => ({ left: 100, right: 346, top: -1000, bottom: 5000, width: 246, height: 6000 }) };
+  const element = { matches: selector => { assert.equal(selector, 'p > span'); return inline; },
+    closest: selector => selector === 'p' ? paragraph : selector === '.comparison-scroll' ? scroller : null,
+    getBoundingClientRect: () => { calls.push(['measure-original']); return textRect; } };
+  const locator = { scrollIntoViewIfNeeded: async () => { calls.push(['native-scroll']); },
+    evaluate: async callback => callback(element) };
+  const context = { innerWidth: 390, innerHeight: 844, scrollX: 0, scrollY: 9882,
+    visualViewport: { offsetLeft: 0, offsetTop: 0, width: 390, height: 844, scale: 1 },
+    getComputedStyle: () => ({ fontFamily: 'synthetic-font', fontSize: '13px', lineHeight: '22.75px',
+      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }),
+    expect: (value, message) => ({
+      toBeVisible: async () => { assert.equal(value, locator); calls.push(['visible']); assert.ok(visible, 'Hidden text must fail'); },
+      toEqual: expected => { messages.push(message); assert.deepEqual(JSON.parse(JSON.stringify(value)), JSON.parse(JSON.stringify(expected)), message); },
+    }) };
+  runInNewContext(`${readabilityCode}\nglobalThis.checkReadability = expectComparisonTextReadable;`, context);
+  return { run: () => context.checkReadability(locator), calls, messages, textRect };
+}
+test('QA-01 readability helper centers the containing paragraph and measures the original inline reason', async () => {
+  const fixture = readabilityFixture(); await fixture.run();
+  assert.deepEqual(fixture.calls, [['native-scroll'], ['center-paragraph', { block: 'center', inline: 'nearest', behavior: 'instant' }],
+    ['visible'], ['measure-original']]);
+});
+test('QA-01 readability helper preserves native scrolling for existing block text', async () => {
+  const fixture = readabilityFixture({ inline: false }); await fixture.run();
+  assert.deepEqual(fixture.calls, [['native-scroll'], ['visible'], ['measure-original']]);
+});
+test('QA-01 readability helper accepts exact containment boundaries', async () => {
+  await readabilityFixture({ rect: { left: 101, right: 345, top: 0, bottom: 844, width: 244, height: 844 } }).run();
+});
+for (const [name, rect] of [
+  ['positiveWidth', { width: 0 }], ['positiveHeight', { height: 0 }],
+  ['withinLeft', { left: 100.999 }], ['withinRight', { right: 345.001 }],
+  ['withinTop', { top: -0.001 }], ['withinBottom', { bottom: 844.001 }],
+]) test(`QA-01 readability helper still rejects ${name} without tolerance`, async () => {
+  const fixture = readabilityFixture({ rect });
+  await assert.rejects(fixture.run(), error => {
+    const geometry = JSON.parse(fixture.messages[0].split('fully contained: ')[1]);
+    assert.deepEqual(geometry.failedChecks, [name]); assert.equal(geometry.checks[name], false);
+    return error.code === 'ERR_ASSERTION';
+  });
+});
+test('QA-01 readability failures retain named rectangles, viewport, scroll, font and every failed inequality', async () => {
+  const fixture = readabilityFixture({ rect: { right: 400, bottom: 845 } });
+  await assert.rejects(fixture.run());
+  const geometry = JSON.parse(fixture.messages[0].split('fully contained: ')[1]);
+  assert.deepEqual(geometry.textRect, fixture.textRect);
+  assert.equal(geometry.scrollerRect.left, 100);
+  assert.deepEqual(geometry.clip, { left: 101, right: 345, top: 0, bottom: 844 });
+  assert.deepEqual(geometry.failedChecks, ['withinRight', 'withinBottom']);
+  assert.equal(geometry.viewport.height, 844); assert.equal(geometry.viewport.visual.height, 844);
+  assert.equal(geometry.scroll.y, 9882); assert.equal(geometry.textStyle.fontFamily, 'synthetic-font');
+});
+test('QA-01 readability helper cannot make hidden text pass by centering it', async () => {
+  const fixture = readabilityFixture({ visible: false });
+  await assert.rejects(fixture.run(), /Hidden text must fail/);
+  assert.equal(fixture.calls.some(([name]) => name === 'measure-original'), false);
+});
+
 const insightsRequest = (ticker = 'AAA', pin = '0', query = 'mode=discover', changes = {}) => ({
   path: `/companies/${ticker}/financials/insights`, ticker, pin, query: new URLSearchParams(query), method: 'GET', body: null, request: {}, ...changes,
 });
@@ -188,6 +261,123 @@ test('QA-01 request allowlist preserves independent pins and rejects provider/un
   scenario.versions.AAA = 1; scenario.validateRequest(old);
   assert.deepEqual([scenario.defaultReply(old).status, scenario.defaultReply(old).version, scenario.defaultReply(old).code], [409, '1', 'DATA_VERSION_CHANGED']);
   assert.equal(scenario.versions.BBB, 1);
+});
+
+const comparisonRequest = (ticker, pin, query = 'fiscal_year=2025', suffix = 'financials/annual', changes = {}) => ({
+  path: `/companies/${ticker}/${suffix}`, ticker, pin, query: new URLSearchParams(query), method: 'GET', body: null, request: {}, ...changes,
+});
+
+test('QA-01 opt-in comparison fixtures pass the actual annual validator with distinct identities and honest gaps', () => {
+  const expected = { AAA: ['5000000000', '4000000000'], BBB: ['9000000000', '7000000000'], CCC: ['3000000000', '2500000000'], DDD: [null, null] };
+  for (const issuer of data.comparisonCompanies) {
+    contract.validateAnnualResponse(data.comparisonAnnual(issuer.ticker, null), issuer, null);
+    for (const [index, year] of [2025, 2024].entries()) {
+      const response = data.comparisonAnnual(issuer.ticker, year);
+      assert.equal(contract.validateAnnualResponse(response, issuer, year), response);
+      assert.equal(response.metrics.revenue.value, expected[issuer.ticker][index]);
+      for (const point of Object.values(response.metrics)) for (const source of point.provenance) {
+        assert.equal(source.company_cik, issuer.cik);
+        assert.equal(source.value, point.value);
+        assert.equal(source.period_start, response.period.start); assert.equal(source.period_end, response.period.end);
+        assert.ok(source.accession_number.startsWith(`${issuer.cik}-`));
+        assert.equal(new URL(source.sec_url).hostname, 'www.sec.gov');
+      }
+    }
+  }
+  const alpha = data.comparisonAnnual('AAA', 2025), beta = data.comparisonAnnual('BBB', 2025);
+  assert.equal(contract.reportingWindowsDiffer([alpha, beta]), true);
+  assert.equal(contract.metricComparability('revenue', [alpha, beta]).basesDiffer, true);
+  assert.equal(data.comparisonAnnual('CCC', 2025).metrics.revenue.revenue_basis, undefined);
+  assert.equal(contract.metricComparability('revenue', [data.comparisonAnnual('CCC', 2025)]).basisUnknown, true);
+  const delta = data.comparisonAnnual('DDD', 2025);
+  assert.equal(delta.period, null); assert.equal(delta.period_reason, data.comparisonPeriodReason);
+  assert.ok(Object.values(delta.metrics).every(p => p.status === 'unavailable' && p.value === null && p.period === null && p.provenance.length === 0));
+  assert.equal(alpha.metrics.gross_margin.status, 'unavailable');
+  assert.equal(alpha.metrics.gross_margin.reason, data.comparisonUnknownReason);
+  assert.equal(beta.metrics.gross_margin.status, 'not_applicable');
+  assert.throws(() => contract.validateAnnualResponse(data.comparisonAnnual('CCC', 2025), data.comparisonCompany('DDD'), 2025));
+  alpha.metrics.gross_margin.reason = 'mutated test response';
+  assert.equal(data.comparisonAnnual('AAA', 2025).metrics.gross_margin.reason, data.comparisonUnknownReason);
+  assert.throws(() => data.comparisonAnnual('EEE', 2025));
+  assert.throws(() => data.comparisonAnnual('CCC', 2023));
+});
+
+test('QA-01 comparison inventory is opt-in per scenario and cannot reset recorded traffic or default behavior', () => {
+  const ordinary = new Scenario({}, {}), enabled = new Scenario({}, {});
+  const catalog = structuredClone(ordinary.defaultReply({ path: '/companies' }).body);
+  const pins = { ...ordinary.versions }, annual = structuredClone(data.annual('AAA', 2025));
+  enabled.enableFourCompanyComparison();
+  assert.deepEqual(ordinary.defaultReply({ path: '/companies' }).body, catalog);
+  assert.deepEqual(data.companies, catalog); assert.deepEqual(ordinary.versions, pins);
+  assert.deepEqual(data.annual('AAA', 2025), annual);
+  assert.equal(enabled.defaultReply({ path: '/companies' }).body.length, 4);
+  assert.throws(() => data.company('CCC')); assert.throws(() => data.annual('CCC', 2025));
+  ordinary.versions.CCC = 4; // A pin alone must not grant catalog/route admission.
+  assert.throws(() => ordinary.validateRequest(comparisonRequest('CCC', '4')));
+  assert.throws(() => enabled.enableFourCompanyComparison());
+  const late = new Scenario({}, {}); late.ledger.push(comparisonRequest('AAA', '0'));
+  assert.throws(() => late.enableFourCompanyComparison());
+  assert.equal(late.ledger.length, 1); assert.deepEqual(late.versions, pins);
+});
+
+test('QA-01 extra comparison issuers admit only exact freshness/annual routes and their independent current pins', () => {
+  const scenario = new Scenario({}, {}); scenario.enableFourCompanyComparison();
+  for (const [ticker, pin, otherPin] of [['CCC', '4', '7'], ['DDD', '7', '4']]) {
+    scenario.validateRequest(comparisonRequest(ticker, undefined, '', 'freshness'));
+    for (const query of ['', 'fiscal_year=2025', 'fiscal_year=2024']) {
+      const current = comparisonRequest(ticker, pin, query);
+      scenario.validateRequest(current);
+      contract.validateAnnualResponse(scenario.defaultReply(current).body, data.comparisonCompany(ticker), query ? Number(new URLSearchParams(query).get('fiscal_year')) : null);
+    }
+    for (const invalid of [undefined, null, '', 'null', '0', '1', otherPin, `0${pin}`, `${pin}.0`, `+${pin}`, `${pin} `, '-1']) {
+      assert.throws(() => scenario.validateRequest(comparisonRequest(ticker, invalid)), `${ticker} must reject pin ${invalid}`);
+    }
+    for (const request of [
+      comparisonRequest(ticker, pin, 'fiscal_year=2023'), comparisonRequest(ticker, pin, 'fiscal_year=2025&fiscal_year=2025'),
+      comparisonRequest(ticker, pin, 'period=annual'), comparisonRequest(ticker, pin, '', 'sources'),
+      comparisonRequest(ticker, pin, 'period=annual', 'financials/summary'), comparisonRequest(ticker, pin, 'mode=discover', 'financials/insights'),
+      comparisonRequest(ticker, pin, 'limit=5&q=test', 'context'), comparisonRequest(ticker, pin, '', 'research-answer', { method: 'POST', body: { question: 'test' } }),
+      comparisonRequest(ticker, pin, '', 'refresh', { method: 'POST' }), comparisonRequest(ticker, pin, '', 'anything'),
+      comparisonRequest(ticker, pin, '', 'freshness'), comparisonRequest(ticker, undefined, 'unexpected=1', 'freshness'),
+      comparisonRequest(ticker, pin, 'fiscal_year=2025', 'financials/annual', { method: 'POST' }),
+      comparisonRequest(ticker, pin, 'fiscal_year=2025', 'financials/annual', { body: {} }),
+    ]) assert.throws(() => scenario.validateRequest(request), request.path);
+    assert.throws(() => scenario.defaultReply(comparisonRequest(ticker, otherPin)), 'Default extra-issuer reply also rejects a mismatched pin');
+  }
+  scenario.versions.EEE = 9;
+  assert.throws(() => scenario.validateRequest(comparisonRequest('EEE', '9')));
+  // Extra issuer admission cannot change the existing AAA/BBB stale-pin policy.
+  const beta = comparisonRequest('BBB', '0'); scenario.validateRequest(beta);
+  assert.deepEqual(scenario.defaultReply(beta), { status: 409, code: 'DATA_VERSION_CHANGED', version: '1' });
+});
+
+test('QA-01 installed opt-in comparison routes return independent headers and block pin reuse without concealing requests', async () => {
+  let intercept;
+  const context = { on() {}, async routeWebSocket() {}, async route(pattern, handler) { intercept = handler; } };
+  const scenario = new Scenario(context, { on() {} }); scenario.enableFourCompanyComparison(); await scenario.install();
+  async function deliver(ticker, suffix, pin) {
+    const result = {};
+    const request = { url: () => `http://127.0.0.1:3107/api/finlens/companies/${ticker}/${suffix}`, method: () => 'GET',
+      headers: () => pin === undefined ? {} : { 'x-finlens-data-version': pin }, postData: () => null, postDataJSON: () => null };
+    await intercept({ request: () => request, async fulfill(reply) { result.reply = reply; }, async abort(reason) { result.abort = reason; } });
+    return result;
+  }
+  for (const [ticker, pin] of [['AAA', '0'], ['BBB', '1'], ['CCC', '4'], ['DDD', '7']]) {
+    const annual = await deliver(ticker, 'financials/annual?fiscal_year=2025', pin);
+    assert.equal(annual.reply.status, 200); assert.equal(annual.reply.headers['X-FinLens-Data-Version'], pin);
+    contract.validateAnnualResponse(JSON.parse(annual.reply.body), data.comparisonCompany(ticker), 2025);
+    if (ticker === 'CCC' || ticker === 'DDD') {
+      const fresh = await deliver(ticker, 'freshness');
+      assert.equal(JSON.parse(fresh.reply.body).data_version, Number(pin));
+      assert.equal(fresh.reply.headers['X-FinLens-Data-Version'], undefined);
+    }
+  }
+  assert.equal(scenario.ledger.length, 6); assert.deepEqual(scenario.violations, []);
+  for (const [ticker, suffix, pin] of [['CCC', 'financials/annual?fiscal_year=2025', '7'], ['DDD', 'financials/annual?fiscal_year=2025', '4'],
+    ['CCC', 'financials/summary?period=annual', '4'], ['EEE', 'financials/annual?fiscal_year=2025', '4']]) {
+    assert.equal((await deliver(ticker, suffix, pin)).abort, 'blockedbyclient');
+  }
+  assert.equal(scenario.ledger.length, 10); assert.equal(scenario.violations.length, 4);
 });
 
 function verifyInsightsFixtureChecksum(bytes) {
