@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { describeApiError, FinLensApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
-  type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
+  type FactProvenance, type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
 import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, officialSecUrl,
   periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS, METRIC_CATALOG, METRIC_GROUPS } from "@/lib/research";
 
@@ -37,6 +37,16 @@ function snapshotFor(scope: SnapshotScope, period: PeriodKind) {
   return entry.response;
 }
 
+function alternativePeriodLabel(source: Pick<FactProvenance, "period_start" | "period_end">): string {
+  // Check the calendar date before formatDate, which can normalize invalid days.
+  const date = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  if (!date(source.period_end)) return "Period unknown";
+  if (source.period_start === null) return `As of ${formatDate(source.period_end)}`;
+  if (!date(source.period_start) || source.period_start > source.period_end) return "Period unknown";
+  return `Period: ${formatDate(source.period_start)} – ${formatDate(source.period_end)}`;
+}
+
 export function MetricProvenance({ point, summary = "Sources and details" }: { point: NormalizedMetric; summary?: string }) {
   return <details className="provenance"><summary>{summary}</summary>
     <div className="details-body">
@@ -56,7 +66,7 @@ export function MetricProvenance({ point, summary = "Sources and details" }: { p
         {officialSecUrl(source.sec_url) && <a href={officialSecUrl(source.sec_url)} target="_blank" rel="noopener noreferrer">Open official SEC filing ↗</a>}
       </div>)}
       {point.alternatives.length > 0 && <details><summary>{point.alternatives.length} alternative source observations</summary>
-        {point.alternatives.map((source) => <p key={source.fact_id} className="source-record wrap-anywhere">{source.original_concept} · {source.value} {source.unit} · {source.form} · Filed {formatDate(source.filed)} · {source.accession_number}{officialSecUrl(source.sec_url) && <> · <a href={officialSecUrl(source.sec_url)} target="_blank" rel="noopener noreferrer">SEC source ↗</a></>}</p>)}
+        {point.alternatives.map((source) => <p key={source.fact_id} className="source-record wrap-anywhere">{source.original_concept} · {source.value} {source.unit} · {alternativePeriodLabel(source)} · {source.form} · Filed {formatDate(source.filed)} · {source.accession_number}{officialSecUrl(source.sec_url) && <> · <a href={officialSecUrl(source.sec_url)} target="_blank" rel="noopener noreferrer">SEC source ↗</a></>}</p>)}
       </details>}
     </div>
   </details>;
