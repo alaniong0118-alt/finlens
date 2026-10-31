@@ -10,6 +10,7 @@ import ThemeControl from "@/components/theme-control";
 import ResearchFreshness from "@/components/research-freshness";
 import CompanyComparison from "@/components/company-comparison";
 import SecRiskComparison from "@/components/sec-risk-comparison";
+import AnnualPeriodComparison from "@/components/annual-period-comparison";
 
 export default function Home() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -77,9 +78,10 @@ export default function Home() {
         <ul className="hero-badges" aria-label="Research capabilities">{["SEC-sourced", "Deterministic metrics", "Hybrid evidence search", "Traceable sources"].map((label) => <li key={label}>{label}</li>)}</ul>
       </div>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} />
-      <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
+      <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
         <FinancialInsights company={company} />
+        <AnnualPeriodComparison company={company} />
         <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} /></div>
       </ResearchFreshness>}
       <CompanyComparison companies={companies} />
