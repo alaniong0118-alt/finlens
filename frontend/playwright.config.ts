@@ -23,7 +23,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop-chromium', grepInvert: /@mobile-only/, use: { viewport: { width: 1440, height: 1000 } } },
-    { name: 'mobile-width-chromium', testMatch: ['**/experience.spec.ts', '**/comparison.spec.ts'], grepInvert: /@desktop-only/,
+    { name: 'mobile-width-chromium', testMatch: ['**/experience.spec.ts', '**/comparison.spec.ts', '**/comparison-gap-filter.spec.ts'], grepInvert: /@desktop-only/,
       use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
   webServer: {

@@ -95,6 +95,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
   const [annualGeneration, setAnnualGeneration] = useState(0);
   const [discovery, setDiscovery] = useState<{ key: string; scopes: CompanyScope[]; cancelled?: boolean } | null>(null);
   const [data, setData] = useState<{ key: string; columns: Column[]; cancelled?: boolean } | null>(null);
+  const [coverageFilter, setCoverageFilter] = useState<{ key: string; gapsOnly: boolean } | null>(null);
   const controllers = useRef<AbortController[]>([]);
   const selected = useMemo(() => selection.map(t => companies.find(c => c.ticker === t)).filter((c): c is Company => !!c), [companies, selection]);
   const valid = validCompanySelection(selection) && selected.length === selection.length
@@ -223,6 +224,17 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
   }
   const results = columns?.flatMap(c => c.result ? [c.result] : []) ?? [];
   const bases = new Set(results.flatMap(r => r.metrics.revenue.revenue_basis ? [r.metrics.revenue.revenue_basis] : []));
+  // Only current, validated columns supply statuses. Unverified columns keep all
+  // rows in the gap view rather than turning unknown coverage into success.
+  const unverifiedCompanies = columns?.filter(column => !column.result).length ?? 0;
+  const unavailableMetrics = COMPARISON_METRICS.filter(metric => columns?.some(column => {
+    const status = column.result?.metrics[metric].status;
+    return status === "unavailable" || status === "not_applicable";
+  }));
+  const gapMetrics = unverifiedCompanies > 0 ? COMPARISON_METRICS : unavailableMetrics;
+  // Scope generations reset the view, including A -> B -> A and refreshes.
+  const gapsOnly = coverageFilter?.key === requestKey && coverageFilter.gapsOnly;
+  const visibleMetrics = gapsOnly ? gapMetrics : COMPARISON_METRICS;
   return <section className="panel company-comparison" aria-labelledby="comparison-title">
     <div className="section-heading"><div><p className="eyebrow">Reported annual financials</p><h2 id="comparison-title">Company comparison</h2></div>
       <span className="muted small">2–4 companies · Read only</span></div>
@@ -259,6 +271,17 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
       {reportingWindowsDiffer(results) && <p className="notice" role="note">Reporting windows differ. These fiscal-year labels represent different accounting date ranges; compare them with care.</p>}
       {results.some(r => r.period === null) && <p className="notice" role="note">A requested annual window is missing or ambiguous for at least one company. No other reporting period has been substituted.</p>}
       {bases.size > 1 && <p className="notice" role="note">Revenue economic bases differ. Cross-company equivalence has not been established.</p>}
+      <div className="comparison-actions">
+        <label htmlFor="comparison-metric-view">Metric rows<select id="comparison-metric-view" value={gapsOnly ? "gaps" : "all"}
+          aria-describedby="comparison-coverage-help comparison-coverage-count" onChange={event => setCoverageFilter({ key: requestKey, gapsOnly: event.target.value === "gaps" })}>
+          <option value="all">All metrics ({COMPARISON_METRICS.length})</option>
+          <option value="gaps">Coverage gaps ({gapMetrics.length})</option>
+        </select></label>
+        {gapsOnly && <button type="button" className="secondary-button" onClick={() => setCoverageFilter({ key: requestKey, gapsOnly: false })}>Show all metrics</button>}
+      </div>
+      <p className="muted small" id="comparison-coverage-help">Coverage gaps include unavailable, not-applicable and unverified values. Availability alone does not establish comparability.</p>
+      <p className="muted small" id="comparison-coverage-count" role="status" aria-live="polite">Showing {visibleMetrics.length} of {COMPARISON_METRICS.length} metric rows. Rows with unavailable or not-applicable values: {unavailableMetrics.length}. Unverified company responses: {unverifiedCompanies}.</p>
+      {visibleMetrics.length === 0 && <p className="notice">No coverage gaps in the current validated responses. Select Show all metrics to inspect values and comparability.</p>}
       <p className="muted small" id="comparison-scroll-help">On narrow screens, scroll the table horizontally. Sources and exact values are available in each cell.</p>
       <div className="table-scroll comparison-scroll" tabIndex={0} role="region" aria-label="Annual company comparison table" aria-describedby="comparison-scroll-help" onFocusCapture={revealComparisonFocus}>
         <table className="comparison-table"><caption>Annual financial metrics · FY{year}. Company publications are independently versioned.</caption>
@@ -268,7 +291,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
             {column.result?.period_reason && <span>{column.result.period_reason}</span>}
             {column.version !== null && <span>Publication {column.version}</span>}
           </th>)}</tr></thead>
-          <tbody>{COMPARISON_METRICS.map(metric => <tr key={metric}><th scope="row">{METRIC_LABELS[metric]}
+          <tbody>{visibleMetrics.map(metric => <tr key={metric}><th scope="row">{METRIC_LABELS[metric]}
             <ComparabilityInspector key={requestKey} metric={metric} columns={columns} />
             <button type="button" className="secondary-button" aria-label={`Copy research note for ${METRIC_LABELS[metric]}`}
               disabled={!copyEligible || copyFeedback?.owner === copyOwner && copyFeedback.pending} onClick={() => copyNote(metric)}>Copy Research Note</button>

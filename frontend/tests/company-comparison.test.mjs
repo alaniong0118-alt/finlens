@@ -1295,3 +1295,113 @@ test('unknown string operand metric is accepted verbatim and rendered only as in
   assert.equal(noteButton(app).disabled, false);
   assert.equal(app.requests.length, 6);
 });
+
+function availableCoverage(ticker, year = 2025) {
+  const result = response(ticker, year);
+  for (const point of Object.values(result.metrics)) if (point.status !== 'available') {
+    Object.assign(point, { status: 'available', value: '0.1', reason: null,
+      provenance: [structuredClone(result.metrics.revenue.provenance[0])] });
+  }
+  return result;
+}
+const coverageCount = app => app.host.querySelector('#comparison-coverage-count');
+const coverageRows = app => [...app.host.querySelectorAll('tbody tr')];
+
+for (const count of [2, 4]) test(`coverage filter counts metric rows across ${count} companies and preserves exact reasons, sources and copy scope`, async ctx => {
+  const writes = []; clipboard(ctx, text => { writes.push(text); return Promise.resolve(); });
+  const app = await mount(ctx), tickers = ['AAA', 'BBB', 'CCC', 'DDD'].slice(0, count);
+  while (app.host.querySelectorAll('.comparison-picker').length < count) await app.click('Add company');
+  for (const [i, ticker] of tickers.entries()) await app.change(`#comparison-company-${i}`, ticker);
+  await app.discovery(tickers);
+  const results = tickers.map(ticker => response(ticker, 2025));
+  const reason = 'future_exclusion__v9 <img src=x onerror="run()">\nNo substitute';
+  Object.assign(results[0].metrics.gross_profit, { status: 'not_applicable', value: null, reason, provenance: [] });
+  for (const [i, ticker] of tickers.entries()) await app.release(app.request(ticker, 'financials/annual?fiscal_year=2025'), results[i]);
+  const control = app.host.querySelector('#comparison-metric-view');
+  assert.equal(app.host.querySelector('label[for="comparison-metric-view"]').firstChild.textContent, 'Metric rows');
+  assert.equal(control.tagName, 'SELECT'); assert.equal(control.value, 'all');
+  assert.equal(control.getAttribute('aria-describedby'), 'comparison-coverage-help comparison-coverage-count');
+  assert.equal(coverageRows(app).length, 11);
+  assert.equal(coverageCount(app).textContent, 'Showing 11 of 11 metric rows. Rows with unavailable or not-applicable values: 5. Unverified company responses: 0.');
+  assert.equal(coverageCount(app).getAttribute('role'), 'status'); assert.equal(coverageCount(app).getAttribute('aria-live'), 'polite');
+  const grossRow = noteButton(app, 'Gross profit').closest('tr'), original = grossRow.innerHTML;
+  const requests = app.requests.length;
+  await app.change('#comparison-metric-view', 'gaps');
+  assert.equal(coverageRows(app).length, 5);
+  assert.deepEqual(coverageRows(app).map(row => row.querySelector('th > details > summary').textContent),
+    ['Revenue YoY', 'Operating margin', 'Net margin', 'Gross profit', 'Gross margin'].map(label => `Inspect ${label} comparability`));
+  assert.equal(noteButton(app), null); assert.equal(noteButton(app, 'Gross profit').disabled, false);
+  assert.equal(noteButton(app, 'Gross profit').closest('tr').innerHTML, original);
+  assert.ok(app.host.textContent.includes(reason)); assert.equal(app.host.querySelector('img'), null);
+  assert.match(coverageCount(app).textContent, /^Showing 5 of 11/);
+  await act(async () => noteButton(app, 'Gross profit').click());
+  assert.deepEqual(writes, [notes.serializeResearchNote('gross_profit', 2025, results.map((result, i) => ({ company: company(tickers[i]), version: i + 2, result })))]);
+  await app.click('Show all metrics');
+  assert.equal(control.value, 'all'); assert.equal(coverageRows(app).length, 11);
+  assert.equal(noteButton(app).disabled, false); assert.equal(app.requests.length, requests);
+});
+
+test('zero coverage gaps has an explicit empty/reset state without claiming comparability', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  for (const ticker of ['AAA', 'BBB']) await app.release(app.request(ticker, 'financials/annual?fiscal_year=2025'), availableCoverage(ticker));
+  const requests = app.requests.length;
+  assert.equal(app.host.querySelector('option[value="gaps"]').textContent, 'Coverage gaps (0)');
+  await app.change('#comparison-metric-view', 'gaps');
+  assert.equal(coverageRows(app).length, 0);
+  assert.equal(coverageCount(app).textContent, 'Showing 0 of 11 metric rows. Rows with unavailable or not-applicable values: 0. Unverified company responses: 0.');
+  assert.match(app.host.textContent, /No coverage gaps in the current validated responses/);
+  assert.match(app.host.querySelector('#comparison-coverage-help').textContent, /Availability alone does not establish comparability/);
+  await app.click('Show all metrics'); assert.equal(coverageRows(app).length, 11);
+  assert.doesNotMatch(app.host.textContent, /No coverage gaps in the current validated responses/);
+  assert.equal(app.requests.length, requests);
+});
+
+for (const failure of ['unknown-status', 'malformed-operand', 'stale-publication', 'failed-response']) test(`coverage filter keeps all unknown rows for ${failure} and cannot enable copy`, async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  const invalid = availableCoverage('AAA');
+  if (failure === 'unknown-status') invalid.metrics.revenue.status = 'future_status';
+  if (failure === 'malformed-operand') invalid.metrics.revenue.inputs = [{ metric: {} }];
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), invalid,
+    failure === 'stale-publication' ? '99' : '2', failure === 'failed-response' ? 503 : 200);
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), availableCoverage('BBB'));
+  const requests = app.requests.length;
+  await app.change('#comparison-metric-view', 'gaps');
+  assert.equal(coverageRows(app).length, 11);
+  assert.equal(coverageCount(app).textContent, 'Showing 11 of 11 metric rows. Rows with unavailable or not-applicable values: 0. Unverified company responses: 1.');
+  assert.doesNotMatch(app.host.textContent, /No coverage gaps in the current validated responses/);
+  for (const row of coverageRows(app)) {
+    assert.equal(row.querySelector('button').disabled, true);
+    if (failure === 'failed-response') assert.equal(row.querySelector('td').textContent, 'FinLens returned HTTP 503.');
+    else assert.match(row.querySelector('td').textContent, /could not|does not match|changed/i);
+  }
+  assert.equal(app.requests.length, requests);
+});
+
+test('missing annual windows remain eleven explained gaps rather than a zero-result success', async ctx => {
+  const app = await mount(ctx); await app.select(); await app.discovery();
+  await app.release(app.request('AAA', 'financials/annual?fiscal_year=2025'), missing('AAA', 2025, 'unknown_window_v8'));
+  await app.release(app.request('BBB', 'financials/annual?fiscal_year=2025'), availableCoverage('BBB'));
+  await app.change('#comparison-metric-view', 'gaps');
+  assert.equal(coverageRows(app).length, 11);
+  assert.match(coverageCount(app).textContent, /unavailable or not-applicable values: 11. Unverified company responses: 0/);
+  for (const row of coverageRows(app)) assert.match(row.querySelector('td').textContent, /unknown_window_v8/);
+  assert.equal(noteButton(app).disabled, false, 'Existing validated missing-window copy admission is unchanged');
+});
+
+for (const change of ['year', 'company', 'refresh', 'cancel']) test(`coverage filter resets for a new ${change} scope and never shows old counts while loading`, async ctx => {
+  const app = await focusTable(ctx);
+  await app.change('#comparison-metric-view', 'gaps'); assert.equal(coverageRows(app).length, 4);
+  let year = 2025, tickers = ['AAA', 'BBB'];
+  if (change === 'year') { year = 2024; await app.change('#comparison-year', year); }
+  if (change === 'company') { tickers = ['CCC', 'BBB']; await app.change('#comparison-company-0', 'CCC'); }
+  if (change === 'refresh' || change === 'cancel') await app.click('Refresh comparison');
+  assert.equal(coverageCount(app), null); assert.equal(app.host.querySelector('#comparison-metric-view'), null);
+  if (change === 'cancel') {
+    await app.click('Cancel comparison');
+    assert.equal(coverageCount(app), null); await app.click('Refresh comparison');
+  }
+  if (change !== 'year') await app.discovery(tickers);
+  for (const ticker of tickers) await app.release(app.request(ticker, `financials/annual?fiscal_year=${year}`), response(ticker, year));
+  assert.equal(app.host.querySelector('#comparison-metric-view').value, 'all');
+  assert.equal(coverageRows(app).length, 11); assert.match(coverageCount(app).textContent, /^Showing 11 of 11/);
+});
