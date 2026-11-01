@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useLayoutEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness, filingToneIdentity,
   getCompanyContext, getKeywordFilingSources, captureKeywordRequest, getKeywordSearch, type KeywordRequest, type KeywordResponse,
   type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
@@ -245,12 +245,13 @@ export function AIAnalysis({ result, configured }: { result: FilingContext; conf
   </section>;
 }
 
-function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady, cancelKeyword }: {
+function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady, cancelKeyword, financialOnly = false, filingControls }: {
   company: Company; filing: FilingSource | null; configured: boolean;
   retrievalScope: "filing" | "company";
   query: string; setQuery: (value: string) => void;
   companyEvidenceReady: boolean;
   cancelKeyword: RefObject<KeywordCancellation | null>;
+  financialOnly?: boolean; filingControls: ReactNode;
 }) {
   const { version, changed } = useResearchVersion();
   const [result, setResult] = useState<EvidenceContext | null>(null);
@@ -261,7 +262,8 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [guideMetric, setGuideMetric] = useState("revenue");
   const [guideScope, setGuideScope] = useState<QuestionScope>("latest_available");
-  const [purpose, setPurpose] = useState<"general" | "risk" | "keyword">("general");
+  const [selectedPurpose, setPurpose] = useState<"general" | "risk" | "keyword">("general");
+  const purpose = financialOnly ? "general" : selectedPurpose;
   const [riskGuide, setRiskGuide] = useState("supply_chain");
   const [searchedRisk, setSearchedRisk] = useState<{ owner: string; request: RiskRequest } | null>(null);
   const questionInput = useRef<HTMLTextAreaElement | null>(null);
@@ -273,8 +275,15 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const evidenceScope = useRef(createRequestScope());
   const answerPending = useRef(false);
   const evidencePending = useRef(false);
-  const evidenceIdentity = retrievalScope === "company" ? (companyEvidenceReady ? "company" : "company-unavailable") : filing?.accession_number ?? "";
-  const riskReady = retrievalScope === "company" ? companyEvidenceReady : Boolean(filing);
+  const retrievalEnabled = useRef(!financialOnly);
+  if (retrievalEnabled.current !== !financialOnly) {
+    retrievalEnabled.current = !financialOnly;
+    // Restriction changes invalidate evidence only, never the financial request.
+    evidenceScope.current.invalidate(); evidenceController.current?.abort();
+    evidencePending.current = false;
+  }
+  const evidenceIdentity = financialOnly ? "disabled" : retrievalScope === "company" ? (companyEvidenceReady ? "company" : "company-unavailable") : filing?.accession_number ?? "";
+  const riskReady = !financialOnly && (retrievalScope === "company" ? companyEvidenceReady : Boolean(filing));
   const riskOwner = JSON.stringify([company.ticker, company.cik, version, retrievalScope, evidenceIdentity, purpose, query, riskGuide]);
   const liveRiskOwner = useRef(riskOwner);
   // A render can precede passive-effect cancellation. Old callbacks must not own it.
@@ -312,6 +321,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   }
   async function search(event: Pick<FormEvent<HTMLFormElement>, "preventDefault">) {
     event.preventDefault(); if (version === null || !query.trim() || answerPending.current || evidencePending.current) return;
+    if (financialOnly && purpose !== "general") return;
     if (purpose === "risk") {
       if (!riskReady) return;
       const request: RiskRequest = Object.freeze({ ticker: company.ticker, cik: company.cik, version, query: query.trim(),
@@ -344,8 +354,8 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     controller.current?.abort(); controller.current = versionedController(version, changed);
     const evidenceId = evidenceScope.current.start();
     evidenceController.current?.abort(); evidenceController.current = versionedController(version, changed);
-    const companyWide = retrievalScope === "company" && companyEvidenceReady;
-    const selectedFiling = retrievalScope === "filing" ? filing : null;
+    const companyWide = !financialOnly && retrievalScope === "company" && companyEvidenceReady;
+    const selectedFiling = !financialOnly && retrievalScope === "filing" ? filing : null;
     answerPending.current = true; evidencePending.current = companyWide || Boolean(selectedFiling);
     setSearchedEvidence(evidenceIdentity);
     setLoading(companyWide || Boolean(selectedFiling)); setError(null); setResult(null);
@@ -369,14 +379,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     await Promise.all([direct, evidence]);
   }
   return <>
-    {retrievalScope === "filing" && filing && <div className="filing-record"><strong>{filing.form ?? "SEC filing"}</strong><span>Filed {formatDate(filing.filed)}</span>
-      <p className="mono small wrap-anywhere">Accession {filing.accession_number}</p>
-      {officialSecUrl(filing.sec_url) && <a href={officialSecUrl(filing.sec_url)} target="_blank" rel="noopener noreferrer">Open official filing ↗</a>}
-    </div>}
-    <label>Research purpose<select value={purpose} onChange={event => {
-      edit(""); setSearchedRisk(null); setPurpose(event.target.value === "keyword" ? "keyword" : event.target.value === "risk" ? "risk" : "general");
-    }}><option value="general">General research</option><option value="risk">Risk-topic exploration</option><option value="keyword">Keyword search — selected filing</option></select></label>
-    {purpose === "keyword" ? <KeywordSearch company={company} filing={filing} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelRef={cancelKeyword} /> : <>
+    {purpose !== "keyword" && <>
     <form onSubmit={search} className="search-form">
       {purpose === "risk" ? <fieldset className="question-guide">
         <legend>Explore risk-related SEC evidence</legend>
@@ -409,9 +412,9 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
         <p className="muted small">Fills the editor below. Review or edit it, then submit explicitly.</p>
       </fieldset>}
       <label htmlFor="research-query">Research question or search<textarea ref={questionInput} id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
-      {purpose === "general" && <div className="question-chips" aria-label="Example research topics">{EXAMPLES.map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>}
+      {purpose === "general" && <div className="question-chips" aria-label="Example research topics">{(financialOnly ? EXAMPLES.slice(0, 2) : EXAMPLES).map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>}
       <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading || purpose === "risk" && !riskReady}>{loading || answerLoading ? "Researching stored SEC data…" : purpose === "risk" ? "Search risk topic" : "Research question"}</button>
-      {purpose === "risk" ? <p className="muted small">{version === null ? "Verify this company’s published data before searching." : !riskReady ? "Searchable SEC evidence is unavailable for this selection. Check the filing availability above." : "Search the selected scope explicitly. No direct financial answer, AI analysis or tone scoring is requested."}</p>
+      {purpose === "risk" ? <p className="muted small">{version === null ? "Verify this company’s published data before searching." : !riskReady ? "Searchable SEC evidence is unavailable for this selection. Check the selected filing availability." : "Search the selected scope explicitly. No direct financial answer, AI analysis or tone scoring is requested."}</p>
         : <p className="muted small">Ask for a latest value, a fiscal year or quarter (2024 revenue, Q2 2025 revenue), or a comparison (2024–2025 revenue growth). {(retrievalScope === "filing" ? !filing : !companyEvidenceReady) ? "Filing evidence is unavailable for this selection; only direct financial answers can be requested." : "Other questions search SEC evidence."} No AI generation.</p>}
     </form>
     {searchedVersion !== version && <p className="notice">Data updated; research this question again.</p>}
@@ -422,6 +425,16 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       {searchedVersion === version && answer?.status === "company_mismatch" && <p className="notice">{answer.explanation}</p>}
       {searchedVersion === version && answer?.status === "not_matched" && <p className="muted small">This question is outside supported direct financial answers.{(retrievalScope === "company" ? companyEvidenceReady : filing) && " SEC evidence research continues independently."}</p>}
     </div>
+    </>}
+    {filingControls}
+    {retrievalScope === "filing" && filing && <div className="filing-record"><strong>{filing.form ?? "SEC filing"}</strong><span>Filed {formatDate(filing.filed)}</span>
+      <p className="mono small wrap-anywhere">Accession {filing.accession_number}</p>
+      {officialSecUrl(filing.sec_url) && <a href={officialSecUrl(filing.sec_url)} target="_blank" rel="noopener noreferrer">Open official filing ↗</a>}
+    </div>}
+    {!financialOnly && <label>Research purpose<select value={purpose} onChange={event => {
+      edit(""); setSearchedRisk(null); setPurpose(event.target.value === "keyword" ? "keyword" : event.target.value === "risk" ? "risk" : "general");
+    }}><option value="general">General research</option><option value="risk">Risk-topic exploration</option><option value="keyword">Keyword search — selected filing</option></select></label>}
+    {purpose === "keyword" ? <KeywordSearch company={company} filing={filing} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelRef={cancelKeyword} /> : <>
     <div aria-live="polite" aria-busy={loading}>
       {loading && <p className="loading-state">{retrievalScope === "company" ? "Finding relevant passages in published company filings…" : "Finding relevant passages in this filing…"}</p>}
       {error && <><p role="alert" className="error-state">{error}</p>{purpose === "risk" && <button type="button" className="secondary-button" disabled={version === null || !riskReady || loading} onClick={search}>Retry risk-topic search</button>}</>}
@@ -432,7 +445,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
           : "Searchable filing evidence is unavailable for this selection. Prepare a supported financial question above; direct answers use stored financial observations and may be unavailable. No OpenAI access is required."}</p>
       </div>}
     </div>
-    {searchedVersion === version && searchedEvidence === evidenceIdentity && result && (purpose !== "risk" || searchedRisk?.owner === riskOwner) && <>
+    {!financialOnly && searchedVersion === version && searchedEvidence === evidenceIdentity && result && (purpose !== "risk" || searchedRisk?.owner === riskOwner) && <>
       {purpose === "risk" ? <><p className="small">{riskQueryLabel(searchedRisk!.request.query)} · {company.ticker} · CIK {company.cik} · Publication {searchedRisk!.request.version}</p><p className="muted small">{RISK_EXPLANATION}</p></> : <h3>Supporting SEC evidence</h3>}
       <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}{purpose === "risk" ? "Filing dates describe the returned sources, not a current or complete risk assessment." : "Passages may describe different periods and are research, not validation of the structured answer."}</p>
       <EvidenceResults key={`evidence-${purpose}-${result.query}-${retrievalScope}`} result={result} answer={purpose === "risk" || "retrieval_scope" in result ? null : answer} company={company} risk={purpose === "risk"} />
@@ -458,13 +471,15 @@ function RecordedFilings({ filings, unknown = false }: { filings: FilingSource[]
   </details>;
 }
 
-export default function FilingResearch({ company, configured }: { company: Company; configured: boolean }) {
+export default function FilingResearch({ company, configured, filingResearchEnabled = true }: {
+  company: Company; configured: boolean; filingResearchEnabled?: boolean;
+}) {
   const { version, changed } = useResearchVersion();
   const [query, setQuery] = useState("");
   const [accession, setAccession] = useState("");
   const [retrievalScope, setRetrievalScope] = useState<"filing" | "company">("filing");
   const [sourceAttempt, setSourceAttempt] = useState(0);
-  const sourceOwner = JSON.stringify([company.ticker, company.cik, version, sourceAttempt]);
+  const sourceOwner = JSON.stringify([company.ticker, company.cik, version, sourceAttempt, filingResearchEnabled]);
   const liveSourceOwner = useRef(sourceOwner);
   liveSourceOwner.current = sourceOwner;
   const [sources, setSources] = useState<{
@@ -475,7 +490,7 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const cancelKeyword = useRef<KeywordCancellation | null>(null);
   useEffect(() => {
     // A missing pin does not mean a filing request is running or returned empty.
-    if (version === null) { setSources(null); return; }
+    if (!filingResearchEnabled || version === null) { setSources(null); return; }
     sourcePending.current = true;
     const controller = versionedController(version, changed);
     const current = () => !controller.signal.aborted && liveSourceOwner.current === sourceOwner;
@@ -493,7 +508,7 @@ export default function FilingResearch({ company, configured }: { company: Compa
       }
     }).finally(() => { if (current()) sourcePending.current = false; });
     return () => { controller.abort(); sourcePending.current = false; };
-  }, [company.ticker, version, changed, sourceOwner]);
+  }, [company.ticker, version, changed, sourceOwner, filingResearchEnabled]);
   // Hide a previous company/pin/attempt immediately, before passive cleanup.
   const currentSource = version !== null && sources?.owner === sourceOwner ? sources : null;
   const loading = currentSource?.status === "loading";
@@ -501,7 +516,7 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const error = currentSource?.error;
   const errorCode = currentSource?.errorCode;
   function retrySources() {
-    if (version === null || sourcePending.current) return;
+    if (!filingResearchEnabled || version === null || sourcePending.current) return;
     if (errorCode === "DATA_VERSION_CHANGED") { changed(); return; }
     sourcePending.current = true;
     setSourceAttempt(attempt => attempt + 1);
@@ -510,7 +525,10 @@ export default function FilingResearch({ company, configured }: { company: Compa
   const indexed = searchableFilings(currentSources);
   const filing = indexed.find((item) => item.accession_number === accession);
   return <section className="panel filing-panel" aria-labelledby="filing-title">
-    <div className="section-heading"><div><p className="eyebrow">SEC research</p><h2 id="filing-title">Read the evidence</h2></div><span className="badge">No AI required</span></div>
+    <h2 id="filing-title">Financial questions</h2>
+    <p>Deterministic answers from stored financial data. Source references may retain filing metadata and official SEC links.</p>
+    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={filingResearchEnabled && sourceReady && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={filingResearchEnabled && sourceReady && company.has_indexed_filing && indexed.length > 0} configured={filingResearchEnabled && configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} financialOnly={!filingResearchEnabled} filingControls={filingResearchEnabled ? <>
+    <div className="section-heading"><div><p className="eyebrow">SEC research</p><h3>Read the evidence</h3></div><span className="badge">No AI required</span></div>
     <p className="muted small">Search a selected filing or published filings for this company. Metric snapshots may refer to a different period or accession.</p>
     <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => { cancelKeyword.current?.(true); setRetrievalScope(event.target.value as "filing" | "company"); }}>
       <option value="filing">Selected filing</option><option value="company">Company-wide</option>
@@ -533,7 +551,9 @@ export default function FilingResearch({ company, configured }: { company: Compa
       <RecordedFilings key={`${company.ticker}-${company.cik}-${version}-metadata`} filings={currentSources.filter(item => filingReadiness(item) === "metadata_only")} />
       <RecordedFilings key={`${company.ticker}-${company.cik}-${version}-unknown`} unknown filings={currentSources.filter(item => filingReadiness(item) === "unknown")} />
     </>}
-    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceReady && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceReady && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} />
-    <DualFilingEvidence key={`dual-${company.ticker}-${company.cik}`} company={company} sources={currentSources} />
+    </> : <>
+      <p>Filing text, search, passage retrieval, risk evidence and AI analysis are not enabled here.</p>
+    </>} />
+    {filingResearchEnabled && <DualFilingEvidence key={`dual-${company.ticker}-${company.cik}`} company={company} sources={currentSources} />}
   </section>;
 }

@@ -12,7 +12,7 @@ import { mountedDataLedger, assertPendingDataScope } from './mounted-data-ledger
 // Node's existing test runner + real ReactDOM. Only Next's routing link and
 // browser layout/media APIs are adapted; page, effects, API calls and guards run.
 const require = createRequire(import.meta.url);
-let dom, createRoot, Home, ResearchFreshness, SecRiskComparison;
+let dom, createRoot, Home, ResearchFreshness, SecRiskComparison, FilingResearch;
 before(async () => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://finlens.test' });
   for (const key of ['window', 'document', 'HTMLElement', 'SVGElement', 'Node', 'Event', 'MouseEvent']) {
@@ -52,6 +52,7 @@ before(async () => {
   Home = load(fileURLToPath(new URL('../app/page.tsx', import.meta.url))).default;
   ResearchFreshness = load(fileURLToPath(new URL('../components/research-freshness.tsx', import.meta.url))).default;
   SecRiskComparison = load(fileURLToPath(new URL('../components/sec-risk-comparison.tsx', import.meta.url))).default;
+  FilingResearch = load(fileURLToPath(new URL('../components/filing-research.tsx', import.meta.url))).default;
 });
 after(() => dom.window.close());
 
@@ -802,7 +803,8 @@ test('mounted company-wide search cannot turn financial answer values into numer
 });
 
 async function mount(ctx, configured = false, catalog = companies, { initialVersion = 0, strict = false, catalogStatus = 200,
-  capabilityPayload = { research_mode: true, ai_analysis_configured: configured, ai_analysis_enabled: configured, server_profile: 'development' }, capabilityStatus = 200 } = {}) {
+  capabilityPayload = { research_mode: true, ai_analysis_configured: configured, ai_analysis_enabled: configured, server_profile: 'development', filing_research_enabled: true }, capabilityStatus = 200,
+  deferCapabilities = false, initialFilingCapability } = {}) {
   const requests = [], ledger = mountedDataLedger();
   // Intentionally ignore AbortSignal when resolving: cancellation can race with
   // response delivery. This exercises rendered-state protection, not the mock.
@@ -824,7 +826,14 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
   let unmounted = false;
   async function unmount() { if (!unmounted) { unmounted = true; await act(async () => root.unmount()); host.remove(); localStorage.clear(); } }
   ctx.after(unmount);
-  await act(async () => root.render(strict ? React.createElement(React.StrictMode, null, React.createElement(Home)) : React.createElement(Home)));
+  const catalogChanged = async () => true;
+  async function renderFilingCapability(enabled = initialFilingCapability) {
+    const content = initialFilingCapability === undefined ? React.createElement(Home)
+      : React.createElement(ResearchFreshness, { ticker: catalog[0].ticker, catalogChanged },
+        React.createElement(FilingResearch, { company: catalog[0], configured: false, filingResearchEnabled: enabled }));
+    await act(async () => root.render(strict ? React.createElement(React.StrictMode, null, content) : content));
+  }
+  await renderFilingCapability();
   function request(path, params = {}) {
     const found = requests.find(item => !item.released && !item.init.signal?.aborted && item.path === path && Object.entries(params).every(([key, value]) => item.params.get(key) === value));
     assert.ok(found, `Expected pending request ${path} ${JSON.stringify(params)}`);
@@ -878,11 +887,241 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
     if (!pendingAnswer) await release(request(companyPath(ticker, 'research-answer')), { ticker, question: query, matched: false, status: 'not_matched' });
     return request(companyPath(ticker, `filings/${filing(ticker).accession_number}/context`));
   }
-  await release(request('/capabilities'), capabilityPayload, capabilityStatus);
-  if (catalogStatus !== null) await release(request('/companies'), catalogStatus === 200 ? catalog : { detail: 'Catalog temporarily unavailable' }, catalogStatus);
+  if (initialFilingCapability === undefined) {
+    if (!deferCapabilities) await release(request('/capabilities'), capabilityPayload, capabilityStatus);
+    if (catalogStatus !== null) await release(request('/companies'), catalogStatus === 200 ? catalog : { detail: 'Catalog temporarily unavailable' }, catalogStatus);
+  }
   if (catalogStatus === 200 && initialVersion !== null) await release(request(companyPath(catalog[0].ticker, 'freshness')), freshnessFixture(catalog[0].ticker, initialVersion));
-  return { host, requests, request, release, deliverBeforeCommit, change, click, select, snapshot, trends, evidence, completeCompany, search, unmount };
+  return { host, requests, request, release, deliverBeforeCommit, change, click, select, snapshot, trends, evidence, completeCompany, search, unmount, renderFilingCapability };
 }
+
+const financialOnlyCapabilities = { research_mode: true, ai_analysis_configured: false,
+  ai_analysis_enabled: false, server_profile: 'sec_readonly', filing_research_enabled: false };
+function assertNoFilingRequests(app) {
+  assert.equal(app.requests.some(item => /\/sources$|\/context$|\/filings\//.test(item.path)), false,
+    'No filing inventory, keyword, passage, risk or dual-filing background requests');
+  assert.equal(app.select('Research purpose'), undefined);
+  assert.equal(app.host.querySelector('.ai-panel'), null);
+  assert.doesNotMatch(app.host.querySelector('.hero-badges').textContent, /Hybrid/);
+}
+
+for (const strict of [false, true]) for (const pin of [0, 7]) test(`financial-only mounted single deterministic request pin ${pin}${strict ? ' StrictMode' : ''}`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict, initialVersion: pin, capabilityPayload: financialOnlyCapabilities });
+  assertNoFilingRequests(app);
+  assert.match(app.host.textContent, /Financial-only capability restriction is active/);
+  assert.match(app.host.textContent, /Source references may retain filing metadata/);
+  assert.doesNotMatch(app.host.querySelector('.company-overview').textContent, /Ready for filing research/);
+  const before = app.requests.length, query = 'What was the latest quarterly revenue?';
+  await app.change(app.host.querySelector('textarea'), query);
+  await app.click('Research question');
+  assert.equal(app.requests.length, before + 1);
+  const request = app.request(companyPath('AAPL', 'research-answer'));
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.init.headers['X-FinLens-Data-Version'], String(pin));
+  assert.deepEqual(JSON.parse(request.init.body), { question: query });
+  await app.release(request, directAnswer('AAPL', query));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
+  assertNoFilingRequests(app);
+});
+
+test('financial-only mounted capabilities pending and legacy unknown cannot mount retrieval', async ctx => {
+  const app = await mount(ctx, false, companies, { deferCapabilities: true });
+  assertNoFilingRequests(app);
+  assert.match(app.host.textContent, /Filing research capabilities are not verified/);
+  const legacy = { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' };
+  await app.release(app.request('/capabilities'), legacy);
+  assertNoFilingRequests(app);
+  assert.doesNotMatch(app.host.textContent, /Financial-only capability restriction is active/);
+  const query = 'revenue';
+  await app.change(app.host.querySelector('textarea'), query); await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
+});
+
+test('financial-only mounted delayed full capability mounts retrieval only after verification', async ctx => {
+  const app = await mount(ctx, false, companies, { deferCapabilities: true });
+  assertNoFilingRequests(app);
+  await app.release(app.request('/capabilities'), { ...financialOnlyCapabilities, filing_research_enabled: true });
+  assert.ok(app.request(companyPath('AAPL', 'sources')));
+  assert.ok(app.select('Research purpose'));
+});
+
+// JSDOM does not provide layout. Lock the DOM/text prefix that determines the
+// editor's vertical position; the unchanged browser oracle measures real pixels.
+function financialEditorLayout(app) {
+  const panel = app.host.querySelector('.filing-panel');
+  const editor = panel.querySelector('textarea'), form = editor.closest('form');
+  const leading = [...panel.querySelectorAll('*')].slice(0, [...panel.querySelectorAll('*')].indexOf(editor))
+    .filter(node => !node.contains(editor));
+  assert.equal(panel.querySelector('h2').textContent, 'Financial questions');
+  for (const control of [app.select('Evidence search scope'), app.select('Indexed SEC filing'),
+    app.select('Research purpose'), ...panel.querySelectorAll('.filing-record, .recorded-filings')].filter(Boolean)) {
+    assert.ok(form.compareDocumentPosition(control) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+      'New filing controls and metadata follow the stable financial form');
+  }
+  return { editor, form, leading, text: leading.map(node => node.textContent) };
+}
+function assertFinancialLayoutRetained(app, before) {
+  const after = financialEditorLayout(app);
+  assert.equal(after.editor, before.editor); assert.equal(after.form, before.form);
+  assert.equal(after.leading.length, before.leading.length, 'No new control is inserted before the editor');
+  after.leading.forEach((node, index) => assert.equal(node, before.leading[index], 'Leading DOM identity stays stable'));
+  assert.deepEqual(after.text, before.text, 'The leading copy stays stable in both modes');
+}
+
+for (const strict of [false, true]) for (const pin of [0, 7]) for (const completed of [false, true])
+test(`financial-only capability transition retains ${completed ? 'completed' : 'pending'} answer pin ${pin} strict ${strict}`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict, initialVersion: pin, deferCapabilities: true });
+  const editor = app.host.querySelector('textarea'), form = editor.closest('form'), query = 'revenue';
+  await app.change(editor, query); editor.focus(); await app.click('Research question');
+  const answer = app.request(companyPath('AAPL', 'research-answer'));
+  if (completed) await app.release(answer, directAnswer('AAPL', query));
+  const answerNode = app.host.querySelector('.direct-answer'), layout = financialEditorLayout(app);
+  assertNoFilingRequests(app);
+  await app.release(app.request('/capabilities'), { ...financialOnlyCapabilities, filing_research_enabled: true });
+  assertFinancialLayoutRetained(app, layout);
+  assert.equal(app.host.querySelector('textarea'), editor);
+  assert.equal(editor.closest('form'), form);
+  assert.equal(document.activeElement, editor);
+  assert.equal(editor.value, query);
+  assert.equal(answer.init.signal.aborted, false);
+  if (completed) assert.equal(app.host.querySelector('.direct-answer'), answerNode);
+  // Inventory and evidence readiness can change without replaying or moving the question.
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  assertFinancialLayoutRetained(app, layout);
+  assert.equal(document.activeElement, editor);
+  if (!completed) await app.release(answer, directAnswer('AAPL', query));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
+  assert.equal(app.host.querySelector('textarea'), editor);
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer')).length, 1);
+  assert.equal(app.requests.some(item => item.path.endsWith('/context')), false);
+});
+
+for (const [label, payload, status = 200] of [
+  ['restricted', financialOnlyCapabilities],
+  ['legacy', { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' }],
+  ['invalid', { ...financialOnlyCapabilities, filing_research_enabled: 'true' }],
+  ['failed', {}, 503],
+]) test(`financial-only capability transition ${label} retains pending financial work`, async ctx => {
+  const app = await mount(ctx, false, companies, { deferCapabilities: true });
+  const editor = app.host.querySelector('textarea');
+  await app.change(editor, 'revenue'); await app.click('Research question');
+  const answer = app.request(companyPath('AAPL', 'research-answer'));
+  await app.release(app.request('/capabilities'), payload, status);
+  assert.equal(app.host.querySelector('textarea'), editor);
+  assert.equal(editor.value, 'revenue'); assert.equal(answer.init.signal.aborted, false);
+  await app.release(answer, directAnswer('AAPL', 'revenue'));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer')).length, 1);
+  assertNoFilingRequests(app);
+});
+
+for (const pin of [0, 7]) for (const completed of [false, true])
+test(`financial-only capability reverse cancels evidence only, ${completed ? 'completed' : 'pending'} answer pin ${pin}`, async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: pin, initialFilingCapability: true });
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  const editor = app.host.querySelector('textarea');
+  await app.change(editor, 'revenue'); editor.focus(); await app.click('Research question');
+  const answer = app.request(companyPath('AAPL', 'research-answer'));
+  const evidence = app.request(companyPath('AAPL', `filings/${filing('AAPL').accession_number}/context`));
+  if (completed) await app.release(answer, directAnswer('AAPL', 'revenue'));
+  const answerNode = app.host.querySelector('.direct-answer'), count = app.requests.length;
+  const layout = financialEditorLayout(app);
+  await app.renderFilingCapability(false);
+  assertFinancialLayoutRetained(app, layout);
+  assert.equal(document.activeElement, editor);
+  assert.equal(app.host.querySelector('textarea'), editor);
+  assert.equal(editor.value, 'revenue'); assert.equal(answer.init.signal.aborted, false);
+  assert.equal(evidence.init.signal.aborted, true);
+  assert.equal(app.select('Research purpose'), undefined);
+  if (completed) assert.equal(app.host.querySelector('.direct-answer'), answerNode);
+  // The transport mock deliberately ignores abort: obsolete evidence must stay hidden.
+  await app.release(evidence, context('AAPL', 'revenue'));
+  if (!completed) await app.release(answer, directAnswer('AAPL', 'revenue'));
+  assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
+  assert.equal(app.host.querySelector('.evidence-card'), null);
+  assert.equal(app.requests.length, count);
+});
+
+test('financial-only reordered full-mode controls still select keyword, risk and general research', async ctx => {
+  const app = await mount(ctx, false, companies);
+  await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
+  financialEditorLayout(app);
+  assert.equal(app.select('Evidence search scope').value, 'filing');
+  assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
+  const purpose = app.select('Research purpose');
+  await app.change(purpose, 'keyword');
+  assert.ok(app.host.querySelector('textarea'));
+  assert.equal(app.select('Research purpose'), purpose);
+  await app.change(purpose, 'risk');
+  assert.ok(app.select('Risk topic'));
+  await app.change(purpose, 'general');
+  assert.ok(app.select('Question metric'));
+  financialEditorLayout(app);
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer') || item.path.endsWith('/context')).length, 0);
+});
+
+test('financial-only mounted company change rejects ignored-abort answer and keeps new pin', async ctx => {
+  const app = await mount(ctx, false, companies, { capabilityPayload: financialOnlyCapabilities });
+  const query = 'revenue';
+  await app.change(app.host.querySelector('textarea'), query); await app.click('Research question');
+  const old = app.request(companyPath('AAPL', 'research-answer'));
+  await app.change(app.select('Company'), 'JPM');
+  assert.equal(old.init.signal.aborted, true);
+  await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 7));
+  await app.change(app.host.querySelector('textarea'), query); await app.click('Research question');
+  const current = app.request(companyPath('JPM', 'research-answer'));
+  assert.equal(current.init.headers['X-FinLens-Data-Version'], '7');
+  await app.release(current, directAnswer('JPM', query));
+  const text = app.host.querySelector('.direct-answer').textContent;
+  await app.release(old, directAnswer('AAPL', query));
+  assert.equal(app.host.querySelector('.direct-answer').textContent, text);
+  assertNoFilingRequests(app);
+});
+
+test('financial-only mounted publication mismatch clears answer and rechecks before retry', async ctx => {
+  const app = await mount(ctx, false, companies, { capabilityPayload: financialOnlyCapabilities });
+  await app.change(app.host.querySelector('textarea'), 'revenue'); await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), {}, 409, 1);
+  assert.equal(app.host.querySelector('.direct-answer'), null);
+  const button = [...app.host.querySelectorAll('button')].find(item => item.textContent === 'Research question');
+  assert.equal(button.disabled, true);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  await app.click('Research question');
+  const next = app.request(companyPath('AAPL', 'research-answer'));
+  assert.equal(next.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(next, directAnswer('AAPL', 'revenue'));
+  assertNoFilingRequests(app);
+});
+
+for (const strict of [false, true]) test(`financial-only mounted repin rejects ignored-abort previous-version answer${strict ? ' StrictMode' : ''}`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict, capabilityPayload: financialOnlyCapabilities });
+  await app.change(app.host.querySelector('textarea'), 'revenue'); await app.click('Research question');
+  const old = app.request(companyPath('AAPL', 'research-answer'));
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), {}, 409, 1);
+  assert.equal(old.init.signal.aborted, true);
+  assert.equal(app.host.querySelector('.direct-answer'), null);
+  await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  await app.click('Research question');
+  const current = app.request(companyPath('AAPL', 'research-answer'));
+  assert.equal(current.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(current, directAnswer('AAPL', 'revenue'));
+  const text = app.host.querySelector('.direct-answer').textContent;
+  await app.release(old, { ...directAnswer('AAPL', 'revenue'), answer_text: 'obsolete answer' });
+  assert.equal(app.host.querySelector('.direct-answer').textContent, text);
+  assertNoFilingRequests(app);
+});
+
+test('financial-only full-mode control keeps existing company-keyed editor reset and retrieval', async ctx => {
+  const app = await mount(ctx);
+  await app.change(app.host.querySelector('textarea'), 'revenue');
+  assert.equal(app.host.querySelector('textarea').value, 'revenue');
+  await app.change(app.select('Company'), 'JPM');
+  assert.equal(app.host.querySelector('textarea').value, '', 'The existing company-keyed freshness subtree resets the editor');
+  await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 7));
+  assert.ok(app.request(companyPath('JPM', 'sources')));
+  assert.ok(app.select('Research purpose'));
+});
 
 test('mounted company switch keeps B summary, history and filing after delayed A responses', async ctx => {
   const app = await mount(ctx);
@@ -957,23 +1196,33 @@ test('mounted no-key success renders summary, history, provenance and SEC eviden
 });
 
 for (const [name, capabilityPayload, capabilityStatus = 200] of [
-  ['SEC-only effective denial', { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' }],
+  ['SEC-only effective denial', { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly', filing_research_enabled: true }],
   ['key presence alone', { research_mode: true, ai_analysis_configured: true }],
   ['malformed capability', { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: 'true', server_profile: 'development' }],
   ['inconsistent release enablement', { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: true, server_profile: 'sec_readonly' }],
   ['capability failure', { detail: 'synthetic failure' }, 503],
 ]) test(`DEP-01A1 mounted ${name} keeps AI disabled and deterministic research usable`, async ctx => {
   const app = await mount(ctx, true, companies, { capabilityPayload, capabilityStatus });
-  await app.completeCompany('AAPL', '1000000000');
+  const filingEnabled = name === 'SEC-only effective denial';
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+  if (filingEnabled) await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
   const query = "How much revenue did Apple report?";
-  const pending = await app.search('AAPL', query, true);
+  await app.change(app.host.querySelector('textarea'), query);
+  await app.click('Research question');
   await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', query));
-  await app.release(pending, context('AAPL', query));
   assert.match(app.host.querySelector('.direct-answer').textContent, /\$109.42B/);
-  assert.equal(app.evidence().length, 1);
-  const button = [...app.host.querySelectorAll('button')].find(item => item.textContent === 'Generate AI analysis');
-  assert.equal(button.disabled, true);
-  await act(async () => button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  if (filingEnabled) {
+    await app.release(app.request(companyPath('AAPL', `filings/${filing('AAPL').accession_number}/context`)), context('AAPL', query));
+    assert.equal(app.evidence().length, 1);
+    const button = [...app.host.querySelectorAll('button')].find(item => item.textContent === 'Generate AI analysis');
+    assert.equal(button.disabled, true);
+    await act(async () => button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  } else {
+    assert.equal(app.evidence().length, 0);
+    assert.equal(app.select('Research purpose'), undefined);
+    assert.equal(app.requests.some(item => /\/sources$|\/context$|\/search$/.test(item.path)), false);
+  }
   assert.equal(app.requests.filter(item => item.path.endsWith('/answer')).length, 0);
 });
 
@@ -3081,7 +3330,7 @@ test('DEP-01A2 timed-out snapshot cache evicts and permits recovery through peri
 
 for (const profile of ['development', 'sec_readonly']) test(`DEP-01A2 source timeout and manual recovery preserve independent direct answer in ${profile}`, async ctx => {
   const expire = researchDeadlineClock(ctx);
-  const app = await mount(ctx, false, companies, { capabilityPayload: { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: false, server_profile: profile } });
+  const app = await mount(ctx, false, companies, { capabilityPayload: { research_mode: true, ai_analysis_configured: true, ai_analysis_enabled: false, server_profile: profile, filing_research_enabled: true } });
   const old = app.request(companyPath('AAPL', 'sources'));
   await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
   await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));

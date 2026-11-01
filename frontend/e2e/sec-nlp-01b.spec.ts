@@ -40,7 +40,7 @@ function response(ticker: string, pin: number, chunk: string, mode: Mode): Filin
 async function install(context: BrowserContext, page: Page, scenario: Scenario) {
   const state = { mode: 'valid' as Mode, barrier: null as ReturnType<typeof gate> | null, requests: [] as ApiRequest[] };
   scenario.overrides.push(request => {
-    if (request.path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'development' } };
+    if (request.path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'development', filing_research_enabled: true } };
     if (request.path.endsWith('/sources')) return { body: data.sources(request.ticker!).map(item => ({ ...item, form: '10-K', has_filing_chunks: true, sec_url: sourceUrl(request.ticker!, item.accession_number) })) };
     if (!request.path.endsWith('/context')) return;
     const body = data.evidence(request.ticker!, request.query.get('q')!, Number(request.pin), request.path.includes('/filings/') ? data.accession(request.ticker!) : undefined);

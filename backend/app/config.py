@@ -11,6 +11,10 @@ from dotenv import load_dotenv
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 # Retain process provenance even if the environment changes after admission.
 _PROCESS_PROFILE = os.environ.get("FINLENS_SERVER_PROFILE")
+# This restriction can only be selected by the launching process, never dotenv.
+_PROCESS_FINANCIAL_ONLY = os.environ.get("FINLENS_FINANCIAL_ONLY", "0")
+if _PROCESS_FINANCIAL_ONLY not in {"0", "1"}:
+    raise ValueError("FINLENS_FINANCIAL_ONLY must be 0 or 1.")
 
 
 def load_backend_env(path: Path | None = None) -> None:
@@ -43,10 +47,17 @@ class HttpDatabaseBounds:
 @dataclass(frozen=True)
 class ServerProfile:
     name: Literal["development", "sec_readonly", "sec_reader"]
+    financial_only: bool = False
 
     def __post_init__(self):
         if self.name not in {"development", "sec_readonly", "sec_reader"}:
             raise ValueError("Invalid FINLENS_SERVER_PROFILE; use development, sec_readonly or sec_reader.")
+        if type(self.financial_only) is not bool or (self.financial_only and self.name != "sec_readonly"):
+            raise ValueError("FINLENS_FINANCIAL_ONLY requires sec_readonly.")
+
+    @property
+    def filing_research_enabled(self) -> bool:
+        return self.name in {"development", "sec_readonly"} and not self.financial_only
 
     @property
     def generation_allowed(self) -> bool:
@@ -64,7 +75,8 @@ class ServerProfile:
 # Resolve exactly once after legacy dotenv (reader imports never load dotenv),
 # before importers initialize engines/models.
 # An explicitly empty value is a configuration error, not a development fallback.
-_SERVER_PROFILE = ServerProfile(os.environ.get("FINLENS_SERVER_PROFILE", "development"))
+_SERVER_PROFILE = ServerProfile(os.environ.get("FINLENS_SERVER_PROFILE", "development"),
+                                financial_only=_PROCESS_FINANCIAL_ONLY == "1")
 if _SERVER_PROFILE.name == "sec_reader" and _PROCESS_PROFILE != "sec_reader":
     raise ValueError("sec_reader requires explicit process FINLENS_SERVER_PROFILE=sec_reader.")
 

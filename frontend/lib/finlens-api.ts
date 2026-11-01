@@ -696,6 +696,8 @@ export type Capabilities = {
   ai_analysis_configured: boolean;
   ai_analysis_enabled: boolean;
   server_profile: "development" | "sec_readonly";
+  /** Missing on legacy servers: retrieval is unverified. */
+  filing_research_enabled?: boolean;
 };
 export type FreshnessStream = {
   status: "unknown" | "pending" | "current" | "stale" | "failed";
@@ -807,6 +809,9 @@ export function getCapabilities(signal?: AbortSignal): Promise<Capabilities> {
         || typeof data.ai_analysis_configured !== "boolean"
         || typeof data.ai_analysis_enabled !== "boolean"
         || !["development", "sec_readonly"].includes(data.server_profile)
+        || (data.filing_research_enabled !== undefined && typeof data.filing_research_enabled !== "boolean")
+        || (data.filing_research_enabled === false && data.server_profile !== "sec_readonly")
+        || (data.filing_research_enabled === true && !data.research_mode)
         || (data.ai_analysis_enabled && (!data.ai_analysis_configured || data.server_profile !== "development"))) {
       throw new FinLensApiError("Server capabilities could not be verified.", 502, "INVALID_RESPONSE");
     }

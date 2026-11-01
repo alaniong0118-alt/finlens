@@ -550,7 +550,7 @@ test('QA-01 insights obsolete pins return independent 409 before fixture generat
 
 test('QA-01 capabilities satisfy the actual disabled-AI client contract', async ctx => {
   const scenario = new Scenario({}, {}), reply = scenario.defaultReply({ path: '/capabilities' });
-  assert.deepEqual(reply.body, { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' });
+  assert.deepEqual(reply.body, { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly', filing_research_enabled: true });
   const mock = ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(reply.body)));
   assert.deepEqual(await api.getCapabilities(), reply.body);
   mock.mock.restore();

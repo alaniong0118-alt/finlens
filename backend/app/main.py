@@ -85,6 +85,7 @@ class CapabilityResponse(BaseModel):
     ai_analysis_configured: bool
     ai_analysis_enabled: bool
     server_profile: str
+    filing_research_enabled: bool
 
 
 class FilingAnswerRequest(BaseModel):
@@ -259,13 +260,15 @@ def healthz() -> HealthResponse:
 
 
 @app.get("/capabilities", response_model=CapabilityResponse)
-def capabilities() -> CapabilityResponse:
+def capabilities(response: Response) -> CapabilityResponse:
     """Configuration only; does not probe a provider or disclose credentials."""
+    response.headers["Cache-Control"] = "no-store"
     return CapabilityResponse(
         research_mode=True,
         ai_analysis_configured=server_profile().generation_allowed and bool(os.getenv("OPENAI_API_KEY", "").strip()),
         ai_analysis_enabled=server_profile().generation_allowed and bool(os.getenv("OPENAI_API_KEY", "").strip()),
         server_profile=server_profile().name,
+        filing_research_enabled=server_profile().filing_research_enabled,
     )
 
 

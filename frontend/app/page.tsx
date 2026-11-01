@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { describeApiError, firstReadyCompany, getCapabilities, getCompanies, type Company } from "@/lib/finlens-api";
+import { describeApiError, firstReadyCompany, getCapabilities, getCompanies, type Company, type Capabilities } from "@/lib/finlens-api";
 import CompanyOverview from "@/components/company-overview";
 import FinancialResearch from "@/components/financial-research";
 import FinancialInsights from "@/components/financial-insights";
@@ -19,7 +19,9 @@ export default function Home() {
   const [ticker, setTicker] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [configured, setConfigured] = useState(false);
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const filingEnabled = capabilities?.research_mode === true && capabilities.filing_research_enabled === true;
+  const configured = filingEnabled && capabilities?.ai_analysis_enabled === true;
   const initialCatalogController = useRef<AbortController | null>(null);
   const loadCatalog = useCallback(() => {
     if (initialCatalogController.current && !initialCatalogController.current.signal.aborted) return;
@@ -61,10 +63,10 @@ export default function Home() {
   }, [loadCatalog]);
   useEffect(() => {
     const controller = new AbortController();
-    setConfigured(false);
+    setCapabilities(null);
     getCapabilities(controller.signal).then((data) => {
-      if (!controller.signal.aborted) setConfigured(data.ai_analysis_enabled === true);
-    }).catch(() => { if (!controller.signal.aborted) setConfigured(false); });
+      if (!controller.signal.aborted) setCapabilities(data);
+    }).catch(() => { if (!controller.signal.aborted) setCapabilities(null); });
     return () => controller.abort();
   }, []);
   const company = companies.find((item) => item.ticker === ticker);
@@ -77,19 +79,20 @@ export default function Home() {
     <main className="workspace" id="research-workspace">
       <div className="hero"><p className="eyebrow">Company data. Official evidence.</p><h1>Understand the numbers.<br className="hero-break" /> Follow the source.</h1>
         <p>Explore reported financials and SEC filings. Research Mode works without AI; grounded analysis is an optional next step.</p>
-        <ul className="hero-badges" aria-label="Research capabilities">{["SEC-sourced", "Deterministic metrics", "Hybrid evidence search", "Traceable sources"].map((label) => <li key={label}>{label}</li>)}</ul>
+        <ul className="hero-badges" aria-label="Research capabilities">{["SEC-sourced", "Deterministic metrics", ...(filingEnabled ? ["Hybrid evidence search"] : []), "Traceable sources"].map((label) => <li key={label}>{label}</li>)}</ul>
       </div>
-      <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} />
+      <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
+      {!filingEnabled && <p role="status">{capabilities?.filing_research_enabled === false ? "Financial-only capability restriction is active." : "Filing research capabilities are not verified."} Stored financial research remains available. This does not verify runtime readiness or data completeness.</p>}
       <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#quarter-window-title">Reported windows</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
         <FinancialInsights company={company} />
         <AnnualPeriodComparison company={company} />
         <QuarterWindowComparison company={company} />
         <FinancialCoverage company={company} />
-        <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} /></div>
+        <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} filingResearchEnabled={filingEnabled} /></div>
       </ResearchFreshness>}
       <CompanyComparison companies={companies} />
-      <SecRiskComparison companies={companies} />
+      {filingEnabled ? <SecRiskComparison companies={companies} /> : <section className="panel" aria-labelledby="risk-comparison-title"><h2 id="risk-comparison-title">SEC risk evidence unavailable</h2><p>Filing retrieval is not enabled in this workspace. No risk evidence requests are sent.</p></section>}
       <footer>Financial research and education. No investment recommendations or price forecasts. Reported values and available coverage vary by issuer and period.</footer>
     </main>
   </>;

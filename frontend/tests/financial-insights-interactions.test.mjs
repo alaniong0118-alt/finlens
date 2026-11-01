@@ -398,9 +398,13 @@ for (const strict of [false, true]) test(`1B.2A version zero, explicit compare a
 test('1B.2A Home mounts inside freshness before the research grid and preserves every research link', async ctx => {
   const app = await mount(ctx, { home: true, supported: false });
   await app.release(app.requests.find(r => r.path === '/companies'), [company, otherCompany]);
-  await app.release(app.requests.find(r => r.path === '/capabilities'), { ai_analysis_enabled: false });
+  await app.release(app.requests.find(r => r.path === '/capabilities'), { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'development', filing_research_enabled: true });
   await app.release(app.freshRequest(), freshness());
-  assert.ok(app.panel()); assert.equal(app.panel().nextElementSibling.className, 'research-grid');
+  assert.ok(app.panel());
+  // Annual/quarter/coverage panels now sit between insights and this grid.
+  const grid = app.host.querySelector('.research-grid');
+  assert.ok(grid);
+  assert.ok(app.panel().compareDocumentPosition(grid) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   for (const id of ['insights-title', 'snapshot-title', 'history-title', 'filing-title', 'comparison-title', 'risk-comparison-title']) {
     assert.ok(app.host.querySelector(`.workspace-nav a[href="#${id}"]`)); assert.ok(app.host.querySelector(`#${id}`));
   }
@@ -413,7 +417,7 @@ test('1B.2A Home mounts inside freshness before the research grid and preserves 
 test('1B.2A supported Home loads insights while snapshot, history and SEC research settle independently', async ctx => {
   const app = await mount(ctx, { home: true });
   await app.release(app.requests.find(r => r.path === '/companies'), [company, otherCompany]);
-  await app.release(app.requests.find(r => r.path === '/capabilities'), { ai_analysis_enabled: false });
+  await app.release(app.requests.find(r => r.path === '/capabilities'), { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'development', filing_research_enabled: true });
   await app.release(app.freshRequest(), freshness()); await app.discover();
   await app.release(app.requests.find(r => r.path.endsWith('/financials/summary')), {
     ticker: company.ticker, company_cik: company.cik, requested_period: 'quarter', period: null, metrics: {}, selection_policy: 'Synthetic empty snapshot',
@@ -424,7 +428,10 @@ test('1B.2A supported Home loads insights while snapshot, history and SEC resear
   });
   await app.release(app.requests.find(r => r.path.endsWith('/sources')), []);
   await app.compare();
-  assert.match(app.host.querySelector('[aria-labelledby="snapshot-title"]').textContent, /No compatible metrics/);
+  const snapshot = app.host.querySelector('[aria-labelledby="snapshot-title"]');
+  // Missing metric records are now explicitly unverified in the snapshot map.
+  assert.match(snapshot.textContent, /0 of 15 metrics report available.*15 unverified/);
+  assert.equal(snapshot.querySelector('.metric-value'), null);
   assert.match(app.host.querySelector('[aria-labelledby="history-title"]').textContent, /Synthetic history unavailable/);
   assert.match(app.host.querySelector('[aria-labelledby="filing-title"]').textContent, /Not indexed for filing research/);
   assert.ok(app.panel().querySelector('.insights-result'));

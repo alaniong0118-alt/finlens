@@ -181,7 +181,7 @@ export class Scenario {
   defaultReply(item: ApiRequest): Reply {
     const { path, ticker, query, pin, body } = item;
     if (path === '/companies') return { body: this.fourCompanyComparison ? data.comparisonCompanies : data.companies };
-    if (path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' } };
+    if (path === '/capabilities') return { body: { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly', filing_research_enabled: true } };
     const issuer = ticker!;
     const version = this.versions[issuer];
     if (this.fourCompanyComparison && (issuer === 'CCC' || issuer === 'DDD')) {

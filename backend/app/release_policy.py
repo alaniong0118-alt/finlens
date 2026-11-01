@@ -24,7 +24,7 @@ def development_only(function):
 
 
 def require_encoder() -> None:
-    if server_profile().name not in {"development", "sec_readonly"}:
+    if not server_profile().filing_research_enabled:
         raise ReleaseModeBlocked()
 
 
@@ -72,6 +72,25 @@ READONLY_ROUTES = frozenset({
 })
 
 
+# An explicit subset: future READONLY_ROUTES additions do not inherit permission.
+# Sources retains filing metadata/financial provenance, never passage contents.
+FINANCIAL_ONLY_ROUTES = frozenset({
+    ("GET", "/healthz"), ("GET", "/dbz"), ("GET", "/capabilities"),
+    ("GET", "/companies"), ("POST", "/companies/{ticker}/research-answer"),
+    ("GET", "/companies/{ticker}/financials/summary"),
+    ("GET", "/companies/{ticker}/financials/annual"),
+    ("GET", "/companies/{ticker}/financials/insights"),
+    ("GET", "/companies/{ticker}/financials/coverage"),
+    ("GET", "/companies/{ticker}/financials/quarters"),
+    ("GET", "/companies/{ticker}/financials/metrics/{metric}"),
+    ("GET", "/companies/{ticker}/financial-summary"),
+    ("GET", "/companies/{ticker}/financial-snapshot"),
+    ("GET", "/companies/{ticker}/financial-history"),
+    ("GET", "/companies/{ticker}/sources"),
+    ("GET", "/companies/{ticker}/freshness"),
+})
+
+
 # 02A has no database/research capability, including keyword-only research.
 READER_ROUTES = frozenset({("GET", "/healthz"), ("GET", "/capabilities")})
 
@@ -101,6 +120,8 @@ class ReleaseAdmissionMiddleware:
         allowed = (READONLY_ROUTES if profile == "sec_readonly" else
                    READER_ROUTES if profile == "sec_reader" and self.expected_profile == "sec_reader"
                    else frozenset())
+        if profile == "sec_readonly" and server_profile().financial_only:
+            allowed = allowed & FINANCIAL_ONLY_ROUTES
         if scope["type"] == "http":
             from starlette.routing import Match
             for route in self.router.routes:

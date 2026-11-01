@@ -51,6 +51,23 @@ test('DEP-01A1 capability transport failure cannot enable AI', async ctx => {
   await assert.rejects(getCapabilities(), error => error.code === 'NETWORK_ERROR');
 });
 
+test('financial-only capability accepts explicit restrictions and legacy unknown, rejects false claims', async ctx => {
+  const base = { research_mode: true, ai_analysis_configured: false, ai_analysis_enabled: false, server_profile: 'sec_readonly' };
+  for (const payload of [base, { ...base, filing_research_enabled: false }, { ...base, filing_research_enabled: true }]) {
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(payload)));
+    assert.deepEqual(await getCapabilities(), payload);
+  }
+  for (const payload of [
+    ...[null, 'true', 0, 1, {}].map(value => ({ ...base, filing_research_enabled: value })),
+    { ...base, filing_research_enabled: false, server_profile: 'development' },
+    { ...base, filing_research_enabled: true, research_mode: false },
+    { ...base, filing_research_enabled: false, ai_analysis_enabled: true },
+  ]) {
+    ctx.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(payload)));
+    await assert.rejects(getCapabilities(), error => error.code === 'INVALID_RESPONSE');
+  }
+});
+
 test('FD-01 filing readiness requires exact booleans and preserves the complete input', () => {
   const flags = [true, false, undefined, null, 'true', 'false', 1, 0, {}, []];
   const records = flags.map((flag, index) => ({ accession_number: `fixture-${index}`, ...(flag === undefined ? {} : { has_filing_chunks: flag }) }));
