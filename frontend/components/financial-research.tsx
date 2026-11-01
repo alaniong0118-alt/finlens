@@ -7,6 +7,7 @@ import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, 
   periodLabel, PERIOD_LABELS, SNAPSHOT_METRICS, METRIC_CATALOG, METRIC_GROUPS } from "@/lib/research";
 
 import { useResearchVersion } from "@/components/research-freshness";
+import { snapshotGaps, snapshotPoint } from "@/lib/snapshot-gaps";
 
 const CASH_FLOW_METRICS = ["operating_cash_flow", "capital_expenditures", "free_cash_flow"];
 const ALTERNATIVE_PERIODS: PeriodKind[] = ["half_year", "nine_months", "annual"];
@@ -22,7 +23,7 @@ function snapshotFor(scope: SnapshotScope, period: PeriodKind) {
     scope.controller.signal.addEventListener("abort", () => controller.abort(), { once: true });
     const created = { controller, settled: false, response: getFinancialSummary(scope.ticker, period, controller.signal, true).then(result => {
       if (controller.signal.aborted) throw new DOMException("Request cancelled", "AbortError");
-      if (result.ticker !== scope.ticker || result.company_cik !== scope.cik || result.requested_period !== period) {
+      if (!snapshotGaps(result, scope.ticker, scope.cik, period)) {
         throw new Error("Financial snapshot does not match this company and period.");
       }
       return result;
@@ -85,11 +86,11 @@ export function MetricCard({ point }: { point: NormalizedMetric }) {
   </article>;
 }
 
-function SnapshotMetric({ metric, point }: { metric: string; point: NormalizedMetric | undefined }) {
-  if (point?.metric === metric) return <MetricCard point={point} />;
+function SnapshotMetric({ metric, point, cik, period, anchor }: { metric: string; point: NormalizedMetric | undefined; cik: string; period: PeriodKind; anchor: FinancialSummary['period'] }) {
+  if (snapshotPoint(point, metric, cik, period, anchor)) return <MetricCard point={point} />;
   return <article className="metric-card"><h3>{METRIC_LABELS[metric]}</h3>
     <p className="small muted metric-description">{METRIC_CATALOG.find(item => item.id === metric)?.description}</p>
-    <p className="missing-value">Status unavailable</p><p className="small">This metric was not returned for this selection.</p>
+    <p className="missing-value">Status unavailable</p><p className="small">This metric was not returned or could not be verified for this selection.</p>
   </article>;
 }
 
@@ -283,6 +284,10 @@ export default function FinancialResearch({ company }: { company: Company }) {
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [snapshotAttempt, setSnapshotAttempt] = useState(0);
+  const [summaryGeneration, setSummaryGeneration] = useState(-1);
+  const generation = useRef({ key: '', value: 0 });
+  const generationKey = JSON.stringify([company.ticker, company.cik, period, version, snapshotAttempt]);
+  if (generation.current.key !== generationKey) generation.current = { key: generationKey, value: generation.current.value + 1 };
   const snapshotPending = useRef(false);
   const scope = useRef<SnapshotScope | null>(null);
   const [alternatives, setAlternatives] = useState<{ ticker: string; version: number; hints: { metric: string; snapshot: FinancialSummary }[] } | null>(null);
@@ -299,10 +304,11 @@ export default function FinancialResearch({ company }: { company: Company }) {
     setLoading(true); setSummary(null); setError(null); setErrorCode(null);
     const current = scope.current;
     if (version === null || !current) return;
+    const requestGeneration = generation.current.value;
     let active = true;
     snapshotPending.current = true;
     snapshotFor(current, period).then((result) => {
-      if (active && !current.controller.signal.aborted) { setSummary(result); setLoadedVersion(version); }
+      if (active && !current.controller.signal.aborted && generation.current.value === requestGeneration) { setSummary(result); setLoadedVersion(version); setSummaryGeneration(requestGeneration); }
     }).catch((failure) => {
       if (active && !current.controller.signal.aborted) {
         setError(describeApiError(failure));
@@ -342,8 +348,8 @@ export default function FinancialResearch({ company }: { company: Company }) {
           if (!active || current.controller.signal.aborted) break;
           for (const metric of missing) {
             const point = alternative.metrics[metric];
-            if (!hints.some(hint => hint.metric === metric) && point?.status === "available"
-                && point.value !== null && point.value.trim() !== "" && Number.isFinite(Number(point.value))
+            if (!hints.some(hint => hint.metric === metric) && snapshotPoint(point, metric, company.cik, mode, alternative.period)
+                && point.status === "available"
                 && point.metric === metric && point.unit === summary!.metrics[metric].unit
                 && alternative.period?.kind === mode && point.period?.kind === mode
                 && point.period.start === alternative.period?.start && point.period.end === alternative.period?.end) {
@@ -357,7 +363,12 @@ export default function FinancialResearch({ company }: { company: Company }) {
     void discover();
     return () => { active = false; };
   }, [company.ticker, company.cik, period, summary, loadedVersion, version]);
-  const available = summary ? Object.values(summary.metrics).filter((point) => point.status === "available").length : 0;
+  const gaps = summary && !loading && !error && Number.isSafeInteger(version) && version !== null && version >= 0
+    && !Object.is(version, -0) && loadedVersion === version && summaryGeneration === generation.current.value
+    ? snapshotGaps(summary, company.ticker, company.cik, period) : null;
+  const available = gaps?.filter(point => point.status === 'available').length ?? 0;
+  const missing = gaps?.filter(point => point.status !== 'available') ?? [];
+  const unverified = gaps?.filter(point => point.status === 'unverified').length ?? 0;
   return <div className="research-column">
     <section className="panel" aria-labelledby="snapshot-title">
       <div className="section-heading"><div><p className="eyebrow">Company research</p><h2 id="snapshot-title">Financial snapshot</h2></div>
@@ -367,17 +378,22 @@ export default function FinancialResearch({ company }: { company: Company }) {
         {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading financial snapshot…"}</p>}
         {error && <><p role="alert" className="error-state">{error}</p>
           <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retrySnapshot}>{errorCode === "DATA_VERSION_CHANGED" ? "Retry data check" : "Retry snapshot"}</button></>}
-        {summary && !loading && loadedVersion === version && summary.ticker === company.ticker && summary.requested_period === period && <>
+        {summary && gaps && !loading && loadedVersion === version && summary.ticker === company.ticker && summary.company_cik === company.cik && summary.requested_period === period && <>
           <p className="period-label">{periodLabel(summary.period)}</p>
-          <p className="muted small availability">Financial data: {available ? `${available} of ${Object.keys(summary.metrics).length} metrics available for this snapshot` : "No compatible metrics for this period"}. This snapshot is separate from the selected SEC research filing.</p>
+          <p className="muted small availability">Financial data: {available} of {gaps.length} metrics report available after structural checks; {unverified} unverified. This snapshot is separate from the selected SEC research filing.</p>
+          <details className="secondary-metrics"><summary>Snapshot coverage gaps ({missing.length})</summary>
+            <p className="small muted">Only the current snapshot is shown. These are structural checks, not independent source verification. Unverified does not establish missing source coverage.</p>
+            {missing.length ? <ul>{missing.map(item => <li key={item.metric} className="small"><strong>{item.label}</strong>: {item.status === 'unavailable' ? 'Unavailable' : item.status === 'not_applicable' ? 'Not applicable' : 'Unverified'}{item.reason ? ` — ${item.reason}` : ''}</li>)}</ul>
+              : <p className="small">No gaps in the checked metrics for this snapshot.</p>}
+          </details>
           {period === "quarter" && alternatives?.ticker === company.ticker && alternatives.version === version && alternatives.hints.map(({ metric, snapshot }) =>
             <p className="small cash-flow-alternative" key={metric}>{METRIC_LABELS[metric]} is available for {periodLabel(snapshot.period)}. Choose {PERIOD_LABELS[snapshot.requested_period]} in Snapshot period to view it.</p>)}
-          <div className="metric-grid">{SNAPSHOT_METRICS.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} />)}</div>
+          <div className="metric-grid">{SNAPSHOT_METRICS.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} cik={company.cik} period={period} anchor={summary.period} />)}</div>
           {[
             { label: "More income and profitability", ids: METRIC_CATALOG.filter(item => ["income", "profitability"].includes(item.group) && !SNAPSHOT_METRICS.includes(item.id)).map(item => item.id) },
             { label: "Balance sheet · as of the reporting date", ids: METRIC_CATALOG.filter(item => item.group === "balance").map(item => item.id) },
             { label: "Cash flow · reported intervals", ids: METRIC_CATALOG.filter(item => item.group === "cash_flow").map(item => item.id) },
-          ].map(group => <details className="secondary-metrics" key={group.label}><summary>{group.label}</summary><div className="metric-grid">{group.ids.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} />)}</div></details>)}
+          ].map(group => <details className="secondary-metrics" key={group.label}><summary>{group.label}</summary><div className="metric-grid">{group.ids.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} cik={company.cik} period={period} anchor={summary.period} />)}</div></details>)}
         </>}
       </div>
     </section>

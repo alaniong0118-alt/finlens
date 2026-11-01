@@ -1579,10 +1579,95 @@ function cashSnapshot(ticker, kind = 'quarter', values = {}) {
     const value = values[metric];
     result.metrics[metric] = { ...point(ticker, value ?? null, metric, kind), period: result.period,
       status: value == null ? 'unavailable' : 'available', reason: value == null ? 'No compatible inputs for this period.' : null };
+    // A missing synthetic metric has no fabricated source value.
+    if (value == null) result.metrics[metric].provenance = [];
   }
   return result;
 }
 const cashHints = app => [...app.snapshot().querySelectorAll('.cash-flow-alternative')];
+
+for (const strict of [false, true]) test(`Snapshot gaps distinguish current unavailable, not-applicable and unverified items strict ${strict}`, async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: 0, strict });
+  const payload = summary('AAPL', '1000000000');
+  for (const [metric, status, reason] of [['gross_profit', 'unavailable', 'Source basis conflict'], ['operating_income', 'not_applicable', 'Not relevant to this issuer']]) {
+    payload.metrics[metric] = { ...point('AAPL', null, metric), status, reason, provenance: [] };
+  }
+  payload.metrics.net_income = { ...point('AAPL', '123', 'net_income'), unit: 'incorrect' };
+  const request = app.request(companyPath('AAPL', 'financials/summary'));
+  assert.equal(request.init.headers['X-FinLens-Data-Version'], '0');
+  await app.release(request, payload);
+  const panel = app.snapshot(), disclosure = [...panel.querySelectorAll('details')].find(node => node.querySelector(':scope > summary')?.textContent.startsWith('Snapshot coverage gaps'));
+  assert.ok(disclosure); const count = app.requests.length;
+  assert.match(disclosure.textContent, /Gross profit: Unavailable — Source basis conflict/);
+  assert.match(disclosure.textContent, /Operating income: Not applicable — Not relevant to this issuer/);
+  assert.match(disclosure.textContent, /Net income: Unverified/);
+  assert.match(disclosure.textContent, /Diluted EPS: Unverified/);
+  assert.doesNotMatch(disclosure.textContent, /Revenue: Unverified|No gaps in the checked metrics/);
+  const toggle = disclosure.querySelector('summary'); toggle.focus(); assert.equal(document.activeElement, toggle);
+  await act(async () => toggle.click()); assert.equal(disclosure.open, true); assert.equal(app.requests.length, count);
+});
+
+for (const defect of ['empty', 'invalid-item', 'period-mismatch', 'wrong-source', 'missing-source']) test(`Snapshot gaps leave ${defect} metrics unverified`, async ctx => {
+  const app = await mount(ctx), payload = summary('AAPL', '1000000000');
+  if (defect === 'empty') payload.metrics = {};
+  if (defect === 'invalid-item') payload.metrics.revenue = null;
+  if (defect === 'period-mismatch') payload.metrics.revenue.period = { ...payload.period, end: '2024-12-31' };
+  if (defect === 'wrong-source') payload.metrics.revenue.provenance[0].company_cik = companies[1].cik;
+  if (defect === 'missing-source') payload.metrics.revenue.provenance = [];
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  const text = app.snapshot().textContent;
+  assert.match(text, /Revenue: Unverified/); assert.doesNotMatch(text, /No gaps in the checked metrics/);
+  assert.doesNotMatch(text, /\$1B/);
+});
+
+test('Snapshot gaps show no gaps only when every expected item is structurally valid', async ctx => {
+  const app = await mount(ctx), payload = summary('AAPL', '1000000000');
+  const names = ['revenue', 'gross_profit', 'operating_income', 'net_income', 'diluted_eps', 'revenue_growth_yoy', 'gross_margin', 'operating_margin', 'net_margin', 'cash_and_equivalents', 'total_assets', 'total_liabilities', 'operating_cash_flow', 'capital_expenditures', 'free_cash_flow'];
+  for (const metric of names) {
+    const item = point('AAPL', '1000000000', metric);
+    item.unit = ['revenue_growth_yoy', 'gross_margin', 'operating_margin', 'net_margin'].includes(metric) ? 'ratio' : metric === 'diluted_eps' ? 'USD/share' : 'USD';
+    if (['cash_and_equivalents', 'total_assets', 'total_liabilities'].includes(metric)) item.period = { ...payload.period, kind: 'instant', start: null };
+    payload.metrics[metric] = item;
+  }
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  assert.match(app.snapshot().textContent, /Snapshot coverage gaps \(0\)/);
+  assert.match(app.snapshot().textContent, /No gaps in the checked metrics for this snapshot/);
+});
+
+for (const defect of ['wrong-ticker', 'wrong-cik', 'wrong-period', 'missing-metrics']) test(`Snapshot gaps reject ${defect} response`, async ctx => {
+  const app = await mount(ctx), payload = summary('AAPL', '1000000000');
+  if (defect === 'wrong-ticker') payload.ticker = 'JPM';
+  if (defect === 'wrong-cik') payload.company_cik = companies[1].cik;
+  if (defect === 'wrong-period') payload.requested_period = 'annual';
+  if (defect === 'missing-metrics') delete payload.metrics;
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  assert.ok(app.snapshot().querySelector('[role="alert"]'));
+  assert.doesNotMatch(app.snapshot().textContent, /Snapshot coverage gaps|No gaps in the checked metrics|\$1B/);
+});
+
+test('Snapshot gaps hide old scopes across period and company changes and ignore late results', async ctx => {
+  const app = await mount(ctx); await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  assert.match(app.snapshot().textContent, /Snapshot coverage gaps/);
+  await app.change(app.select('Snapshot period'), 'annual');
+  assert.doesNotMatch(app.snapshot().textContent, /Snapshot coverage gaps/);
+  const stale = app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' });
+  await app.change(app.host.querySelector('#company'), 'JPM');
+  await app.release(stale, summary('AAPL', '2000000000', 'annual'));
+  assert.doesNotMatch(app.snapshot().textContent, /Snapshot coverage gaps|\$2B/);
+  await app.completeCompany('JPM', '3000000000');
+  assert.match(app.snapshot().textContent, /Snapshot coverage gaps/); assert.match(app.snapshot().textContent, /\$3B/);
+});
+
+test('Snapshot gaps hide old data when publication version changes', async ctx => {
+  const app = await mount(ctx); await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  assert.match(app.snapshot().textContent, /Snapshot coverage gaps/);
+  await focusCheck(); await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
+  assert.doesNotMatch(app.snapshot().textContent, /Snapshot coverage gaps|\$1B/);
+  const next = app.request(companyPath('AAPL', 'financials/summary'));
+  assert.equal(next.init.headers['X-FinLens-Data-Version'], '1');
+  await app.release(next, summary('AAPL', '2000000000'));
+  assert.match(app.snapshot().textContent, /Snapshot coverage gaps/); assert.match(app.snapshot().textContent, /\$2B/);
+});
 
 test('mounted cash-flow alternatives confirm YTD, preserve quarter values and reuse the existing selector/cache', async ctx => {
   const app = await mount(ctx);
@@ -1607,6 +1692,24 @@ test('mounted cash-flow alternatives confirm YTD, preserve quarter values and re
   assert.equal(app.requests.length, count, 'Returning to quarter does not refetch or rediscover');
   assert.equal(cashHints(app).length, 3);
   assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
+});
+
+test('Snapshot gaps admit alternative cash-flow hints only for structurally checked sources', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
+  const half = cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '800000000', capital_expenditures: '200000000', free_cash_flow: '600000000' });
+  half.metrics.operating_cash_flow.provenance[0].company_cik = companies[1].cik;
+  half.metrics.capital_expenditures.provenance = [];
+  await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'half_year' }), half);
+  assert.equal(cashHints(app).length, 1);
+  assert.match(cashHints(app)[0].textContent, /Free cash flow.*Half-year YTD/);
+  assert.doesNotMatch(app.snapshot().textContent, /Operating cash flow is available|Capital expenditures is available/);
+  const count = app.requests.length;
+  await app.change(app.select('Snapshot period'), 'half_year');
+  assert.equal(app.requests.length, count, 'The existing alternative cache must be reused');
+  assert.match(app.snapshot().textContent, /Operating cash flow: Unverified/);
+  assert.match(app.snapshot().textContent, /Capital expenditures: Unverified/);
+  assert.doesNotMatch(app.snapshot().textContent, /Free cash flow: Unverified/);
 });
 
 test('mounted cash-flow alternatives ignore invalid values/units/periods and failed or wrong-company responses', async ctx => {
