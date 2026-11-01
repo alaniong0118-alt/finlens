@@ -29,6 +29,7 @@ function load(file) {
 const data = load('e2e/fixtures/data.ts');
 const api = load('lib/finlens-api.ts');
 const contract = load('lib/company-comparison.ts');
+const quarterContract = load('lib/quarter-window-comparison.ts');
 const presentation = load('lib/research.ts');
 const { installIgnoredAbort } = load('e2e/fixtures/ignored-abort.ts');
 const insights = load('lib/financial-insights.ts');
@@ -632,19 +633,21 @@ for (const [ticker, version, terminal] of [
   // Locator protocol stub only: invokes the real readiness method and installed
   // assertion library without a browser, DOM, server or HTTP. It tests the added
   // synchronization, not whether the application reaches this UI in Chromium.
-  let enter, release;
+  let enter, release, enterQuarter, releaseQuarter;
   const entered = new Promise(done => { enter = done; }), barrier = new Promise(done => { release = done; });
+  const quarterEntered = new Promise(done => { enterQuarter = done; }), quarterBarrier = new Promise(done => { releaseQuarter = done; });
   const checks = [];
   class Locator {
     _apiName = 'Locator';
     constructor(name) { this.name = name; }
-    getByRole(role, options) { return new Locator(options.name); }
+    getByRole(role, options) { return new Locator(this.name === 'Reported quarter-duration windows' && role === 'status' ? 'quarter-status' : options.name); }
     locator(selector) { assert.equal(this.name, 'Annual financial insights'); assert.equal(selector, '.insights-status'); return new Locator(selector); }
     async _expect(expression, options) {
       checks.push([this.name, expression]);
       if (expression === 'to.have.text') {
-        assert.equal(this.name, '.insights-status'); assert.equal(options.expectedText[0].string, terminal);
-        assert.equal(options.timeout, 35000); enter(); await barrier;
+        if (this.name === 'quarter-status') { assert.equal(options.expectedText[0].string, 'Select two to four reported windows.'); enterQuarter(); await quarterBarrier; }
+        else { assert.equal(this.name, '.insights-status'); assert.equal(options.expectedText[0].string, terminal);
+          assert.equal(options.timeout, 35000); enter(); await barrier; }
       } else if (expression === 'to.have.value') assert.equal(options.expectedText[0].string, ticker);
       else assert.ok(['to.be.visible', 'to.be.enabled'].includes(expression));
       return { matches: true, received: expression === 'to.have.value' ? ticker : terminal, log: [] };
@@ -656,10 +659,78 @@ for (const [ticker, version, terminal] of [
   let ready = false, unrelatedReleased = false;
   void unrelated.promise.then(() => { unrelatedReleased = true; });
   const pending = scenario.ready(ticker).then(() => { ready = true; });
-  await entered; assert.equal(ready, false); release(); await pending;
+  await entered; assert.equal(ready, false); release(); await quarterEntered; assert.equal(ready, false); releaseQuarter(); await pending;
   assert.equal(ready, true); assert.equal(unrelatedReleased, false);
-  assert.deepEqual(checks.map(([, expression]) => expression), ['to.have.value', 'to.be.visible', 'to.be.enabled', 'to.have.text']);
+  assert.deepEqual(checks.map(([, expression]) => expression), ['to.have.value', 'to.be.visible', 'to.be.enabled', 'to.have.text', 'to.have.text']);
   assert.deepEqual(scenario.ledger, []); scenario.releaseAll();
+});
+
+function quarterRequest(ticker = 'AAA', pin = '0', keys = [], changes = {}) {
+  const query = new URLSearchParams(); for (const key of keys) query.append('period', key);
+  return { method: 'GET', path: `/companies/${ticker}/financials/quarters`, ticker, pin, query, body: null,
+    request: { postData: () => null }, ...changes };
+}
+test('QA-01 reported-window fixtures satisfy current client validation for discovery and exact selected windows', () => {
+  for (const ticker of ['AAA', 'BBB']) {
+    const issuer = data.company(ticker), keys = data.reportedQuarterWindows.map(w => `${w.start},${w.end}`);
+    for (const selected of [[], keys.slice(0, 2), keys.slice(0, 3), keys]) {
+      const body = data.quarterWindows(ticker, selected), windows = selected.map(key => {
+        const [start, end] = key.split(','); return { start, end };
+      });
+      assert.equal(quarterContract.validateQuarterResponse(body, issuer, windows, data.reportedQuarterWindows).columns.length, selected.length);
+      for (const column of body.columns) {
+        assert.equal(Object.keys(column.metrics).length, 11);
+        assert.equal(column.metrics.gross_margin.status, 'not_applicable');
+        assert.equal(column.metrics.free_cash_flow.status, 'available');
+        assert.equal(column.metrics.free_cash_flow.value, '0');
+        assert.equal(column.metrics.free_cash_flow.inputs.length, 2);
+        assert.equal(column.metrics.revenue.period.fiscal_year, null);
+      }
+    }
+  }
+});
+test('QA-01 reported-window route rejects unknown selectors, raw bodies and noncanonical pins before overrides', () => {
+  const scenario = new Scenario({}, {}), keys = data.reportedQuarterWindows.map(w => `${w.start},${w.end}`);
+  for (const selected of [[], keys.slice(0, 2), keys]) scenario.validateRequest(quarterRequest('AAA', '0', selected));
+  for (const selected of [[keys[0]], [keys[0], keys[0]], [...keys, keys[0]], [keys[0], '2024-01-01,2024-03-31']])
+    assert.throws(() => scenario.validateRequest(quarterRequest('AAA', '0', selected)));
+  for (const changes of [{ method: 'POST' }, { body: {} }, { request: { postData: () => 'null' } },
+    { request: { postData: () => '' } }, { query: new URLSearchParams('extra=1') }, { path: '/companies/BBB/financials/quarters' },
+    { pin: '00' }, { pin: '1' }, { pin: undefined }, { pin: '9007199254740992' }])
+    assert.throws(() => scenario.validateRequest(quarterRequest('AAA', '0', [], changes)));
+  const obsolete = quarterRequest('BBB', '0'); scenario.validateRequest(obsolete);
+  assert.deepEqual(scenario.defaultReply(obsolete), { status: 409, code: 'DATA_VERSION_CHANGED', version: '1' });
+});
+
+test('quarter focus oracle samples exposed visible outline segments and rejects full or side occlusion', () => {
+  const file = ts.createSourceFile('quarter.spec.ts', readFileSync(resolve(frontend, 'e2e/quarter-window-comparison.spec.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+  const fn = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'focusGeometry');
+  assert.ok(fn);
+  const js = ts.transpileModule(fn.getText(file), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const capture = new Function('element', 'document', 'getComputedStyle', 'innerWidth', 'innerHeight', 'devicePixelRatio', `${js};return focusGeometry(element);`);
+  const style = { outlineWidth: '3px', outlineOffset: '-6px', outlineStyle: 'solid', outlineColor: 'rgb(0, 0, 0)',
+    backgroundColor: 'rgb(255, 255, 255)', backgroundImage: 'none', opacity: '1', filter: 'none', mixBlendMode: 'normal',
+    overflowX: 'visible', overflowY: 'visible', clipPath: 'none', contain: 'none' };
+  const target = { getBoundingClientRect: () => ({ left: 10, right: 380, top: -1100, bottom: 500, width: 370, height: 1600 }),
+    parentElement: null, matches: () => true, contains: node => node === target };
+  const overlay = { parentElement: null }, child = { parentElement: target }, samples = [];
+  target.contains = node => node === target || node === child;
+  const { assessFocusPaint } = load('e2e/fixtures/annual-period-browser.ts');
+  for (const mode of ['exposed', 'full-overlay', 'right-overlay', 'low-contrast', 'right-dark']) {
+    samples.length = 0;
+    const result = capture(target, { documentElement: { scrollWidth: 390 }, elementFromPoint(x, y) { samples.push({ x, y });
+      if (x < 0 || x >= 390 || y < 0 || y >= 844) return null;
+      return mode === 'full-overlay' || mode === 'right-overlay' && x > 200 ? overlay : mode === 'right-dark' && x > 200 ? child : target; } },
+    node => ({ ...style, backgroundColor: mode === 'low-contrast' && node === target || node === child ? 'rgb(0, 0, 0)' : style.backgroundColor }), 390, 844, 1);
+    assert.equal(result.hit, false, 'An offscreen center cannot establish tall-region exposure');
+    assert.equal(result.surfaces.length, 4); assert.equal(result.visibleHeight, 500);
+    assert.ok(result.surfaces.every(point => point.x > 10 && point.x < 380 && point.y > 0 && point.y < 844));
+    const contrast = assessFocusPaint(result.outlineColor, result.surfaces);
+    assert.equal(result.surfaces.every(point => point.exposed) && contrast.sufficient, mode === 'exposed', mode);
+    if (mode === 'right-dark') { assert.equal(result.surfaces[0].layers[0].color, 'rgb(255, 255, 255)');
+      assert.equal(result.surfaces[2].layers[0].color, 'rgb(0, 0, 0)'); assert.ok(result.surfaces.every(point => point.exposed)); }
+    assert.ok(samples.some(point => point.x === 14.5) && samples.some(point => point.x === 375.5));
+  }
 });
 
 test('QA-01 installed HTTP/WebSocket routes preserve fail-closed boundaries with insights', async () => {

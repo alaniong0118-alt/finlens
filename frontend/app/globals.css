@@ -191,4 +191,9 @@ footer { margin:32px 0 5px; border-top:1px solid var(--border); padding-top:18px
 .comparison-table thead th span { display:block; margin-top:6px; font-weight:400; }
 .comparison-table .metric-value { font-size:23px; }
 .comparison-table .provenance { margin-top:10px; }
+.quarter-comparison .comparison-scroll:focus-visible,
+.quarter-comparison .provenance summary:focus-visible,
+.quarter-comparison .provenance a:focus-visible { outline-offset:-6px; }
+.quarter-comparison .provenance summary,
+.quarter-comparison .provenance a { padding-inline:8px; }
 @media (max-width:767px) { .comparison-controls { grid-template-columns:minmax(0,1fr); } .comparison-actions label { width:100%; } .comparison-table th,.comparison-table td { padding:12px; } }

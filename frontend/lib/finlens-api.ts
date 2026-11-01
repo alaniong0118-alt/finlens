@@ -741,6 +741,12 @@ export type AnnualFinancialComparison = FinancialSummary & {
   fiscal_years: number[];
   period_reason: string | null;
 };
+export type ReportedWindow = { start: string; end: string };
+export type QuarterComparison = {
+  ticker: string; company_name: string; company_cik: string; requested_period: "quarter";
+  selection_policy: string; available_windows: ReportedWindow[];
+  columns: { window: ReportedWindow; metrics: Record<string, NormalizedMetric> }[];
+};
 export type MetricHistory = {
   ticker: string; company_cik: string; metric: string; unit: string; requested_period: PeriodKind;
   status: NormalizedMetric["status"]; reason: string | null; history: NormalizedMetric[];
@@ -805,6 +811,12 @@ export function getFinancialSummary(ticker: string, period: PeriodKind, signal?:
 export function getAnnualFinancials(ticker: string, fiscalYear: number | null, signal: AbortSignal): Promise<AnnualFinancialComparison> {
   const query = fiscalYear === null ? "" : `?fiscal_year=${fiscalYear}`;
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/annual${query}`, { signal }, true);
+}
+export function getQuarterFinancials(ticker: string, windows: ReportedWindow[], signal: AbortSignal): Promise<QuarterComparison> {
+  const query = new URLSearchParams();
+  for (const window of windows) query.append("period", `${window.start},${window.end}`);
+  const suffix = query.size ? `?${query}` : "";
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/quarters${suffix}`, { signal }, true);
 }
 export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });

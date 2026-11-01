@@ -122,6 +122,32 @@ class AnnualFinancialComparison(NormalizedFinancialSummary):
         return self
 
 
+class ReportedQuarterWindow(BaseModel):
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def direct_duration(self):
+        if not 75 <= (self.end - self.start).days + 1 <= 105:
+            raise ValueError("A reported quarter-duration window must be 75–105 days.")
+        return self
+
+
+class ReportedQuarterColumn(BaseModel):
+    window: ReportedQuarterWindow
+    metrics: dict[str, NormalizedMetric]
+
+
+class ReportedQuarterComparison(BaseModel):
+    ticker: str
+    company_name: str
+    company_cik: str
+    requested_period: Literal["quarter"] = "quarter"
+    selection_policy: str
+    available_windows: list[ReportedQuarterWindow]
+    columns: list[ReportedQuarterColumn]
+
+
 class FiscalPeriodRequest(BaseModel):
     fiscal_year: int = Field(ge=1900, le=2099)
     quarter: int | None = Field(default=None, ge=1, le=4)

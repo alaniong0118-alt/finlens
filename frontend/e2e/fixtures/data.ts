@@ -59,6 +59,45 @@ export function annual(ticker: string, year: number | null): AnnualFinancialComp
   return { ...base, requested_period: 'annual', requested_fiscal_year: year, fiscal_years: [2025, 2024], period: year === null ? null : period('annual', year), period_reason: null, metrics: points };
 }
 
+// Literal synthetic reported durations; these do not establish fiscal labels or
+// actual issuer coverage. Overlap and same-end/different-start remain distinct.
+export const reportedQuarterWindows = [
+  { start: '2025-07-01', end: '2025-09-30' },
+  { start: '2025-04-01', end: '2025-07-14' }, // 105 days
+  { start: '2025-01-16', end: '2025-03-31' }, // 75 days
+  { start: '2025-01-01', end: '2025-03-31' },
+];
+export function quarterWindows(ticker: string, selected: string[] = []) {
+  const issuer = company(ticker), keys = reportedQuarterWindows.map(w => `${w.start},${w.end}`);
+  if (![0, 2, 3, 4].includes(selected.length) || new Set(selected).size !== selected.length || selected.some(key => !keys.includes(key)))
+    throw new Error('Invalid synthetic reported-window selection');
+  return { ticker, company_name: issuer.name, company_cik: issuer.cik, requested_period: 'quarter' as const,
+    selection_policy: 'Synthetic exact duration observations; no production coverage claim.',
+    available_windows: reportedQuarterWindows.map(w => ({ ...w })),
+    columns: selected.map(key => {
+      const index = keys.indexOf(key), window = { ...reportedQuarterWindows[index] };
+      const points = Object.fromEntries(annualMetrics.map((metric, metricIndex) => {
+        const point = observation(ticker, metric, 'quarter');
+        point.period = { kind: 'quarter', ...window, fiscal_year: null, fiscal_period: null, fiscal_label_basis: 'unknown' };
+        if (point.unit === 'ratio' || metric === 'free_cash_flow') Object.assign(point, { status: metric === 'gross_margin' ? 'not_applicable' : 'unavailable',
+          value: null, reason: metric === 'gross_margin' ? 'Synthetic industry exclusion for this observation.' : 'Synthetic compatible direct-period operands are missing.', provenance: [], inputs: [] });
+        point.provenance = point.provenance.map(source => ({ ...source,
+          fact_id: issuer.id * 10000 + index * 100 + metricIndex + 1, period_start: window.start, period_end: window.end,
+          source_fiscal_year: 2025, source_fiscal_period: null }));
+        return [metric, point];
+      }));
+      // Literal canonical FCF success: the two synthetic source observations
+      // both have the same fixed value; no fixture-side financial calculator.
+      Object.assign(points.free_cash_flow, { status: 'available', value: '0', reason: null,
+        formula: 'operating_cash_flow - capital_expenditures',
+        provenance: [...points.operating_cash_flow.provenance, ...points.capital_expenditures.provenance],
+        inputs: ['operating_cash_flow', 'capital_expenditures'].map(metric => ({ role: metric, metric,
+          value: points[metric].value!, unit: 'USD', period: points[metric].period!,
+          fact_ids: points[metric].provenance.map(source => source.fact_id) })) });
+      return { window, metrics: points };
+    }) };
+}
+
 // Opt-in annual comparison only. Default catalog, observations and publications
 // above remain unchanged; these additional issuers cannot enter other workflows.
 export const comparisonCompanies: Company[] = [...companies,

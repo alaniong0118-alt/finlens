@@ -150,6 +150,7 @@ export function publicationRequests(ticker = 'AAA', pin = 0): string[] {
   return [expectedRequest(`/companies/${ticker}/freshness`),
     expectedRequest(`/companies/${ticker}/financials/insights`, pin, 'mode=discover'),
     expectedRequest(`/companies/${ticker}/financials/annual`, pin),
+    expectedRequest(`/companies/${ticker}/financials/quarters`, pin),
     expectedRequest(`/companies/${ticker}/financials/summary`, pin, 'period=quarter'),
     expectedRequest(`/companies/${ticker}/financials/metrics/revenue`, pin, 'period=quarter&limit=12'),
     expectedRequest(`/companies/${ticker}/sources`, pin)];
@@ -173,8 +174,9 @@ export const publicationHeaderCancellations = (ticker = 'AAA', pin = 0): Complet
 export const replayCancellations = (ticker = 'AAA', pin = 0, freshness = true): string[] => [
   ...(freshness ? [expectedRequest(`/companies/${ticker}/freshness`)] : []),
   expectedRequest(`/companies/${ticker}/financials/annual`, pin),
+  expectedRequest(`/companies/${ticker}/financials/quarters`, pin),
 ];
-function lifecycle(scenario: Scenario, cancellations: readonly string[] = []) {
+export function lifecycle(scenario: Scenario, cancellations: readonly string[] = []) {
   return outcomes.get(scenario)!.snapshot(scenario.ledger, cancellations);
 }
 export const annualRequestCursor = (scenario: Scenario) => outcomes.get(scenario)!.cursor();

@@ -94,7 +94,7 @@ function SnapshotMetric({ metric, point, cik, period, anchor }: { metric: string
   </article>;
 }
 
-function revealHistorySourceFocus(event: FocusEvent<HTMLDivElement>) {
+export function revealHistorySourceFocus(event: FocusEvent<HTMLDivElement>) {
   const region = event.currentTarget, target = event.target;
   if (!(target instanceof HTMLElement) || !target.matches('.provenance summary, .provenance a[href]')
       || region.scrollWidth <= region.clientWidth) return;

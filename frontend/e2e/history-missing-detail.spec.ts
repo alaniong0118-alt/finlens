@@ -18,13 +18,14 @@ function missingHistory() {
 type HistoryRequest = { request: Request; method: string; url: string; pin: string | undefined; bodyAbsent: boolean;
   start: number; finished?: number; status?: number; version?: string; failed?: number; error?: string };
 
-// This test only permits the two observed startup cancellations. A
+// Only these three automatic discovery scopes may have one startup cancellation. A
 // request's identity and terminal event must bind to its own successful peer.
 function checkInitialHistoryRequests(records: HistoryRequest[], boundary: number, violations: string[] = []): string[] {
   if (violations.length) throw new Error('Unbound request lifecycle event');
   const scopes = [
     { path: '/api/finlens/companies/AAA/freshness', pin: undefined },
     { path: '/api/finlens/companies/AAA/financials/annual', pin: '0' },
+    { path: '/api/finlens/companies/AAA/financials/quarters', pin: '0' },
   ];
   const allowed: string[] = [];
   for (const scope of scopes) {
@@ -54,7 +55,8 @@ function recordHistoryRequests(page: Page) {
   const scoped = (request: Request) => {
     const path = new URL(request.url()).pathname;
     return path === '/api/finlens/companies/AAA/freshness'
-      || path === '/api/finlens/companies/AAA/financials/annual';
+      || path === '/api/finlens/companies/AAA/financials/annual'
+      || path === '/api/finlens/companies/AAA/financials/quarters';
   };
   let sequence = 0;
   page.on('request', request => {
@@ -79,7 +81,8 @@ function recordHistoryRequests(page: Page) {
 function historyRequestAudit(records: HistoryRequest[], violations: string[], boundary: number | null) {
   const rows = records.filter(row => {
     const path = new URL(row.url).pathname;
-    return path === '/api/finlens/companies/AAA/freshness' || path === '/api/finlens/companies/AAA/financials/annual';
+    return path === '/api/finlens/companies/AAA/freshness' || path === '/api/finlens/companies/AAA/financials/annual'
+      || path === '/api/finlens/companies/AAA/financials/quarters';
   }).map(row => {
     const url = new URL(row.url);
     return { method: row.method, url: url.origin + url.pathname, query: url.search.slice(0, 256).replace(/[^\x20-\x7e]/g, '?'),
@@ -262,11 +265,11 @@ for (const width of [1440, 390]) test.describe(`History missing-detail at ${widt
       await expect(rows.nth(index).locator('td').nth(1)).toContainText(row.reason!);
       await expect(rows.nth(index).locator('td').nth(1)).not.toContainText(body.history[1 - index].reason!);
     }
-    // Wait for observed initial requests to settle as well as both 200 peers.
+    // Wait for observed initial requests to settle as well as all three 200 peers.
     // Cross-request event delivery order does not establish browser start order.
-    await expect.poll(() => ['/api/finlens/companies/AAA/freshness', '/api/finlens/companies/AAA/financials/annual']
+    await expect.poll(() => ['/api/finlens/companies/AAA/freshness', '/api/finlens/companies/AAA/financials/annual', '/api/finlens/companies/AAA/financials/quarters']
       .every(path => audit.records.some(row => new URL(row.url).pathname === path
-        && row.method === 'GET' && row.pin === (path.endsWith('/annual') ? '0' : undefined)
+        && row.method === 'GET' && row.pin === (path.endsWith('/freshness') ? undefined : '0')
         && row.status === 200 && row.finished !== undefined)
         && audit.records.filter(row => new URL(row.url).pathname === path)
           .every(row => row.finished !== undefined || row.failed !== undefined)), { timeout: 5000 }).toBe(true);

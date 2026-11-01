@@ -69,6 +69,8 @@ export class Scenario {
       : 'Annual financial insights could not be loaded or verified. Retry explicitly.';
     await expect(this.page.getByRole('region', { name: 'Annual financial insights', exact: true }).locator('.insights-status'))
       .toHaveText(discoveryTerminal, { timeout: 35_000 });
+    await expect(this.page.getByRole('region', { name: 'Reported quarter-duration windows', exact: true }).getByRole('status'))
+      .toHaveText('Select two to four reported windows.');
   }
   async install() {
     await this.context.routeWebSocket('**/*', socket => {
@@ -145,6 +147,13 @@ export class Scenario {
       return;
     }
     if (method !== 'GET' || body !== null) throw new Error(`Invalid method/body ${path}`);
+    if (suffix === 'financials/quarters') {
+      if (path !== `/companies/${ticker}/financials/quarters` || !Number.isSafeInteger(Number(pin))
+          || String(Number(pin)) !== pin || item.request.postData() !== null
+          || [...query.keys()].some(key => key !== 'period')) throw new Error('Invalid reported-window request');
+      data.quarterWindows(ticker, query.getAll('period'));
+      return;
+    }
     if (suffix === 'financials/insights') {
       if (path !== `/companies/${ticker}/financials/insights` || !Number.isSafeInteger(Number(pin))
         || String(Number(pin)) !== pin || (item.request.postData?.() ?? null) !== null) throw new Error('Invalid insights issuer path, publication pin or body');
@@ -186,6 +195,7 @@ export class Scenario {
     if (path.endsWith('/summary')) return { body: data.summary(issuer, query.get('period') as PeriodKind) };
     if (path.includes('/metrics/')) return { body: data.history(issuer, path.split('/').at(-1)!, query.get('period') as PeriodKind) };
     if (path.endsWith('/annual')) return { body: data.annual(issuer, query.has('fiscal_year') ? Number(query.get('fiscal_year')) : null) };
+    if (path.endsWith('/quarters')) return { body: data.quarterWindows(issuer, query.getAll('period')) };
     if (path.endsWith('/research-answer')) return { body: data.answer(issuer, (body as { question: string }).question) };
     if (path.endsWith('/context')) return { body: data.evidence(issuer, query.get('q')!, version, path.includes('/filings/') ? data.accession(issuer) : undefined) };
     throw new Error(`No synthetic reply ${path}`);

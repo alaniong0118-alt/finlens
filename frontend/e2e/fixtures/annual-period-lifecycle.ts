@@ -75,10 +75,10 @@ export class AnnualLifecycle {
       const peers = rows.filter(candidate => candidate.generation === row.generation && candidate.request === row.request);
       const companion = peers.find(candidate => candidate.id !== row.id);
       const freshness = /^\/companies\/(AAA|BBB)\/freshness$/.test(pathname) && pin === null;
-      const annual = /^\/companies\/(AAA|BBB)\/financials\/annual$/.test(pathname)
+      const discovery = /^\/companies\/(AAA|BBB)\/financials\/(annual|quarters)$/.test(pathname)
         && typeof pin === 'string' && /^(0|[1-9]\d*)$/.test(pin);
       return !(row.origin === 'http://127.0.0.1:3107' && method === 'GET'
-        && (freshness || annual) && query === '' && body === null && row.bodyAbsent
+        && (freshness || discovery) && query === '' && body === null && row.bodyAbsent
         && declaredCancellations.includes(row.request) && row.state === 'cancelled' && row.response === null
         && row.error === 'net::ERR_ABORTED' && peers.length === 2 && companion?.routed && companion.bodyAbsent
         && companion.state === 'completed' && companion.response?.status === 200

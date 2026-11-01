@@ -133,7 +133,8 @@ test('annual discovery accepts either notification order within one generation w
 });
 test('all legal cross-request event interleavings retain routed and pre-route replay pairs', () => {
   const orders=['AaBHF','ABaHF','ABHaF','ABHFa','BAaHF','BAHaF','BAHFa','BHAaF','BHAFa','BHFAa'];
-  for(const [path,pin] of [['/companies/AAA/freshness',undefined],['/companies/AAA/financials/annual','0'],['/companies/AAA/financials/annual','1']])
+  for(const [path,pin] of [['/companies/AAA/freshness',undefined],['/companies/AAA/financials/annual','0'],['/companies/AAA/financials/annual','1'],
+    ['/companies/AAA/financials/quarters','0'],['/companies/AAA/financials/quarters','1']])
     for(const routeOld of [false,true]) for(const order of orders) {
       const invalid=[], recorder=new AnnualLifecycle(event=>invalid.push(event));
       const old=request(path,{pin}), good=request(path,{pin});
@@ -151,9 +152,10 @@ test('all legal cross-request event interleavings retain routed and pre-route re
     }
 });
 test('annual replay cannot use an old-generation success or a wrong version, query, body, or duplicate', () => {
+  for(const path of ['/companies/AAA/financials/annual','/companies/AAA/financials/quarters'])
   for(const kind of ['old-generation','version','query','body','duplicate','unfinished']) {
-    const recorder=new AnnualLifecycle(()=>{}), path='/companies/AAA/financials/annual';
-    const old=request(path,{pin:'1',...(kind==='query'?{query:'fiscal_year=2024'}:{}),...(kind==='body'?{rawBody:'null'}:{})});
+    const recorder=new AnnualLifecycle(()=>{});
+    const old=request(path,{pin:'1',...(kind==='query'?{query:path.endsWith('quarters')?'period=2025-01-01%2C2025-03-31&period=2025-04-01%2C2025-06-30':'fiscal_year=2024'}:{}),...(kind==='body'?{rawBody:'null'}:{})});
     const good=request(path,{pin:'1'}), ledger=[routed(good)];
     if(kind==='old-generation'){recorder.started(good);completed(recorder,good,200,'1');recorder.cursor();recorder.started(old);recorder.failed(old);}
     else {recorder.started(old);recorder.failed(old);recorder.started(good);if(kind!=='unfinished')completed(recorder,good,200,kind==='version'?'0':'1');
