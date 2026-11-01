@@ -502,10 +502,10 @@ export function getCompanies(signal?: AbortSignal): Promise<Company[]> {
   return requestJson<Company[]>("/companies", { signal });
 }
 
-export function getFilingSources(ticker: string, signal?: AbortSignal): Promise<FilingSource[]> {
+export function getFilingSources(ticker: string, signal?: AbortSignal, requirePublishedVersion = false): Promise<FilingSource[]> {
   return requestJson<FilingSource[]>(
     `/companies/${encodeURIComponent(ticker)}/sources`,
-    { signal },
+    { signal }, requirePublishedVersion,
   );
 }
 

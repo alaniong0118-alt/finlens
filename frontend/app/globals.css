@@ -202,3 +202,19 @@ footer { margin:32px 0 5px; border-top:1px solid var(--border); padding-top:18px
 .financial-coverage .provenance summary,
 .financial-coverage .provenance a { padding-inline:8px; }
 @media (max-width:767px) { .comparison-controls { grid-template-columns:minmax(0,1fr); } .comparison-actions label { width:100%; } .comparison-table th,.comparison-table td { padding:12px; } }
+
+/* Original-source comparison: bounded columns reflow on narrow screens. */
+.dual-filing-evidence { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); min-width: 0; }
+.dual-filing-controls, .dual-filing-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.dual-filing-controls > div, .dual-filing-controls label, .dual-filing-column { min-width: 0; }
+.dual-filing-controls select { width: 100%; min-width: 0; }
+.dual-filing-evidence textarea { width: 100%; }
+.dual-filing-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: .75rem; }
+.dual-filing-column .excerpt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dual-filing-column h5 { margin: .75rem 0; font-size: 1rem; }
+@media (max-width: 700px) { .dual-filing-controls, .dual-filing-columns { grid-template-columns: minmax(0, 1fr); } }
+.dual-filing-column { border: 1px solid var(--border); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.dual-filing-column > p, .dual-filing-evidence form > p { margin-block: .75rem; }
+.dual-filing-columns { margin-top: 1rem; }
+
+.dual-filing-selection { margin-top: .4rem; }

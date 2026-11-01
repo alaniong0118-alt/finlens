@@ -5,6 +5,7 @@ import { citationForClaim, describeApiError, FinLensApiError, versionedControlle
   type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, type QuestionScope } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
+import DualFilingEvidence from "@/components/dual-filing-evidence";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
 import PassageTone from "@/components/passage-tone";
 import { RISK_TOPICS, RISK_EXPLANATION, riskTopic, riskQueryLabel, validateRiskEvidence, RiskEvidenceError, type RiskRequest } from "@/lib/sec-risk";
@@ -479,7 +480,7 @@ export default function FilingResearch({ company, configured }: { company: Compa
     const controller = versionedController(version, changed);
     const current = () => !controller.signal.aborted && liveSourceOwner.current === sourceOwner;
     setSources({ owner: sourceOwner, status: "loading", data: [], error: null, errorCode: null });
-    getFilingSources(company.ticker, controller.signal).then((data) => {
+    getFilingSources(company.ticker, controller.signal, true).then((data) => {
       if (!current()) return;
       if (!Array.isArray(data) || data.some(item => !item || typeof item.accession_number !== "string" || !item.accession_number.trim())) throw new Error("Invalid filing list response.");
       const indexed = searchableFilings(data);
@@ -533,5 +534,6 @@ export default function FilingResearch({ company, configured }: { company: Compa
       <RecordedFilings key={`${company.ticker}-${company.cik}-${version}-unknown`} unknown filings={currentSources.filter(item => filingReadiness(item) === "unknown")} />
     </>}
     <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={sourceReady && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={sourceReady && company.has_indexed_filing && indexed.length > 0} configured={configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} />
+    <DualFilingEvidence key={`dual-${company.ticker}-${company.cik}`} company={company} sources={currentSources} />
   </section>;
 }
