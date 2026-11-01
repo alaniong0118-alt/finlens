@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,6 +19,14 @@ from app.models import Company, FinancialFact
 @pytest.fixture
 def db(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    # Test-only approximation of PostgreSQL's C collation for UTF-8 strings;
+    # this does not change or validate the production PostgreSQL configuration.
+    @event.listens_for(engine, "connect")
+    def sqlite_c_collation(connection, _record):
+        def compare(left, right):
+            a, b = left.encode("utf-8"), right.encode("utf-8")
+            return (a > b) - (a < b)
+        connection.create_collation("C", compare)
     Base.metadata.create_all(engine)
     monkeypatch.setattr(main, "HttpSessionLocal", sessionmaker(bind=engine))
     monkeypatch.setenv("OPENAI_API_KEY", "")
@@ -30,6 +38,15 @@ def db(monkeypatch):
         session.commit()
         yield session, company
     engine.dispose()
+
+
+def test_sqlite_fixture_c_collation_orders_utf8_bytes(db):
+    session, _company = db
+    values = session.execute(text(
+        "SELECT value FROM (SELECT :z AS value UNION ALL SELECT :upper UNION ALL SELECT :lower "
+        "UNION ALL SELECT :accent_one UNION ALL SELECT :accent_two) ORDER BY value COLLATE C"
+    ), {"z": "z", "upper": "A", "lower": "a", "accent_one": "\u00e9", "accent_two": "\u00c5"}).scalars().all()
+    assert values == ["A", "a", "z", "\u00c5", "\u00e9"]
 
 
 def add(db, concept="Revenues", value="100", start="2025-01-01", end="2025-03-31", **kwargs):

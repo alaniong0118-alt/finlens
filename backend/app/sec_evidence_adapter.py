@@ -313,7 +313,7 @@ def _xml_tree(data):
     return root, scopes
 
 
-def _validate_inline_structure(root, scopes, dei_namespace):
+def _validate_inline_structure(root, scopes, dei_namespace, *, cash_flow_profile=False):
     """Reject unsupported instance semantics before any candidate can disappear.
 
     Known narrative text-block/continuation containers do not change a nested
@@ -327,7 +327,8 @@ def _validate_inline_structure(root, scopes, dei_namespace):
             if "inlineXBRL" in namespace and "/transformation/" not in namespace:
                 _require(namespace == IX, "unsupported_inline_namespace")
     parents = {child: parent for parent in root.iter() for child in parent}
-    financial_names = METRICS["revenue"].concepts + METRICS["net_income"].concepts
+    financial_names = (METRICS["operating_cash_flow"].concepts + METRICS["capital_expenditures"].concepts
+                       if cash_flow_profile else METRICS["revenue"].concepts + METRICS["net_income"].concepts)
     identity_names = {"EntityCentralIndexKey", "DocumentType", "AmendmentFlag", "DocumentPeriodEndDate"}
     for element in root.iter():
         namespace, local = element.tag[1:].split("}", 1) if element.tag.startswith("{") else ("", element.tag)

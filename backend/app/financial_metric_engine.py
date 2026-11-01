@@ -26,9 +26,16 @@ class UnknownMetric(ValueError):
 SourceScalar = str | int | Decimal | date | datetime | None
 
 
+@dataclass(frozen=True, order=True)
+class SessionObservationKey:
+    """Identity within admitted original bytes; never a database fact ID."""
+    artifact_sha256: str
+    fact_locator: str
+
+
 @dataclass(frozen=True)
 class Observation:
-    reference: int  # Real DB row identity in this adapter; never a manufactured ID.
+    reference: int | SessionObservationKey  # DB integers remain real row identities.
     concept: str | None
     value: Decimal
     unit: str
@@ -152,9 +159,14 @@ def period_key(point):
 class FinancialMetricEngine:
     """One algorithm over adapter-eligible observations and narrow permissions."""
 
-    def __init__(self, observations: tuple[Observation, ...], permissions: SourcePermissions, *, budget=None):
+    def __init__(self, observations: tuple[Observation, ...], permissions: SourcePermissions, *, budget=None,
+                 missing_source_reason="No compatible stored SEC fact for this period, concept and unit."):
         self._budget = budget
         self._tick()
+        if any(type(o.reference) is SessionObservationKey for o in self._walk(observations)):
+            if not all(type(o.reference) is SessionObservationKey for o in self._walk(observations)):
+                raise ValueError("Mixed database and session observation identities are unsupported.")
+        self._missing_source_reason = missing_source_reason
         self.observations = observations
         self.permissions = permissions
         self.selection_approvals = {}
@@ -311,7 +323,7 @@ class FinancialMetricEngine:
                     if name == "capital_expenditures" and point.value < 0:
                         return self.missing(name, "Negative payment fact conflicts with positive-outflow CapEx convention.", period)
                     return point
-            return self.missing(name, "No compatible stored SEC fact for this period, concept and unit.", period)
+            return self.missing(name, self._missing_source_reason, period)
         if name == "revenue_growth_yoy":
             current = self.observation("revenue", period)
             prior = [p for p in self._walk(self.base["revenue"]) if p.period.kind == period.kind
