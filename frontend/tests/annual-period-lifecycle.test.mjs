@@ -22,8 +22,8 @@ function routed(req) {
     pin: req.headers()['x-finlens-data-version'], query: url.searchParams,
     body: req.postData() === null ? null : JSON.parse(req.postData()) };
 }
-function completed(recorder, req, status = 200) {
-  recorder.responded({ request: () => req, url: () => req.url(), status: () => status, headers: () => ({}) });
+function completed(recorder, req, status = 200, version) {
+  recorder.responded({ request: () => req, url: () => req.url(), status: () => status, headers: () => version === undefined ? {} : { 'x-finlens-data-version': version } });
   recorder.finished(req);
 }
 function setup() {
@@ -120,4 +120,44 @@ test('annual lifecycle cursor tracks started identities, including late pre-rout
   assert.deepEqual(result.rejectedUnbound, []);
   assert.deepEqual(result.rows.filter(row => row.id > boundary).map(row => [row.id, row.state]), [[3, 'cancelled'], [4, 'completed']]);
   assert.ok(result.rows.some(row => row.id === 1 && row.request === annualSignature(routed(first))));
+});
+test('annual discovery accepts either notification order within one generation with the exact version', () => {
+  for (const inverted of [false, true]) {
+    const bad=[], recorder=new AnnualLifecycle(event=>bad.push(event));
+    const old=request('/companies/AAA/financials/annual',{pin:'1'}), good=request('/companies/AAA/financials/annual',{pin:'1'});
+    if(inverted){recorder.started(good);completed(recorder,good,200,'1');recorder.started(old);recorder.failed(old);}
+    else {recorder.started(old);recorder.started(good);completed(recorder,good,200,'1');recorder.failed(old);}
+    assert.deepEqual(recorder.snapshot([routed(good)],[annualSignature(routed(old))]).rejectedUnbound,[]);
+    assert.deepEqual(bad,[]);
+  }
+});
+test('all legal cross-request event interleavings retain routed and pre-route replay pairs', () => {
+  const orders=['AaBHF','ABaHF','ABHaF','ABHFa','BAaHF','BAHaF','BAHFa','BHAaF','BHAFa','BHFAa'];
+  for(const [path,pin] of [['/companies/AAA/freshness',undefined],['/companies/AAA/financials/annual','0'],['/companies/AAA/financials/annual','1']])
+    for(const routeOld of [false,true]) for(const order of orders) {
+      const invalid=[], recorder=new AnnualLifecycle(event=>invalid.push(event));
+      const old=request(path,{pin}), good=request(path,{pin});
+      for(const event of order) {
+        if(event==='A')recorder.started(old); if(event==='a')recorder.failed(old);
+        if(event==='B')recorder.started(good);
+        if(event==='H')recorder.responded({request:()=>good,url:()=>good.url(),status:()=>200,
+          headers:()=>pin===undefined?{}:{'x-finlens-data-version':pin}});
+        if(event==='F')recorder.finished(good);
+      }
+      const result=recorder.snapshot([...(routeOld?[routed(old)]:[]),routed(good)],[annualSignature(routed(old))]);
+      assert.deepEqual(invalid,[],`${path}/${pin}/${routeOld}/${order}`);
+      assert.deepEqual(result.bindingErrors,[]);assert.deepEqual(result.rejectedUnbound,[]);
+      assert.deepEqual(result.rows.map(row=>row.state).sort(),['cancelled','completed']);
+    }
+});
+test('annual replay cannot use an old-generation success or a wrong version, query, body, or duplicate', () => {
+  for(const kind of ['old-generation','version','query','body','duplicate','unfinished']) {
+    const recorder=new AnnualLifecycle(()=>{}), path='/companies/AAA/financials/annual';
+    const old=request(path,{pin:'1',...(kind==='query'?{query:'fiscal_year=2024'}:{}),...(kind==='body'?{rawBody:'null'}:{})});
+    const good=request(path,{pin:'1'}), ledger=[routed(good)];
+    if(kind==='old-generation'){recorder.started(good);completed(recorder,good,200,'1');recorder.cursor();recorder.started(old);recorder.failed(old);}
+    else {recorder.started(old);recorder.failed(old);recorder.started(good);if(kind!=='unfinished')completed(recorder,good,200,kind==='version'?'0':'1');
+      if(kind==='duplicate'){const extra=request(path,{pin:'1'});recorder.started(extra);recorder.failed(extra);}}
+    assert.ok(recorder.snapshot(ledger,[annualSignature(routed(old))]).rejectedUnbound.includes(kind==='old-generation'?2:1),kind);
+  }
 });

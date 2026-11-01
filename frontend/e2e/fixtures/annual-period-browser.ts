@@ -200,8 +200,8 @@ export function expectReplayGenerations(scenario: Scenario, since: number, ticke
   for (const request of replayCancellations(ticker, pin, freshness)) {
     const generations = rows.filter(item => item.request === request);
     expect(generations).toHaveLength(2);
-    expect(generations[0].state).toBe('cancelled'); expect(generations[1].state).toBe('completed');
-    expect(generations[0].id).toBeLessThan(generations[1].id!);
+    expect(generations.map(item => item.state).sort()).toEqual(['cancelled', 'completed']);
+    expect(generations[0].generation).toBe(generations[1].generation);
   }
 }
 export async function waitForCompletedRequest(scenario: Scenario, request: string) {

@@ -2,7 +2,7 @@ import type { Request, Response } from '@playwright/test';
 
 type Receipt = { status: number; version: string | null; code: string | null };
 type State = 'pending' | 'completed' | 'cancelled' | 'failed';
-type RecordRow = { id: number; request: string; origin: string; bodyAbsent: boolean; state: State; response: Receipt | null; error: string | null };
+type RecordRow = { id: number; generation: number; request: string; origin: string; bodyAbsent: boolean; state: State; response: Receipt | null; error: string | null };
 type Routed = { request: Request; method: string; path: string; pin: string | undefined; query: URLSearchParams; body: unknown };
 
 export function annualSignature(request: Pick<Routed, 'method' | 'path' | 'pin' | 'query' | 'body'>): string {
@@ -13,6 +13,7 @@ export function annualSignature(request: Pick<Routed, 'method' | 'path' | 'pin' 
 // before Playwright dispatches the corresponding route callback.
 export class AnnualLifecycle {
   private readonly records = new Map<Request, RecordRow>();
+  private generation = 0;
   constructor(private readonly invalid: (event: string) => void) {}
   private isApi(request: Request) {
     const url = new URL(request.url());
@@ -37,7 +38,7 @@ export class AnnualLifecycle {
     catch { this.invalid('invalid request body'); body = raw; }
     const signature = annualSignature({ method: request.method(), path: url.pathname.slice('/api/finlens'.length),
       pin: request.headers()['x-finlens-data-version'], query: url.searchParams, body });
-    this.records.set(request, { id: this.records.size + 1, request: signature, origin: url.origin, bodyAbsent: raw === null,
+    this.records.set(request, { id: this.records.size + 1, generation: this.generation, request: signature, origin: url.origin, bodyAbsent: raw === null,
       state: 'pending', response: null, error: null });
   };
   responded = (response: Response) => {
@@ -58,7 +59,7 @@ export class AnnualLifecycle {
     const error = request.failure()?.errorText ?? 'Unknown request failure';
     Object.assign(record, { state: error === 'net::ERR_ABORTED' ? 'cancelled' : 'failed', error });
   };
-  cursor() { return this.records.size; }
+  cursor() { const boundary = this.records.size; this.generation++; return boundary; }
   snapshot(ledger: readonly Routed[], declaredCancellations: readonly string[]) {
     const bindingErrors: string[] = [];
     const rows = [...this.records.entries()].map(([request, record]) => {
@@ -71,12 +72,17 @@ export class AnnualLifecycle {
     const rejectedUnbound = rows.filter(row => {
       if (row.routed) return false;
       const [method, pathname, query, pin, body] = JSON.parse(row.request);
-      const next = rows.find(candidate => candidate.id > row.id && candidate.request === row.request);
+      const peers = rows.filter(candidate => candidate.generation === row.generation && candidate.request === row.request);
+      const companion = peers.find(candidate => candidate.id !== row.id);
+      const freshness = /^\/companies\/(AAA|BBB)\/freshness$/.test(pathname) && pin === null;
+      const annual = /^\/companies\/(AAA|BBB)\/financials\/annual$/.test(pathname)
+        && typeof pin === 'string' && /^(0|[1-9]\d*)$/.test(pin);
       return !(row.origin === 'http://127.0.0.1:3107' && method === 'GET'
-        && /^\/companies\/(AAA|BBB)\/freshness$/.test(pathname) && query === '' && pin === null && body === null && row.bodyAbsent
+        && (freshness || annual) && query === '' && body === null && row.bodyAbsent
         && declaredCancellations.includes(row.request) && row.state === 'cancelled' && row.response === null
-        && row.error === 'net::ERR_ABORTED' && next?.routed && next.state === 'completed'
-        && next.response?.status === 200 && next.response.version === null && next.response.code === null && next.error === null);
+        && row.error === 'net::ERR_ABORTED' && peers.length === 2 && companion?.routed && companion.bodyAbsent
+        && companion.state === 'completed' && companion.response?.status === 200
+        && companion.response.version === pin && companion.response.code === null && companion.error === null);
     }).map(row => row.id);
     return { started: rows.length, rows, bindingErrors, rejectedUnbound };
   }

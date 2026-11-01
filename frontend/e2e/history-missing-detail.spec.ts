@@ -15,8 +15,8 @@ function missingHistory() {
     reason: 'Synthetic returned history has no compatible values.', history: [first, second] };
 }
 
-type HistoryRequest = { request: Request; method: string; url: string; pin: string | undefined;
-  start: number; finished?: number; status?: number; failed?: number; error?: string };
+type HistoryRequest = { request: Request; method: string; url: string; pin: string | undefined; bodyAbsent: boolean;
+  start: number; finished?: number; status?: number; version?: string; failed?: number; error?: string };
 
 // This test only permits the two observed startup cancellations. A
 // request's identity and terminal event must bind to its own successful peer.
@@ -29,17 +29,18 @@ function checkInitialHistoryRequests(records: HistoryRequest[], boundary: number
   const allowed: string[] = [];
   for (const scope of scopes) {
     const relevant = records.filter(item => new URL(item.url).pathname === scope.path);
-    if (relevant.some(item => item.method !== 'GET' || item.pin !== scope.pin
+    if (relevant.some(item => item.method !== 'GET' || item.pin !== scope.pin || !item.bodyAbsent
         || new URL(item.url).origin !== 'http://127.0.0.1:3107' || new URL(item.url).search !== ''
         || item.start >= boundary)) throw new Error('Unexpected scoped initial request');
     const failed = relevant.filter(item => item.failed !== undefined);
     const completed = relevant.filter(item => item.finished !== undefined);
     if (failed.length > 1 || completed.length !== 1 || relevant.length !== failed.length + 1
-        || completed[0].status !== 200 || completed[0].finished! >= boundary) throw new Error('Invalid initial replacement');
+        || completed[0].status !== 200 || completed[0].version !== scope.pin
+        || completed[0].finished! >= boundary) throw new Error('Invalid initial replacement');
     if (failed.length) {
       const old = failed[0];
-      if (old.error !== 'net::ERR_ABORTED' || old.failed! >= boundary
-          || old.start >= completed[0].start || old.request === completed[0].request) throw new Error('Unexpected initial cancellation');
+      if (old.error !== 'net::ERR_ABORTED' || old.status !== undefined || old.failed! >= boundary
+          || old.request === completed[0].request) throw new Error('Unexpected initial cancellation');
       allowed.push(`${old.method} ${scope.path}: ${old.error}`);
     }
   }
@@ -57,17 +58,35 @@ function recordHistoryRequests(page: Page) {
   };
   let sequence = 0;
   page.on('request', request => {
-    const row = { request, method: request.method(), url: request.url(), pin: request.headers()['x-finlens-data-version'], start: ++sequence };
+    if (byRequest.has(request)) { violations.push('duplicate request'); return; }
+    const row = { request, method: request.method(), url: request.url(), pin: request.headers()['x-finlens-data-version'],
+      bodyAbsent: request.postData() === null, start: ++sequence };
     records.push(row); byRequest.set(request, row);
   });
   page.on('response', response => { const request = response.request(), row = byRequest.get(request);
-    if (row) row.status = response.status(); else if (scoped(request)) violations.push('unbound scoped response'); });
+    if (row && row.status === undefined && row.failed === undefined && row.finished === undefined) {
+      row.status = response.status(); row.version = response.headers()['x-finlens-data-version'];
+    } else if (row || scoped(request)) violations.push('invalid or unbound scoped response'); });
   page.on('requestfinished', request => { const row = byRequest.get(request);
-    if (row) row.finished = ++sequence; else if (scoped(request)) violations.push('unbound scoped finish'); });
+    if (row && row.status !== undefined && row.failed === undefined && row.finished === undefined) row.finished = ++sequence;
+    else if (row || scoped(request)) violations.push('invalid or unbound scoped finish'); });
   page.on('requestfailed', request => { const row = byRequest.get(request);
-    if (row) { row.failed = ++sequence; row.error = request.failure()?.errorText ?? 'unknown'; }
+    if (row && row.failed === undefined && row.finished === undefined) { row.failed = ++sequence; row.error = request.failure()?.errorText ?? 'unknown'; }
     else violations.push('unbound request failure'); });
   return { records, violations, boundary: () => ++sequence };
+}
+
+function historyRequestAudit(records: HistoryRequest[], violations: string[], boundary: number | null) {
+  const rows = records.filter(row => {
+    const path = new URL(row.url).pathname;
+    return path === '/api/finlens/companies/AAA/freshness' || path === '/api/finlens/companies/AAA/financials/annual';
+  }).map(row => {
+    const url = new URL(row.url);
+    return { method: row.method, url: url.origin + url.pathname, query: url.search.slice(0, 256).replace(/[^\x20-\x7e]/g, '?'),
+      pin: row.pin, bodyAbsent: row.bodyAbsent, start: row.start, finished: row.finished,
+      status: row.status, version: row.version, failed: row.failed, error: row.error };
+  });
+  return { boundary, rows, violations };
 }
 
 // D10 observation pattern, with explicit per-axis clipping and conservative
@@ -228,6 +247,8 @@ for (const width of [1440, 390]) test.describe(`History missing-detail at ${widt
   test.use({ deviceScaleFactor: 1, viewport: { width, height: width === 390 ? 844 : 1000 } });
   test('all-unavailable rows retain evidence and native keyboard focus @desktop-only', async ({ page, scenario }, info) => {
     const body = missingHistory(), evidence = { info, attempts: 0 }, audit = recordHistoryRequests(page);
+    let initialBoundary: number | null = null;
+    try {
     scenario.overrides.push(request => request.path === '/companies/AAA/financials/metrics/revenue'
       && request.query.get('period') === 'quarter' ? { body, version: '0' } : undefined);
     await scenario.open(); await scenario.ready();
@@ -241,13 +262,15 @@ for (const width of [1440, 390]) test.describe(`History missing-detail at ${widt
       await expect(rows.nth(index).locator('td').nth(1)).toContainText(row.reason!);
       await expect(rows.nth(index).locator('td').nth(1)).not.toContainText(body.history[1 - index].reason!);
     }
-    // Wait for both initial successful peers before freezing the boundary;
-    // the accounting below still rejects any extras, wrong pins or failures.
+    // Wait for observed initial requests to settle as well as both 200 peers.
+    // Cross-request event delivery order does not establish browser start order.
     await expect.poll(() => ['/api/finlens/companies/AAA/freshness', '/api/finlens/companies/AAA/financials/annual']
       .every(path => audit.records.some(row => new URL(row.url).pathname === path
         && row.method === 'GET' && row.pin === (path.endsWith('/annual') ? '0' : undefined)
-        && row.status === 200 && row.finished !== undefined)), { timeout: 5000 }).toBe(true);
-    const initialBoundary = audit.boundary();
+        && row.status === 200 && row.finished !== undefined)
+        && audit.records.filter(row => new URL(row.url).pathname === path)
+          .every(row => row.finished !== undefined || row.failed !== undefined)), { timeout: 5000 }).toBe(true);
+    initialBoundary = audit.boundary();
     const requests = scenario.ledger.map(({ method, path, pin, query }) => ({ method, path, pin, query: query.toString() }));
     const table = history.locator('.history-table'), outer = table.locator(':scope > summary');
     await tabTo(page, outer, evidence, 'outer-summary', 80);
@@ -296,5 +319,10 @@ for (const width of [1440, 390]) test.describe(`History missing-detail at ${widt
     await expect(history.locator('.empty-state')).toContainText(body.reason);
     expect(scenario.violations).toEqual([]);
     expect(scenario.failures.slice().sort()).toEqual(checkInitialHistoryRequests(audit.records, initialBoundary, audit.violations).sort());
+    } finally {
+      const data = JSON.stringify(historyRequestAudit(audit.records, audit.violations, initialBoundary));
+      if (Buffer.byteLength(data) > 32768) throw new Error('History request audit exceeds 32 KiB');
+      await info.attach('history-request-audit', { body: data, contentType: 'application/json' });
+    }
   });
 });
