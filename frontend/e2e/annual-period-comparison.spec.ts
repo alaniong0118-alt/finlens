@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect, annualPeriods, missingAnnualReason, expectedRequest,
   selectedRequests, expectFullLedger, completedRequests, publicationCompletions, publicationHeaderCancellations, replayCancellations,
-  expectReplayGenerations, waitForCompletedRequest, assessFocusPaint, captureFocusPaint, type ExpectedLedger } from './fixtures/annual-period-browser';
+  expectReplayGenerations, annualRequestCursor, waitForCompletedRequest, assessFocusPaint, captureFocusPaint, type ExpectedLedger } from './fixtures/annual-period-browser';
 import { type Scenario } from './fixtures/browser';
 
 const panel = (page: Page) => page.getByRole('region', { name: 'Annual period comparison', exact: true });
@@ -101,7 +101,7 @@ test('annual periods: cancel, company scope and actual publication invalidation 
   await panel(page).getByRole('button', { name: 'Cancel annual comparison', exact: true }).click();
   holding = false; held.release(); expected.cancelled.push(...expected.pending.splice(0)); await expect(grid(page)).toHaveCount(0);
   await expect(panel(page).getByRole('status')).toContainText('cancelled'); await expectFullLedger(scenario, expected);
-  const betaStart = scenario.ledger.length;
+  const betaStart = annualRequestCursor(scenario);
   await page.getByRole('combobox', { name: 'Company', exact: true }).selectOption('BBB');
   await scenario.ready('BBB'); expected.completed.push(...publicationCompletions('BBB')); expected.cancelled.push(...replayCancellations('BBB'));
   expected.cancelledAfterHeaders.push(...publicationHeaderCancellations('BBB'));
@@ -112,7 +112,7 @@ test('annual periods: cancel, company scope and actual publication invalidation 
     request => ({ body: annualPeriods('BBB', Number(request.query.get('fiscal_year'))), version: '0' }));
   await selectPair(page); await compare(page).click(); expected.pending.push(...selectedRequests([2025, 2024], 'BBB'));
   await expectFullLedger(scenario, expected);
-  const alphaStart = scenario.ledger.length;
+  const alphaStart = annualRequestCursor(scenario);
   await page.getByRole('combobox', { name: 'Company', exact: true }).selectOption('AAA');
   holdingOther = false; otherHeld.release(); expected.cancelled.push(...expected.pending.splice(0));
   expected.completed.push(...publicationCompletions()); expected.cancelled.push(...replayCancellations()); await scenario.ready();
@@ -127,7 +127,7 @@ test('annual periods: cancel, company scope and actual publication invalidation 
     mismatch = false; scenario.versions.AAA = 1;
     return { status: 409, code: 'DATA_VERSION_CHANGED', version: '1' };
   });
-  await selectPair(page); const repinStart = scenario.ledger.length; await compare(page).click();
+  await selectPair(page); const repinStart = annualRequestCursor(scenario); await compare(page).click();
   expected.completed.push(...completedRequests(selectedRequests([2025])), ...completedRequests(selectedRequests([2024]), 409, '1', 'DATA_VERSION_CHANGED'));
   expected.completed.push(...publicationCompletions('AAA', 1), ...completedRequests([expectedRequest('/companies')]));
   expected.cancelledAfterHeaders.push(...publicationHeaderCancellations('AAA', 1));

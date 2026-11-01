@@ -29,6 +29,16 @@ function source(value: unknown, cik: string): boolean {
     && typeof value.form === 'string' && typeof value.accession_number === 'string' && typeof value.sec_url === 'string' && !!officialSecUrl(value.sec_url)
     && (value.source_fiscal_year === null || Number.isSafeInteger(value.source_fiscal_year)) && nullableText(value.source_fiscal_period);
 }
+// Alternatives are display-only diagnostics, never selected inputs. Their own
+// dates may be unknown or malformed; the provenance view labels them unknown.
+// An untrusted URL remains text metadata and is never rendered as a link.
+function diagnosticSource(value: unknown, cik: string): boolean {
+  return record(value) && Number.isSafeInteger(value.fact_id) && value.company_cik === cik
+    && typeof value.original_concept === 'string' && decimal(value.value) && typeof value.unit === 'string'
+    && date(value.filed) && typeof value.form === 'string' && typeof value.accession_number === 'string'
+    && typeof value.sec_url === 'string'
+    && (value.source_fiscal_year === null || Number.isSafeInteger(value.source_fiscal_year)) && nullableText(value.source_fiscal_period);
+}
 export function snapshotPoint(value: unknown, metric: string, cik: string, period: PeriodKind, anchor: unknown): value is NormalizedMetric {
   if (!record(value) || value.metric !== metric || value.unit !== unitFor(metric)
       || !['available', 'unavailable', 'not_applicable'].includes(String(value.status))
@@ -42,7 +52,7 @@ export function snapshotPoint(value: unknown, metric: string, cik: string, perio
       || (value.status === 'available' ? !decimal(value.value) || value.period === null : value.value !== null)
       || !Array.isArray(value.provenance) || (value.status === 'available' && value.provenance.length === 0)
       || !value.provenance.every(item => source(item, cik))
-      || !Array.isArray(value.alternatives) || !value.alternatives.every(item => source(item, cik))
+      || !Array.isArray(value.alternatives) || !value.alternatives.every(item => diagnosticSource(item, cik))
       || !Array.isArray(value.inputs)) return false;
   return value.inputs.every(item => record(item) && typeof item.role === 'string' && typeof item.metric === 'string'
     && decimal(item.value) && typeof item.unit === 'string' && Array.isArray(item.fact_ids)

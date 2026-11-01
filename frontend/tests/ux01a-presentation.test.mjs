@@ -56,6 +56,18 @@ test('History focus outlines stay within the region and padded disclosure and so
   }
 });
 
+test('Snapshot provenance focus uses padded inset outlines on summaries and links', () => {
+  for (const width of [1440, 390, 320]) {
+    assert.equal(declaration(':focus-visible', 'outline', width), '3px solid var(--accent)');
+    for (const selector of ['.metric-card .provenance summary', '.metric-card .provenance .source-record a']) {
+      assert.equal(declaration(selector, 'padding-inline', width), '8px');
+      assert.equal(declaration(`${selector}:focus-visible`, 'outline-offset', width), '-6px');
+    }
+    assert.ok(parseFloat(declaration('summary', 'min-height', width)) >= 44);
+    assert.ok(parseFloat(declaration('.details-body a', 'min-height', width)) >= 44);
+  }
+});
+
 test('UX-01A 390px controls and snapshot cards use the available panel width', () => {
   assert.equal(declaration('.history-controls', 'grid-template-columns', 390), 'minmax(0,1fr)');
   assert.equal(declaration('.metric-grid', 'grid-template-columns', 390), 'minmax(0,1fr)');

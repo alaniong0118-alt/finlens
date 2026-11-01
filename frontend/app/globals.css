@@ -95,6 +95,10 @@ section[aria-labelledby="snapshot-title"] .compact-label > select {
 .metric-card h3 { font-size:14px; color:var(--text); } .metric-value { margin:6px 0 4px; font-size:clamp(1.15rem,2vw,1.7rem); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.04em; line-height:1.3; overflow-wrap:anywhere; } .missing-value { font-size:17px; color:var(--muted); padding-top:6px; }
 .basis-label { color:var(--accent); margin-top:4px; } .provenance { margin-top:9px; border-top:1px solid var(--border); }
 .details-body { font-size:13px; line-height:1.75; padding:2px 0 12px; overflow-wrap:anywhere; } .details-body .mono { font-size:inherit; } .details-body p + p { margin-top:8px; } .details-body a { display:inline-flex; align-items:center; min-height:44px; } .source-record { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+.metric-card .provenance summary { padding-inline:8px; }
+.metric-card .provenance summary:focus-visible { outline-offset:-6px; }
+.metric-card .provenance .source-record a { padding-inline:8px; }
+.metric-card .provenance .source-record a:focus-visible { outline-offset:-6px; }
 .history-table .provenance .source-record a { padding-inline:8px; }
 .history-table .provenance .source-record a:focus-visible { outline-offset:-6px; }
 .secondary-metrics { margin-top:17px; } .secondary-metrics > summary { font-size:13px; }

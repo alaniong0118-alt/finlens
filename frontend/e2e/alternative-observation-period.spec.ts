@@ -23,7 +23,7 @@ function syntheticAlternatives() {
 // attributes or arbitrary CSS values. Bounds keep every attachment below 32 KiB.
 function captureAlternativeFocus(element: Element) {
   const style = getComputedStyle(element), rect = element.getBoundingClientRect();
-  const extent = parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset));
+  const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
   const geometry = (node: Element, box = node.getBoundingClientRect()) => {
     return { tag: node.localName.replace(/[^a-z0-9-]/gi, '').slice(0, 16),
       rect: { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height },
@@ -32,15 +32,25 @@ function captureAlternativeFocus(element: Element) {
   };
   const overflow = (value: string) => ['visible', 'hidden', 'clip', 'scroll', 'auto', 'overlay'].includes(value) ? value : 'unknown';
   const ancestors = [];
-  let ancestor = element.parentElement, depth = 0, clippingCount = 0;
+  let ancestor = element.parentElement, depth = 0, clippingCount = 0, unknownOverflow = false;
   while (ancestor && depth < 32) {
     const parentStyle = getComputedStyle(ancestor);
     const overflowX = overflow(parentStyle.overflowX), overflowY = overflow(parentStyle.overflowY);
     const paintContainment = parentStyle.contain.split(/\s+/).some(value => ['paint', 'strict', 'content'].includes(value));
     const clipPath = parentStyle.clipPath !== 'none';
+    unknownOverflow ||= overflowX === 'unknown' || overflowY === 'unknown';
     if (overflowX !== 'visible' || overflowY !== 'visible' || paintContainment || clipPath) {
       clippingCount++;
-      if (ancestors.length < 16) ancestors.push({ depth, ...geometry(ancestor), overflowX, overflowY, paintContainment, clipPath });
+      if (ancestors.length < 16) {
+        const box = geometry(ancestor), clipX = overflowX !== 'visible' || paintContainment, clipY = overflowY !== 'visible' || paintContainment;
+        const left = box.rect.left + box.client.left, top = box.rect.top + box.client.top;
+        const right = left + box.client.width, bottom = top + box.client.height;
+        ancestors.push({ depth, ...box, overflowX, overflowY, paintContainment, clipPath, clipX, clipY,
+          overflowCssPixels: { left: clipX ? Math.max(0, left - (rect.left - extent)) : 0,
+            right: clipX ? Math.max(0, rect.right + extent - right) : 0,
+            top: clipY ? Math.max(0, top - (rect.top - extent)) : 0,
+            bottom: clipY ? Math.max(0, rect.bottom + extent - bottom) : 0 } });
+      }
     }
     ancestor = ancestor.parentElement; depth++;
   }
@@ -49,7 +59,7 @@ function captureAlternativeFocus(element: Element) {
     ...Object.values(item.rect), ...Object.values(item.scroll), ...Object.values(item.client),
   ].every(Number.isFinite) && item.rect.right >= item.rect.left && item.rect.bottom >= item.rect.top
     && item.rect.width >= 0 && item.rect.height >= 0 && item.scroll.width >= 0 && item.scroll.height >= 0
-    && item.client.width >= 0 && item.client.height >= 0;
+    && item.client.width >= 0 && item.client.height >= 0 && item.client.left >= 0 && item.client.top >= 0;
   const geometryValid = validGeometry(focusedGeometry) && ancestors.every(validGeometry)
     && [innerWidth, innerHeight, scrollX, scrollY, parseFloat(style.outlineWidth), parseFloat(style.outlineOffset), extent].every(Number.isFinite)
     && innerWidth > 0 && innerHeight > 0 && rect.width > 0 && rect.height > 0 && parseFloat(style.outlineWidth) > 0;
@@ -58,13 +68,17 @@ function captureAlternativeFocus(element: Element) {
     top: Math.max(0, extent - rect.top), bottom: Math.max(0, rect.bottom + extent - innerHeight) };
   const overflowPhysicalPixels = { left: overflowCssPixels.left * dpr, right: overflowCssPixels.right * dpr,
     top: overflowCssPixels.top * dpr, bottom: overflowCssPixels.bottom * dpr };
-  const rasterContained = geometryValid && dprValid
-    && Object.values(overflowPhysicalPixels).every(value => Number.isFinite(value) && value >= 0 && value < 0.5);
+  const belowRasterTolerance = (values: Record<string, number>) => Object.values(values).every(value => Number.isFinite(value) && value >= 0 && value < 0.5);
+  const ancestryComplete = ancestor === null && clippingCount <= 16 && !unknownOverflow;
+  const clipPathSupported = ancestors.every(item => !item.clipPath);
+  const clippingContained = ancestryComplete && clipPathSupported && ancestors.every(item =>
+    belowRasterTolerance(Object.fromEntries(Object.entries(item.overflowCssPixels).map(([edge, value]) => [edge, value * dpr]))));
+  const rasterContained = geometryValid && dprValid && belowRasterTolerance(overflowPhysicalPixels) && clippingContained;
   return { visible: element.matches(':focus-visible'), outline: style.outlineStyle,
     width: parseFloat(style.outlineWidth), offset: parseFloat(style.outlineOffset), extent,
     contained: rect.left - extent >= 0 && rect.right + extent <= innerWidth
       && rect.top - extent >= 0 && rect.bottom + extent <= innerHeight,
-    dpr, dprValid, geometryValid, overflowCssPixels, overflowPhysicalPixels, rasterContained,
+    dpr, dprValid, geometryValid, overflowCssPixels, overflowPhysicalPixels, rasterContained, clippingContained, ancestryComplete, clipPathSupported,
     element: focusedGeometry, viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY },
     clippingAncestors: ancestors, ancestorLimitReached: ancestor !== null, clippingAncestorLimitReached: clippingCount > 16 };
 }

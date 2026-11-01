@@ -2902,6 +2902,37 @@ for (const strict of [false, true]) test(`D10 alternatives show their own period
   assert.equal(app.requests.length, requestCount, 'Source disclosure and focus must not fetch data');
 });
 
+test('D10 snapshot keeps selected value while alternative dates and URLs remain diagnostic', async ctx => {
+  const app = await mount(ctx), payload = summary('AAPL', '1000000000');
+  const selected = payload.metrics.revenue.provenance[0];
+  payload.metrics.revenue.alternatives = [
+    { ...selected, fact_id: 101, period_start: 123, period_end: {} },
+    { ...selected, fact_id: 102, period_start: undefined, period_end: undefined,
+      sec_url: 'https://example.test/untrusted' },
+  ];
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  const card = [...app.snapshot().querySelectorAll('.metric-card')].find(node => node.querySelector('h3')?.textContent === 'Revenue');
+  assert.equal(card.querySelector('.metric-value').textContent, '$1B');
+  const rows = [...card.querySelectorAll('.provenance details .source-record')];
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(row => row.textContent.includes('Period unknown')));
+  assert.ok(rows[0].querySelector('a'));
+  assert.equal(rows[1].querySelector('a'), null);
+  assert.match(app.snapshot().textContent, /Revenue YoY/);
+});
+
+for (const defect of ['selected-source', 'alternative-company']) test(`D10 snapshot rejects ${defect} identity despite diagnostic date fallback`, async ctx => {
+  const app = await mount(ctx), payload = summary('AAPL', '1000000000');
+  payload.metrics.revenue.alternatives = [{ ...payload.metrics.revenue.provenance[0], fact_id: 101,
+    period_start: undefined, period_end: undefined }];
+  if (defect === 'selected-source') payload.metrics.revenue.provenance[0].company_cik = companies[1].cik;
+  else payload.metrics.revenue.alternatives[0].company_cik = companies[1].cik;
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), payload);
+  const card = [...app.snapshot().querySelectorAll('.metric-card')].find(node => node.querySelector('h3')?.textContent === 'Revenue');
+  assert.equal(card.querySelector('.metric-value'), null);
+  assert.match(card.textContent, /could not be verified/);
+});
+
 test('D10 history alternatives retain distinct duration and as-of dates alongside the selected period', async ctx => {
   const app = await mount(ctx), data = history('AAPL', '1000000000');
   data.history[0].alternatives = [

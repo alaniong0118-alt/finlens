@@ -1,5 +1,6 @@
-import type { BrowserContext, Request, Response, TestInfo } from '@playwright/test';
+import type { BrowserContext, TestInfo } from '@playwright/test';
 import { test as base, expect, type ApiRequest, type Scenario, type Reply } from './browser';
+import { AnnualLifecycle, annualSignature } from './annual-period-lifecycle';
 import { supportsInsightsPublication } from './financial-insights-browser';
 import * as data from './data';
 import type { AnnualFinancialComparison, NormalizedMetric } from '../../lib/finlens-api';
@@ -140,7 +141,7 @@ export function annualReply(request: ApiRequest, scenario: Pick<Scenario, 'versi
     : { body: annualPeriods(request.ticker!, request.query.size ? Number(request.query.get('fiscal_year')) : null), version };
 }
 export function signature(request: Pick<ApiRequest, 'method' | 'path' | 'pin' | 'query' | 'body'>): string {
-  return JSON.stringify([request.method, request.path, request.query.toString(), request.pin ?? null, request.body]);
+  return annualSignature(request);
 }
 export function expectedRequest(path: string, pin?: number, query = ''): string {
   return JSON.stringify(['GET', path, query, pin === undefined ? null : String(pin), null]);
@@ -159,8 +160,7 @@ type Receipt = { status: number; version: string | null; code: string | null };
 type Completion = Receipt & { request: string };
 export type ExpectedLedger = { completed: Completion[]; cancelled: string[]; pending: string[]; cancelledAfterHeaders: Completion[] };
 // A response event proves receipt of headers, never completion of its body.
-type Outcome = { id: number; state: 'pending' | 'completed' | 'cancelled' | 'failed'; response: Receipt | null; error: string | null };
-const outcomes = new WeakMap<Scenario, Map<Request, Outcome>>();
+const outcomes = new WeakMap<Scenario, AnnualLifecycle>();
 export const completedRequests = (requests: string[], status = 200, version?: string, code: string | null = null): Completion[] => requests.map(request => ({
   request, status, version: version ?? JSON.parse(request)[3], code,
 }));
@@ -174,12 +174,10 @@ export const replayCancellations = (ticker = 'AAA', pin = 0, freshness = true): 
   ...(freshness ? [expectedRequest(`/companies/${ticker}/freshness`)] : []),
   expectedRequest(`/companies/${ticker}/financials/annual`, pin),
 ];
-function lifecycle(scenario: Scenario) {
-  const records = outcomes.get(scenario)!;
-  const rows = scenario.ledger.map(request => ({ request: signature(request), ...records.get(request.request) }));
-  return { started: records.size, unledgered: [...records.keys()].filter(request => !scenario.ledger.some(item => item.request === request)).length,
-    rows };
+function lifecycle(scenario: Scenario, cancellations: readonly string[] = []) {
+  return outcomes.get(scenario)!.snapshot(scenario.ledger, cancellations);
 }
+export const annualRequestCursor = (scenario: Scenario) => outcomes.get(scenario)!.cursor();
 export async function expectFullLedger(scenario: Scenario, expected: ExpectedLedger): Promise<void> {
   const receipt = ({ status, version, code }: Receipt): Receipt => ({ status, version, code });
   const intended = [
@@ -189,15 +187,16 @@ export async function expectFullLedger(scenario: Scenario, expected: ExpectedLed
     ...expected.pending.map(request => JSON.stringify([request, 'pending', null, null])),
   ].sort();
   await expect.poll(() => {
-    const actual = lifecycle(scenario);
-    return { started: actual.started, unledgered: actual.unledgered, outcomes: actual.rows.map(item => JSON.stringify([
+    const actual = lifecycle(scenario, expected.cancelled);
+    return { started: actual.started, bindingErrors: actual.bindingErrors, rejectedUnbound: actual.rejectedUnbound,
+      outcomes: actual.rows.map(item => JSON.stringify([
       item.request, item.state, item.response, item.error,
     ])).sort() };
-  }).toEqual({ started: intended.length, unledgered: 0, outcomes: intended });
+  }).toEqual({ started: intended.length, bindingErrors: [], rejectedUnbound: [], outcomes: intended });
   expect(scenario.violations).toEqual([]);
 }
 export function expectReplayGenerations(scenario: Scenario, since: number, ticker = 'AAA', pin = 0, freshness = true) {
-  const rows = lifecycle(scenario).rows.slice(since);
+  const rows = lifecycle(scenario).rows.filter(row => row.id > since);
   for (const request of replayCancellations(ticker, pin, freshness)) {
     const generations = rows.filter(item => item.request === request);
     expect(generations).toHaveLength(2);
@@ -216,43 +215,9 @@ export const test = base.extend<{ annualScenario: Scenario }>({
     // BBB0 intentionally uses the existing insights-unavailable fixture, not a
     // newly manufactured insights publication or evidence reconciliation request.
     scenario.versions.BBB = 0;
-    const records = new Map<Request, Outcome>(); outcomes.set(scenario, records);
-    const isApi = (request: Request) => {
-      const url = new URL(request.url());
-      return url.origin === 'http://127.0.0.1:3107' && url.pathname.startsWith('/api/finlens/');
-    };
     const invalid = (event: string) => { scenario.violations.push(`Invalid annual lifecycle event: ${event}`); };
-    const pending = (request: Request, event: string) => {
-      if (!isApi(request)) return;
-      const record = records.get(request);
-      if (!record || record.state !== 'pending') { invalid(event); return; }
-      return record;
-    };
-    const started = (request: Request) => {
-      if (!isApi(request)) return;
-      if (records.has(request)) { invalid('duplicate request'); return; }
-      records.set(request, {
-        id: records.size + 1, state: 'pending', response: null, error: null,
-      });
-    };
-    const responded = (response: Response) => {
-      const request = response.request(), record = pending(request, 'response without pending request');
-      if (!record) return;
-      if (record.response || response.url() !== request.url()) { invalid('duplicate or misassociated response'); return; }
-      const headers = response.headers();
-      record.response = { status: response.status(), version: headers['x-finlens-data-version'] ?? null,
-        code: headers['x-finlens-error-code'] ?? null };
-    };
-    const finished = (request: Request) => {
-      const record = pending(request, 'finish without pending request'); if (!record) return;
-      if (!record.response) { invalid('finish before response headers'); return; }
-      record.state = 'completed';
-    };
-    const failed = (request: Request) => {
-      const record = pending(request, 'failure without pending request'); if (!record) return;
-      const error = request.failure()?.errorText ?? 'Unknown request failure';
-      Object.assign(record, { state: error === 'net::ERR_ABORTED' ? 'cancelled' : 'failed', error });
-    };
+    const recorder = new AnnualLifecycle(invalid); outcomes.set(scenario, recorder);
+    const { started, responded, finished, failed } = recorder;
     context.on('request', started); context.on('response', responded);
     context.on('requestfinished', finished); context.on('requestfailed', failed);
     await installAnnualRoute(context, scenario);
