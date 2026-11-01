@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import ts from 'typescript';
 import React, { act } from 'react';
 import { JSDOM } from 'jsdom';
+import { mountedDataLedger, assertPendingDataScope } from './mounted-data-ledger.mjs';
 
 // Node's existing test runner + real ReactDOM. Only Next's routing link and
 // browser layout/media APIs are adapted; page, effects, API calls and guards run.
@@ -802,7 +803,7 @@ test('mounted company-wide search cannot turn financial answer values into numer
 
 async function mount(ctx, configured = false, catalog = companies, { initialVersion = 0, strict = false, catalogStatus = 200,
   capabilityPayload = { research_mode: true, ai_analysis_configured: configured, ai_analysis_enabled: configured, server_profile: 'development' }, capabilityStatus = 200 } = {}) {
-  const requests = [];
+  const requests = [], ledger = mountedDataLedger();
   // Intentionally ignore AbortSignal when resolving: cancellation can race with
   // response delivery. This exercises rendered-state protection, not the mock.
   ctx.mock.method(globalThis, 'fetch', (input, init = {}) => {
@@ -811,7 +812,11 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
     assert.ok(url.pathname.startsWith('/api/finlens/'));
     let resolve, reject;
     const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
-    requests.push({ path: url.pathname.slice('/api/finlens'.length), params: url.searchParams, init, resolve, reject, released: false });
+    const record = { path: url.pathname.slice('/api/finlens'.length), params: url.searchParams, init, released: false };
+    ledger.started(record, url);
+    record.resolve = response => { ledger.responded(record, response); resolve(response); };
+    record.reject = error => { ledger.failed(record); reject(error); };
+    requests.push(record);
     return promise;
   });
   const host = document.createElement('div'); document.body.append(host);
@@ -1461,7 +1466,7 @@ for (const strict of [false, true]) for (const version of [1, 0]) {
     assert.equal(dependentRequests(app).length, 0, 'Delayed freshness also gates user-submitted requests');
     assert.equal(app.requests.filter(r => r.path.endsWith('/freshness') && !r.init.signal.aborted).length, 1);
     await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', version));
-    assert.equal(dependentRequests(app).length, 3, 'One snapshot, history and sources fan-out');
+    assertPendingDataScope(dependentRequests(app), { version, metric: 'net_income', snapshotPeriod: 'annual', replay: strict });
     assert.ok(dependentRequests(app).every(r => r.init.headers['X-FinLens-Data-Version'] === String(version)));
     await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), summary('AAPL', '4000000000', 'annual'));
     await app.release(app.request(companyPath('AAPL', 'financials/metrics/net_income')), history('AAPL', '300000000', 'net_income'));
@@ -1490,7 +1495,7 @@ test('mounted failed initial freshness stays unpinned until a later check succee
   assert.equal(dependentRequests(app).length, 0, 'Failure cannot authorize an invented fallback');
   await focusCheck();
   await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
-  assert.equal(dependentRequests(app).length, 3);
+  assertPendingDataScope(dependentRequests(app), { version: 1, snapshotPeriod: 'half_year' });
   assert.equal(app.request(companyPath('AAPL', 'financials/summary')).params.get('period'), 'half_year');
   assert.ok(dependentRequests(app).every(r => r.init.headers['X-FinLens-Data-Version'] === '1'));
 });
@@ -1526,22 +1531,15 @@ test('mounted rapid company switches establish fresh pins and discard cancelled 
 test('mounted company switch does not borrow the previous known publication version', async ctx => {
   const app = await mount(ctx, false, companies, { initialVersion: 1 });
   const old = dependentRequests(app);
-  const expectedPaths = ticker => ['financials/annual', 'financials/metrics/revenue', 'financials/summary', 'sources']
-    .map(suffix => companyPath(ticker, suffix)).sort();
-  const paths = requests => requests.map(request => request.path).sort();
-  assert.deepEqual(paths(old), expectedPaths('AAPL'), 'Exactly one request per expected AAPL endpoint');
-  assert.ok(old.every(r => (r.init.method ?? 'GET') === 'GET' && r.init.headers['X-FinLens-Data-Version'] === '1' && !r.init.signal.aborted));
+  assertPendingDataScope(old, { version: 1 });
   await app.change(app.host.querySelector('#company'), 'JPM');
   assert.ok(old.every(r => r.init.signal.aborted));
-  assert.equal(dependentRequests(app).length, 4, 'New company stays unknown until its own freshness resolves');
-  assert.deepEqual(paths(dependentRequests(app)), expectedPaths('AAPL'), 'No duplicate or unknown company data endpoint');
+  assert.deepEqual(dependentRequests(app), old, 'Unknown company cannot add or replace a data request');
   assert.equal(dependentRequests(app).filter(r => r.path.startsWith('/companies/JPM/')).length, 0, 'JPM data waits for its own freshness');
   await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 0));
-  assert.equal(dependentRequests(app).length, 8);
-  const current = dependentRequests(app).slice(4);
-  assert.deepEqual(paths(current), expectedPaths('JPM'), 'Exactly one request per expected JPM endpoint');
-  assert.ok(current.every(r => (r.init.method ?? 'GET') === 'GET' && !r.init.signal.aborted));
-  assert.ok(dependentRequests(app).slice(4).every(r => r.path.includes('/JPM/') && r.init.headers['X-FinLens-Data-Version'] === '0'));
+  assert.deepEqual(dependentRequests(app).slice(0, old.length), old);
+  const current = dependentRequests(app).slice(old.length);
+  assertPendingDataScope(current, { ticker: 'JPM', version: 0 });
   await app.completeCompany('JPM', '2000000000');
   for (const req of old) await app.release(req, { detail: 'Obsolete response' }, 409, 9);
   assert.match(app.snapshot().textContent, /\$2B/);
@@ -1551,15 +1549,21 @@ test('mounted company switch does not borrow the previous known publication vers
 test('mounted concurrent 409 responses coalesce reconciliation and never retry the obsolete pin', async ctx => {
   const app = await mount(ctx, false, companies, { initialVersion: 1 });
   const old = dependentRequests(app);
-  for (const req of old) await app.release(req, { detail: 'Published data changed' }, 409, 2);
+  const scope = assertPendingDataScope(old, { version: 1 });
+  const firstMismatch = scope.siblings.find(request => request.path.endsWith('/financials/summary'));
+  // Pick the snapshot identity, not whichever endpoint React created first.
+  // Discovery owners intentionally abort themselves when their own mismatch wins.
+  for (const req of [firstMismatch, ...old.filter(request => request !== firstMismatch)]) {
+    await app.release(req, { detail: 'Published data changed' }, 409, 2);
+  }
   assert.equal(app.requests.filter(r => !r.released && r.path.endsWith('/freshness')).length, 1);
-  assert.equal(dependentRequests(app).length, 3, 'No unpinned or obsolete immediate retry');
+  assert.deepEqual(dependentRequests(app), old, 'No unpinned or obsolete immediate retry');
   await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 2));
   // The first 409 settled before cancellation; its transport listener was removed.
-  assert.equal(old[0].init.signal.aborted, false);
-  assert.ok(old.slice(1).every(r => r.init.signal.aborted));
-  assert.equal(dependentRequests(app).length, 6);
-  assert.ok(dependentRequests(app).slice(3).every(r => r.init.headers['X-FinLens-Data-Version'] === '2'));
+  assert.equal(firstMismatch.init.signal.aborted, false);
+  assert.ok(old.filter(request => request !== firstMismatch).every(r => r.init.signal.aborted));
+  assert.deepEqual(dependentRequests(app).slice(0, old.length), old);
+  assertPendingDataScope(dependentRequests(app).slice(old.length), { version: 2 });
   await app.completeCompany('AAPL', '2000000000');
   assert.match(app.snapshot().textContent, /\$2B/); assert.match(app.trends().textContent, /\$2B/);
   const count = dependentRequests(app).length;
@@ -2051,27 +2055,9 @@ test('FR-01 cancelled StrictMode catalog completion cannot replace retry or unlo
   assert.equal(app.host.querySelector('#company').value, 'AAPL');
 });
 
-// Exact scoped lifecycle accounting; helper body reused unchanged for remaining variants.
-function assertDiagnosedDataScope(records, version, metric, annualReplay) {
-  const path = suffix => companyPath('AAPL', suffix);
-  const expected = ['financials/annual', `financials/metrics/${metric}`, 'financials/summary', 'sources'].map(path);
-  if (annualReplay) expected.push(path('financials/annual'));
-  assert.deepEqual(records.map(record => record.path).sort(), expected.sort(), 'Exact endpoints reject duplicates and unknown requests');
-  assert.ok(records.every(record => (record.init.method ?? 'GET') === 'GET'
-    && record.init.headers['X-FinLens-Data-Version'] === String(version)), 'Every raw request retains its own pin');
-  const annual = records.filter(record => record.path === path('financials/annual'));
-  if (annualReplay) {
-    assert.equal(annual.length, 2);
-    assert.equal(annual[0].init.signal.aborted, true, 'The first annual setup is the one retired replay');
-    assert.equal(annual[1].init.signal.aborted, false, 'The replacement annual setup remains live');
-  } else assert.equal(annual.length, 1);
-  const owner = annual.at(-1);
-  const siblings = ['financials/metrics/' + metric, 'financials/summary', 'sources']
-    .map(endpoint => records.find(record => record.path === path(endpoint)));
-  const active = [owner, ...siblings];
-  assert.equal(active.length, 4);
-  assert.ok(active.every(record => !record.init.signal.aborted), 'All four endpoint-specific active requests are live');
-  return { owner, siblings, active };
+// Every observed endpoint retains exact company, query, body, pin and transport identity.
+function assertDiagnosedDataScope(records, version, metric, replay, snapshotPeriod = 'quarter') {
+  return assertPendingDataScope(records, { version, metric, replay, snapshotPeriod });
 }
 
 for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 freshness manual recovery verifies ${version}${strict ? ' in StrictMode' : ''} before fan-out`, async ctx => {
@@ -2090,8 +2076,7 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 fr
   assert.equal(dependentRequests(app).length, 0);
   assert.equal(app.requests.filter(r => r.path.endsWith('/freshness') && !r.released && !r.init.signal.aborted).length, 1);
   await app.release(pending, freshnessFixture('AAPL', version));
-  if (strict && version === 0) assertDiagnosedDataScope(dependentRequests(app), version, 'net_income', true);
-  else assertDiagnosedDataScope(dependentRequests(app), version, 'net_income', strict);
+  assertDiagnosedDataScope(dependentRequests(app), version, 'net_income', strict, 'annual');
   assert.ok(dependentRequests(app).every(r => r.init.headers['X-FinLens-Data-Version'] === String(version)));
   assert.equal(app.select('Snapshot period').value, 'annual');
   assert.equal(app.select('Metric').value, 'net_income');
@@ -2204,6 +2189,7 @@ test('FR-01 older rejected snapshot cannot evict a pending replacement shared wi
 test('FR-01 financially unavailable observations do not acquire transport retry controls', async ctx => {
   const app = await mount(ctx);
   const result = summary('AAPL', null); result.metrics.revenue.status = 'unavailable'; result.metrics.revenue.reason = 'No compatible source';
+  result.metrics.revenue.provenance = [];
   await app.release(app.request(companyPath('AAPL', 'financials/summary')), result);
   assert.match(app.snapshot().textContent, /Unavailable/);
   assert.ok(![...app.snapshot().querySelectorAll('button')].some(button => button.textContent === 'Retry snapshot'));
@@ -2747,19 +2733,15 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2
   const diagnosed = !strict && version === 0;
   const currentScope = diagnosed ? assertDiagnosedDataScope(current, version, 'revenue', false)
     : assertDiagnosedDataScope(current, version, 'revenue', strict);
-  const retiredAnnual = strict ? current.find(request => request.path === companyPath('AAPL', 'financials/annual')
-    && request !== currentScope.owner) : null;
-  if (strict) {
-    assert.ok(retiredAnnual, 'Exactly the asserted first annual setup is retained');
-    assert.equal(retiredAnnual.init.signal.aborted, true);
-    assert.equal(retiredAnnual.released, false);
+  const retired = currentScope.retired;
+  assert.equal(retired.length, strict ? 2 : 0);
+  for (const request of retired) {
+    assert.equal(request.init.signal.aborted, true);
+    assert.equal(request.released, false);
   }
-  // Remove only that verified identity; keep creation order of all four live deliveries.
-  const mismatches = strict ? current.filter(request => request !== retiredAnnual) : current;
-  if (!diagnosed) {
-    assert.equal(mismatches.length, 4);
-    assert.ok(currentScope.active.every(request => mismatches.includes(request)));
-  }
+  // Exclude only the two verified retired identities; preserve live creation order.
+  const mismatches = current.filter(request => !retired.includes(request));
+  assert.deepEqual(new Set(mismatches), new Set(currentScope.active));
   const freshnessCount = app.requests.filter(r => r.path.endsWith('/freshness')).length;
   await act(async () => {
     for (const request of mismatches) {
@@ -2768,26 +2750,25 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2
     }
     await drainResponseMicrotasks();
     if (diagnosed) {
-      assert.equal(currentScope.owner.init.signal.aborted, true, 'Annual mismatch aborts its own operation after delivery');
-      assert.ok(currentScope.siblings.every(r => !r.init.signal.aborted), 'The three sibling transports remain live before React cancellation');
+      assert.ok(currentScope.discovery.every(request => request.init.signal.aborted), 'Each discovery mismatch aborts its own operation after delivery');
+      assert.ok(currentScope.siblings.every(r => !r.init.signal.aborted), 'Snapshot, history and source transports remain live before React cancellation');
     } else {
-      assert.equal(currentScope.owner.init.signal.aborted, true, 'Annual mismatch aborts its own operation after delivery');
-      assert.ok(currentScope.siblings.every(r => !r.init.signal.aborted), 'The three sibling transports remain live before React cancellation');
+      assert.ok(currentScope.discovery.every(request => request.init.signal.aborted), 'Each discovery mismatch aborts its own operation after delivery');
+      assert.ok(currentScope.siblings.every(r => !r.init.signal.aborted), 'Snapshot, history and source transports remain live before React cancellation');
       if (strict) {
-        assert.equal(retiredAnnual.init.signal.aborted, true);
-        assert.equal(retiredAnnual.released, false, 'Retired replay waits for an explicit late-response check');
+        assert.ok(retired.every(request => request.init.signal.aborted && !request.released), 'Both retired replays wait for explicit late-response checks');
       }
     }
     assert.equal(app.requests.filter(r => r.path.endsWith('/freshness')).length, freshnessCount + 1);
   });
-  // All three transports settled inside act before React cancelled the caller scopes.
+  // All transports settle inside act before React cancels the caller scopes.
   if (diagnosed) {
-    assert.ok(current.every(r => r.released), 'All four mismatches were delivered');
-    assert.equal(currentScope.owner.init.signal.aborted, true);
+    assert.ok(current.every(r => r.released), 'All five mismatches were delivered');
+    assert.ok(currentScope.discovery.every(request => request.init.signal.aborted));
     assert.ok(currentScope.siblings.every(r => !r.init.signal.aborted));
   } else {
-    assert.ok(mismatches.every(r => r.released), 'All four active mismatches were delivered');
-    assert.equal(currentScope.owner.init.signal.aborted, true);
+    assert.ok(mismatches.every(r => r.released), 'All five active mismatches were delivered');
+    assert.ok(currentScope.discovery.every(request => request.init.signal.aborted));
     assert.ok(currentScope.siblings.every(r => !r.init.signal.aborted));
   }
   assert.match(app.host.textContent, /Published data changed.*Research waits/);
@@ -2810,10 +2791,12 @@ for (const strict of [false, true]) for (const version of [0, 1]) test(`FR-01 P2
   if (strict) {
     const checksBeforeLateReplay = app.requests.filter(request => request.path.endsWith('/freshness')).length;
     const requestsBeforeLateReplay = app.requests.length;
-    assert.equal(retiredAnnual.init.headers['X-FinLens-Data-Version'], String(version));
-    await app.release(retiredAnnual, {}, 409, version + 2);
+    for (const request of retired) {
+      assert.equal(request.init.headers['X-FinLens-Data-Version'], String(version));
+      await app.release(request, {}, 409, version + 2);
+    }
     assert.equal(app.requests.filter(request => request.path.endsWith('/freshness')).length, checksBeforeLateReplay,
-      'A retired old-pin annual 409 cannot reconcile the newer verified pin');
+      'Neither retired discovery 409 can reconcile the newer verified pin');
     assert.equal(app.requests.length, requestsBeforeLateReplay, 'Late retired response cannot trigger any request fan-out');
     assert.match(app.host.querySelector('[aria-label="Data freshness"]').textContent, new RegExp(`version ${version + 1}(?![0-9])`));
     assertDiagnosedDataScope(recovered, version + 1, 'revenue', true);
@@ -3048,8 +3031,7 @@ test('DEP-01A2 freshness timeout stays closed until manual retry verifies its ow
   await app.release(old, freshnessFixture('AAPL', 9));
   assert.equal(dependentRequests(app).length, 0);
   await app.release(retry, freshnessFixture('AAPL', 0));
-  assert.equal(dependentRequests(app).length, 3);
-  assert.ok(dependentRequests(app).every(r => r.init.headers['X-FinLens-Data-Version'] === '0'));
+  assertPendingDataScope(dependentRequests(app), { version: 0 });
 });
 
 test('DEP-01A2 stalled snapshot body times out, preserves siblings and recovers with one pinned manual retry', async ctx => {
@@ -3755,7 +3737,18 @@ test('REL-CORE-01B semantic accepts 306 real backend serializations with no data
     const label = `${profile} ${response.metric} ${response.requested_period}`;
     assert.equal(app.trends().querySelector('[role="alert"]'), null, label);
     assert.equal(app.trends().querySelector('[aria-live]').getAttribute('aria-busy'), 'false', label);
-    assert.equal(Boolean(app.trends().querySelector('table')), response.status === 'available', label);
+    const rows = app.trends().querySelectorAll('tbody tr');
+    assert.equal(Boolean(app.trends().querySelector('table')), response.history.length > 0, label);
+    assert.equal(rows.length, response.history.length, label);
+    assert.equal(Boolean(app.trends().querySelector('.financial-chart')), response.history.some(point => point.status === 'available'), label);
+    response.history.forEach((point, index) => {
+      if (point.status !== 'available') {
+        assert.equal(point.value, null, label);
+        assert.ok(rows[index].textContent.includes(point.status === 'not_applicable' ? 'Not applicable' : 'Unavailable'), label);
+        if (point.reason) assert.ok(rows[index].textContent.includes(point.reason), label);
+        assert.doesNotMatch(rows[index].textContent, /Exact API value:/, label);
+      }
+    });
     assert.deepEqual(response, original, label);
     for (const observation of response.history) if (observation.status === 'available') {
       assert.ok(app.trends().textContent.includes(`Exact API value: ${observation.value} ${observation.unit}`), label);

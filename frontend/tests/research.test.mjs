@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { componentLoader } from './component-loader.mjs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, officialSecUrl, parseTheme, periodLabel, persistTheme, resolveTheme, METRIC_CATALOG, METRIC_GROUPS, METRIC_LABELS, SNAPSHOT_METRICS, guidedQuestion } from '../lib/research.ts';
@@ -12,21 +11,7 @@ import { describeApiError, getAnswer, getCapabilities, getFinancialSummary, getF
 
 // Compile the actual TSX components with the existing TypeScript dependency.
 // No snapshot files, browser DOM shim or new testing framework.
-const require = createRequire(import.meta.url);
-const cache = new Map();
-function component(path) {
-  if (cache.has(path)) return cache.get(path);
-  const exports = {};
-  const output = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const localRequire = (name) => {
-    if (!name.startsWith('@/')) return require(name);
-    const base = fileURLToPath(new URL(`../${name.slice(2)}`, import.meta.url));
-    return component(['.tsx', '.ts'].map(extension => base + extension).find(existsSync));
-  };
-  new Function('require', 'exports', output)(localRequire, exports);
-  cache.set(path, exports);
-  return exports;
-}
+const component = componentLoader(fileURLToPath(new URL('../', import.meta.url)));
 const finance = component(fileURLToPath(new URL('../components/financial-research.tsx', import.meta.url)));
 const filing = component(fileURLToPath(new URL('../components/filing-research.tsx', import.meta.url)));
 const overview = component(fileURLToPath(new URL('../components/company-overview.tsx', import.meta.url)));
@@ -123,6 +108,18 @@ test('FD-01 every advertised guided question resolves with actual backend metric
  const python=['.venv/Scripts/python.exe','.venv/bin/python'].map(path=>fileURLToPath(new URL(`../../backend/${path}`,import.meta.url))).find(existsSync)??'python';
  const run=spawnSync(python,['-B','-c',`
 import json, sys
+from pathlib import Path
+
+def forbidden(*args, **kwargs):
+    raise AssertionError('Database, network and private configuration access forbidden')
+def guard(event, args):
+    if event == 'open' and isinstance(args[0], (str, bytes)) and Path(args[0]).name.lower() == '.env':
+        forbidden()
+    if event in ('socket.connect', 'socket.getaddrinfo'):
+        forbidden()
+    if event == 'import' and args[0] in ('app.database', 'app.config'):
+        forbidden()
+sys.addaudithook(guard)
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import patch
