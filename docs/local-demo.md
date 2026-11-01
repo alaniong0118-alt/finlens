@@ -4,6 +4,20 @@ This is a development-only, existing-data procedure. REL-01A tests scripts offli
 real startup, DB reads, encoder use and browser acceptance require separate operator
 authorization. Public/private deployment is not approved. DEP-01A3 is **BLOCKED**.
 
+### Separate financial-only preparation
+
+`Start-FinLens-FinancialOnly.ps1` is a separate, review-gated local entry point;
+the development-only command below and fixed BLOCKED private-runtime diagnostic
+are unchanged. See the [financial-only startup plan](exec-plans/active/2026-11-01-financial-only-native-startup.md)
+for current offline evidence and remaining activation gates. Do not run the new
+entry point merely because its synthetic tests pass. It normally loads existing
+private configuration and, after configuration checking, starts loopback services
+and makes read-only DB readiness queries; these actions need explicit authorization.
+The later reviewed command defaults to ports 8021/3003 and no browser; `-OpenBrowser`
+is a separate explicit choice. It does not provision PostgreSQL, acquire data or
+load a model. Config/import readiness is not data/privilege acceptance or OS egress
+containment. Original named terminals remain the Ctrl+C shutdown controls.
+
 ## Prerequisites and startup
 
 Use the intended checkout, prepared backend venv/frontend node_modules, installed
