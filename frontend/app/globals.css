@@ -95,6 +95,8 @@ section[aria-labelledby="snapshot-title"] .compact-label > select {
 .metric-card h3 { font-size:14px; color:var(--text); } .metric-value { margin:6px 0 4px; font-size:clamp(1.15rem,2vw,1.7rem); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.04em; line-height:1.3; overflow-wrap:anywhere; } .missing-value { font-size:17px; color:var(--muted); padding-top:6px; }
 .basis-label { color:var(--accent); margin-top:4px; } .provenance { margin-top:9px; border-top:1px solid var(--border); }
 .details-body { font-size:13px; line-height:1.75; padding:2px 0 12px; overflow-wrap:anywhere; } .details-body .mono { font-size:inherit; } .details-body p + p { margin-top:8px; } .details-body a { display:inline-flex; align-items:center; min-height:44px; } .source-record { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+.history-table .provenance .source-record a { padding-inline:8px; }
+.history-table .provenance .source-record a:focus-visible { outline-offset:-6px; }
 .secondary-metrics { margin-top:17px; } .secondary-metrics > summary { font-size:13px; }
 .metric-description,.metric-period,.metric-reason { margin-top:7px; overflow-wrap:anywhere; }
 .secondary-metrics .metric-grid { margin-top:12px; }
@@ -112,6 +114,11 @@ section[aria-labelledby="snapshot-title"] .compact-label > select {
 .history-controls { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:14px; margin:4px 0 16px; }
 .financial-chart { width:100%; min-width:0; height:250px; margin-top:8px; }
 .history-table { margin-top:8px; } .history-table > summary { font-size:13px; }
+.history-table summary { padding-inline:8px; }
+.history-table summary:focus-visible { outline-offset:-6px; }
+.history-table .table-scroll:focus-visible { outline-offset:-3px; }
+.history-table th:nth-child(3), .history-table td:nth-child(3) { min-width:220px; }
+.history-table summary { overflow-wrap:normal; word-break:normal; }
 .table-scroll { overflow-x:auto; max-width:100%; } table { border-collapse:collapse; width:100%; font-size:13px; line-height:1.65; } th,td { padding:12px 10px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; } th { color:var(--muted); font-weight:600; } td .provenance { margin:0; border:0; } td { min-width:100px; font-variant-numeric:tabular-nums; } td:first-child { min-width:155px; }
 .table-scroll-help { margin:4px 0 10px; }
 .filing-select { margin:17px 0 14px; } .filing-record { background:var(--surface); padding:13px; border:1px solid var(--border); border-radius:10px; } .filing-record > span { font-size:13px; color:var(--muted); margin-left:9px; } .filing-record a { display:inline-flex; align-items:center; font-size:13px; margin-top:6px; min-height:44px; }

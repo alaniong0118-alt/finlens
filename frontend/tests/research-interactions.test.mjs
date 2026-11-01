@@ -3156,7 +3156,8 @@ for (const strict of [false, true]) test(`UX-01B retry publication mismatch wait
   assert.equal(dependentRequests(app).length, count, 'Rejected version zero remains closed');
   await retryTwice(app, 'Retry data check');
   await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
-  assert.equal(dependentRequests(app).length, count + 3, 'Existing reconciliation reloads each dependent once');
+  const recoveredScope = assertDiagnosedDataScope(dependentRequests(app).slice(count), 1, 'net_income', strict);
+  assert.ok(recoveredScope.active.every(record => !record.released), 'Recovered endpoints are pending before their explicit response delivery');
   const recovered = app.request(path);
   assert.equal(recovered.init.headers['X-FinLens-Data-Version'], '1');
   await app.release(recovered, history('AAPL', '300000000', 'net_income'));
@@ -3331,6 +3332,136 @@ for (const [label, corrupt] of relCoreMalformed) test(`REL-CORE-01B rejects ${la
   assert.equal(app.host.querySelector('textarea'), editor);
   assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
 });
+
+function missingDetailHistory(metric = 'revenue', status = 'unavailable') {
+  const payload = relCoreHistory('AAPL', metric);
+  payload.status = status; payload.reason = 'No compatible values in the returned history.';
+  const first = payload.history[0];
+  first.status = status; first.value = null; first.inputs = [];
+  first.reason = 'First period has incompatible source bases.';
+  const second = structuredClone(first);
+  second.period = { ...first.period, start: '2025-04-01', end: '2025-06-30', fiscal_period: 'Q2' };
+  second.reason = 'Second period lacks a compatible input.';
+  second.provenance = []; second.alternatives[0].fact_id = 3;
+  second.alternatives[0].original_concept = 'Second period alternative sentinel';
+  second.alternatives[0].period_start = second.period.start;
+  second.alternatives[0].period_end = second.period.end;
+  payload.history.push(second);
+  return payload;
+}
+
+for (const strict of [false, true]) for (const state of ['unavailable', 'not_applicable', 'empty', 'mixed']) {
+  test(`History missing-detail preserves ${state} rows and disclosures strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict });
+    const metric = state === 'not_applicable' ? 'gross_profit' : 'revenue';
+    if (metric !== 'revenue') await app.change(app.select('Metric'), metric);
+    const payload = missingDetailHistory(metric, state === 'not_applicable' ? state : 'unavailable');
+    if (state === 'empty') payload.history = [];
+    if (state === 'mixed') { payload.status = 'available'; payload.history.push(point('AAPL', '300000000')); }
+    const original = structuredClone(payload);
+    await app.release(app.request(companyPath('AAPL', `financials/metrics/${metric}`)), payload);
+    assert.deepEqual(payload, original);
+    const panel = app.trends(), count = app.requests.length;
+    assert.equal(panel.querySelector('[role="alert"]'), null);
+    assert.equal(Boolean(panel.querySelector('.financial-chart')), state === 'mixed');
+    assert.equal(Boolean(panel.querySelector('.empty-state')), state !== 'mixed');
+    if (state !== 'mixed') assert.match(panel.querySelector('.empty-state').textContent, /No compatible values in the returned history/);
+    if (state === 'empty') {
+      assert.equal(panel.querySelector('.history-table,table,.provenance,.source-record'), null);
+      assert.doesNotMatch(panel.textContent, /First period|Second period|sentinel/);
+      return;
+    }
+    const rows = [...panel.querySelectorAll('tbody tr')];
+    assert.equal(rows.length, payload.history.length);
+    assert.match(rows[0].cells[0].textContent, /Jan 1, 2025 – Mar 31, 2025 · FY2025 Q1/);
+    assert.match(rows[1].cells[0].textContent, /Apr 1, 2025 – Jun 30, 2025 · FY2025 Q2/);
+    for (const [index, row] of rows.slice(0, 2).entries()) {
+      assert.ok(row.cells[1].textContent.startsWith(state === 'not_applicable' ? 'Not applicable' : 'Unavailable'));
+      assert.ok(row.cells[1].textContent.includes(payload.history[index].reason));
+      assert.ok(!row.cells[1].textContent.includes(payload.history[1 - index].reason));
+      const details = row.querySelector('.provenance'), summary = details.querySelector('summary');
+      assert.equal(details.open, false); summary.focus(); assert.equal(document.activeElement, summary);
+      await act(async () => summary.click()); assert.equal(details.open, true);
+    }
+    assert.match(rows[0].cells[2].textContent, /RELCORE source sentinel/);
+    assert.match(rows[1].cells[2].textContent, /No compatible source selected for this period/);
+    const alternatives = rows[1].querySelector('.provenance details');
+    alternatives.querySelector('summary').focus(); assert.equal(document.activeElement, alternatives.querySelector('summary'));
+    await act(async () => alternatives.querySelector('summary').click()); assert.equal(alternatives.open, true);
+    assert.match(alternatives.textContent, /Second period alternative sentinel.*Apr 1, 2025 – Jun 30, 2025/);
+    for (const row of rows.slice(0, 2)) for (const link of row.querySelectorAll('a')) {
+      assert.equal(link.href, filing('AAPL').sec_url);
+      assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
+      link.focus(); assert.equal(document.activeElement, link);
+    }
+    assert.ok(rows[0].querySelector('a')); assert.ok(rows[1].querySelector('a'));
+    const region = panel.querySelector('.history-table [role="region"]');
+    assert.equal(region.tabIndex, 0); region.focus(); assert.equal(document.activeElement, region);
+    assert.equal(region.getAttribute('aria-describedby'), panel.querySelector('.table-scroll-help').id);
+    if (state === 'mixed') assert.match(rows[2].cells[1].textContent, /\$300M/);
+    assert.equal(app.requests.length, count, 'Disclosures and focus must not fetch or retry');
+  });
+}
+
+test('History reveals focused source descendants within its horizontal scroll region', async ctx => {
+  const app = await mount(ctx), payload = missingDetailHistory();
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), payload);
+  const panel = app.trends(), region = panel.querySelector('.history-table .table-scroll');
+  const rows = panel.querySelectorAll('tbody tr'), selected = rows[0].querySelector('.provenance');
+  const missing = rows[1].querySelector('.provenance'), alternative = missing.querySelector('details');
+  selected.open = true; missing.open = true; alternative.open = true;
+  const selectedSummary = selected.querySelector(':scope > summary');
+  const selectedLink = selected.querySelector('a');
+  const alternativeSummary = alternative.querySelector('summary');
+  const alternativeLink = alternative.querySelector('a');
+  Object.defineProperties(region, { clientWidth: { configurable: true, value: 324 }, scrollWidth: { configurable: true, value: 475 }, clientLeft: { configurable: true, value: 0 } });
+  region.getBoundingClientRect = () => ({ left: 33, right: 357, top: 0, bottom: 300, width: 324, height: 300 });
+  const rect = (left, right) => ({ left, right, top: 0, bottom: 44, width: right - left, height: 44 });
+  const count = app.requests.length;
+  region.scrollLeft = 40;
+  await act(async () => region.focus());
+  assert.equal(region.scrollLeft, 40, 'Focusing the region keeps its own scroll position');
+  selectedSummary.getBoundingClientRect = () => rect(258, 458);
+  await act(async () => selectedSummary.focus());
+  assert.equal(document.activeElement, selectedSummary); assert.equal(region.scrollLeft, 141);
+  selectedLink.getBoundingClientRect = () => rect(90, 210);
+  await act(async () => selectedLink.focus());
+  assert.equal(document.activeElement, selectedLink); assert.equal(region.scrollLeft, 141, 'A visible target does not scroll');
+  alternativeSummary.getBoundingClientRect = () => rect(-17, 183);
+  await act(async () => alternativeSummary.focus());
+  assert.equal(document.activeElement, alternativeSummary); assert.equal(region.scrollLeft, 91);
+  alternativeLink.getBoundingClientRect = () => rect(300, 400);
+  await act(async () => alternativeLink.focus());
+  assert.equal(document.activeElement, alternativeLink); assert.equal(region.scrollLeft, 134);
+  const unrelated = document.createElement('button'); region.appendChild(unrelated);
+  unrelated.getBoundingClientRect = () => rect(300, 400);
+  await act(async () => unrelated.focus());
+  assert.equal(region.scrollLeft, 134, 'Unrelated descendants do not trigger History source reveal');
+  selectedSummary.getBoundingClientRect = () => rect(20, 420);
+  await act(async () => selectedSummary.focus());
+  assert.equal(region.scrollLeft, 121, 'An oversized target reveals its nearest edge');
+  Object.defineProperty(region, 'scrollWidth', { configurable: true, value: 324 });
+  await act(async () => unrelated.focus());
+  await act(async () => alternativeLink.focus());
+  assert.equal(region.scrollLeft, 121, 'A non-scrollable region does not move');
+  unrelated.remove();
+  assert.equal(app.requests.length, count, 'Focus reveal must not fetch data');
+});
+
+for (const strict of [false, true]) for (const defect of ['malformed', 'unverified']) {
+  test(`History missing-detail ${defect} response fails closed strict ${strict}`, async ctx => {
+    const app = await mount(ctx, false, companies, { strict }), payload = missingDetailHistory();
+    if (defect === 'malformed') payload.history[1].reason = {};
+    else payload.company_cik = companies[1].cik;
+    const pending = app.request(companyPath('AAPL', 'financials/metrics/revenue')), count = app.requests.length;
+    await app.release(pending, payload);
+    const panel = app.trends();
+    assert.ok(panel.querySelector('[role="alert"]'));
+    assert.equal(panel.querySelector('.history-table,.financial-chart,.provenance,.source-record'), null);
+    assert.doesNotMatch(panel.textContent, /First period|Second period|sentinel/);
+    assert.equal(app.requests.length, count, 'Rejection must not retry automatically');
+  });
+}
 
 for (const strict of [false, true]) for (const state of ['available', 'unavailable', 'not_applicable', 'empty', 'mixed']) {
   test(`REL-CORE-01B preserves valid ${state} response strict ${strict}`, async ctx => {

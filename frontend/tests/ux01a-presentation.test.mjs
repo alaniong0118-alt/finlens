@@ -38,6 +38,24 @@ test('UX-01A frequent disclosures, sources, topics and navigation target at leas
   }
 });
 
+test('History focus outlines stay within the region and padded disclosure and source targets', () => {
+  for (const width of [1440, 390, 320]) {
+    assert.equal(declaration(':focus-visible', 'outline', width), '3px solid var(--accent)');
+    assert.equal(declaration('.history-table .table-scroll:focus-visible', 'outline-offset', width), '-3px');
+    assert.equal(declaration('.history-table summary:focus-visible', 'outline-offset', width), '-6px');
+    assert.equal(declaration('.history-table summary', 'padding-inline', width), '8px');
+    assert.equal(declaration('.history-table .provenance .source-record a:focus-visible', 'outline-offset', width), '-6px');
+    assert.equal(declaration('.history-table .provenance .source-record a', 'padding-inline', width), '8px');
+    assert.ok(parseFloat(declaration('summary', 'min-height', width)) >= 44);
+    assert.ok(parseFloat(declaration('.details-body a', 'min-height', width)) >= 44);
+    assert.equal(declaration('.table-scroll', 'overflow-x', width), 'auto');
+    assert.equal(declaration('.history-table th:nth-child(3)', 'min-width', width), '220px');
+    assert.equal(declaration('.history-table td:nth-child(3)', 'min-width', width), '220px');
+    assert.equal(declaration('.history-table summary', 'overflow-wrap', width), 'normal');
+    assert.equal(declaration('.history-table summary', 'word-break', width), 'normal');
+  }
+});
+
 test('UX-01A 390px controls and snapshot cards use the available panel width', () => {
   assert.equal(declaration('.history-controls', 'grid-template-columns', 390), 'minmax(0,1fr)');
   assert.equal(declaration('.metric-grid', 'grid-template-columns', 390), 'minmax(0,1fr)');

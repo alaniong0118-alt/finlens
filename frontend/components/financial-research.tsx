@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { describeApiError, FinLensApiError, versionedController, getFinancialSummary, getMetricHistory, type Company, type FinancialSummary,
   type FactProvenance, type MetricHistory, type NormalizedMetric, type PeriodKind } from "@/lib/finlens-api";
@@ -93,6 +93,19 @@ function SnapshotMetric({ metric, point }: { metric: string; point: NormalizedMe
   </article>;
 }
 
+function revealHistorySourceFocus(event: FocusEvent<HTMLDivElement>) {
+  const region = event.currentTarget, target = event.target;
+  if (!(target instanceof HTMLElement) || !target.matches('.provenance summary, .provenance a[href]')
+      || region.scrollWidth <= region.clientWidth) return;
+  const container = region.getBoundingClientRect(), focused = target.getBoundingClientRect();
+  const left = container.left + region.clientLeft, right = left + region.clientWidth;
+  const before = focused.left - left, after = focused.right - right;
+  // Reveal the nearest edge; never move the page vertically or change focus.
+  if (before < 0 && after > 0) region.scrollLeft += Math.abs(before) <= Math.abs(after) ? before : after;
+  else if (before < 0) region.scrollLeft += before;
+  else if (after > 0) region.scrollLeft += after;
+}
+
 function HistoryView({ data }: { data: MetricHistory }) {
   const rows = historyChartRows(data);
   const warning = epsWarning(data);
@@ -102,7 +115,7 @@ function HistoryView({ data }: { data: MetricHistory }) {
   return <>
     {warning && <p className="notice" role="note">{warning}</p>}
     <p className="muted small">{PERIOD_LABELS[data.requested_period]} observations only · {unitLabel}. {data.requested_period === "instant" ? "Bars are values as of each date." : "Bars are reported intervals, not a continuous comparable series."} Basis changes and missing observations are preserved.</p>
-    {hasValues ? <>
+    {hasValues ? (
       <div className="financial-chart" role="img" aria-label={`${METRIC_LABELS[data.metric]} by ${PERIOD_LABELS[data.requested_period].toLowerCase()}. Exact observations and sources are in the table below.`}>
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart data={rows} margin={{ top: 15, right: 12, bottom: 10, left: 0 }} accessibilityLayer>
@@ -114,9 +127,11 @@ function HistoryView({ data }: { data: MetricHistory }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
+    ) : <div className="empty-state"><h3>{data.status === "not_applicable" ? `${METRIC_LABELS[data.metric]} is not applicable` : "No compatible history for this selection"}</h3><p>{data.reason ?? "Try another metric or period. No values are substituted."}</p></div>}
+    {rows.length > 0 && (
       <details className="history-table" open><summary>Observations and SEC sources ({rows.length})</summary>
         <p className="small muted table-scroll-help" id="history-scroll-help">On narrow screens, scroll horizontally to read values and sources. Keyboard users can focus the table region and use the arrow keys.</p>
-        <div className="table-scroll" tabIndex={0} role="region" aria-label={`${METRIC_LABELS[data.metric]} historical observations and SEC sources`} aria-describedby="history-scroll-help"><table><caption className="sr-only">{METRIC_LABELS[data.metric]} · {PERIOD_LABELS[data.requested_period]}</caption>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label={`${METRIC_LABELS[data.metric]} historical observations and SEC sources`} aria-describedby="history-scroll-help" onFocus={revealHistorySourceFocus}><table><caption className="sr-only">{METRIC_LABELS[data.metric]} · {PERIOD_LABELS[data.requested_period]}</caption>
           <thead><tr><th scope="col">Period</th><th scope="col">Reported value</th><th scope="col">Provenance</th></tr></thead>
           <tbody>{rows.map((row, index) => <tr key={`${row.date}-${index}`}>
             <td>{periodLabel(row.point.period)}</td><td>{row.label}{row.point.status !== "available" && row.point.reason && <p className="small metric-reason">{row.point.reason}</p>}{row.point.revenue_basis && <span className="small muted block">{row.point.revenue_basis.replaceAll("_", " ")}</span>}</td>
@@ -124,7 +139,7 @@ function HistoryView({ data }: { data: MetricHistory }) {
           </tr>)}</tbody>
         </table></div>
       </details>
-    </> : <div className="empty-state"><h3>{data.status === "not_applicable" ? `${METRIC_LABELS[data.metric]} is not applicable` : "No compatible history for this selection"}</h3><p>{data.reason ?? "Try another metric or period. No values are substituted."}</p></div>}
+    )}
   </>;
 }
 
