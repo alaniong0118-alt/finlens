@@ -738,6 +738,35 @@ test('mounted company-wide scope preserves source lineage and exposes no AI acti
   assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
 });
 
+for (const strict of [false, true]) for (const contextFirst of [false, true])
+test(`mounted invalid company provenance keeps scoped alert and direct answer strict ${strict} context first ${contextFirst}`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict });
+  await app.completeCompany('AAPL', '1000000000');
+  await app.change(app.select('Evidence search scope'), 'company');
+  const question = 'revenue';
+  await app.change(app.host.querySelector('textarea'), question); await app.click('Research question');
+  const direct = app.request(companyPath('AAPL', 'research-answer'));
+  const evidence = app.request(companyPath('AAPL', 'context'));
+  assert.equal(direct.init.method, 'POST'); assert.equal(direct.init.headers['X-FinLens-Data-Version'], '0');
+  assert.deepEqual(JSON.parse(direct.init.body), { question });
+  assert.equal(evidence.init.method ?? 'GET', 'GET'); assert.equal(evidence.init.headers['X-FinLens-Data-Version'], '0');
+  assert.deepEqual([...evidence.params], [['q', question], ['limit', '5']]);
+  const malformed = companyContext('AAPL', question);
+  malformed.citations[0].company_cik = companies.find(company => company.ticker === 'JPM').cik;
+  if (contextFirst) await app.release(evidence, malformed);
+  await app.release(direct, directAnswer('AAPL', question));
+  const answer = app.host.querySelector('.direct-answer');
+  if (!contextFirst) await app.release(evidence, malformed);
+  const panel = app.host.querySelector('.filing-panel');
+  assert.equal(document.getElementById(panel.getAttribute('aria-labelledby')).textContent, 'Financial questions');
+  assert.match(panel.querySelector('[role="alert"]').textContent, /Evidence does not match this company/);
+  assert.equal(app.host.querySelector('.direct-answer'), answer);
+  assert.match(answer.textContent, /\$109.42B/);
+  assert.equal(app.evidence().length, 0);
+  assert.equal(app.requests.filter(request => request.path === companyPath('AAPL', 'context')).length, 1);
+  assert.equal(app.requests.filter(request => request.path === companyPath('AAPL', 'research-answer')).length, 1);
+});
+
 test('mounted scope switch discards a delayed company-wide response', async ctx => {
   const app = await mount(ctx);
   await app.completeCompany('AAPL', '1000000000');

@@ -99,12 +99,27 @@ test('metadata-only and malformed readiness cannot enter searchable selector or 
 });
 
 test('invalid company-wide provenance is refused without erasing an independent direct answer', async ({ page, scenario }) => {
-  scenario.overrides.push(request => request.path === '/companies/AAA/context' ? { body: { ...data.evidence('AAA', request.query.get('q')!, 0), citations: [{ ...data.evidence('BBB', request.query.get('q')!, 0).citations[0] }] } } : undefined);
+  let malformedContextReplies = 0;
+  scenario.overrides.push(request => {
+    if (request.path !== '/companies/AAA/context') return undefined;
+    malformedContextReplies++;
+    return { body: { ...data.evidence('AAA', request.query.get('q')!, 0), citations: [{ ...data.evidence('BBB', request.query.get('q')!, 0).citations[0] }] } };
+  });
   await scenario.open(); await scenario.ready();
   await page.getByRole('combobox', { name: 'Evidence search scope', exact: true }).selectOption('company');
   await page.getByRole('button', { name: 'Use question', exact: true }).click();
   await page.getByRole('button', { name: 'Research question', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Read the evidence', exact: true }).getByRole('alert')).toContainText('Evidence does not match this company');
+  const question = 'What is the latest available revenue?';
+  await expect.poll(() => scenario.count('/companies/AAA/context')).toBe(1);
+  const context = scenario.ledger.find(request => request.path === '/companies/AAA/context')!;
+  expect(context).toMatchObject({ method: 'GET', pin: '0', body: null });
+  expect([...context.query.entries()]).toEqual([['q', question], ['limit', '5']]);
+  expect(malformedContextReplies).toBe(1);
+  await expect(page.getByRole('region', { name: 'Financial questions', exact: true }).getByRole('alert')).toContainText('Evidence does not match this company');
   await expect(page.getByRole('region', { name: 'Research Answer', exact: true }).locator('.metric-value')).toHaveText('$1B');
   await expect(page.getByRole('heading', { name: '1 SEC evidence passages', exact: true })).toHaveCount(0);
+  const answers = scenario.ledger.filter(request => request.path === '/companies/AAA/research-answer');
+  expect(answers).toHaveLength(1);
+  expect(answers[0]).toMatchObject({ method: 'POST', pin: '0', body: { question } });
+  expect(answers[0].query.toString()).toBe('');
 });

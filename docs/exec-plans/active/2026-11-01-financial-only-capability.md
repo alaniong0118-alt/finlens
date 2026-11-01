@@ -1,6 +1,6 @@
 # Dormant financial-only capability restriction
 
-Status: active; independently reviewed implementation and four-case synthetic browser acceptance passed; final Git delivery and runtime activation are not performed.
+Status: active; dormant slice delivered as a34e3ca; its sole CI locator failure has independently reviewed test-only correction and one-case local browser PASS; repair Git delivery and fresh CI remain pending.
 
 ## Objective and scope
 
@@ -372,3 +372,124 @@ no actual application activation, real-data/encoder acceptance, external beta,
 source-rights approval, deployment, installation or Git write occurred. Git
 staging/commit/push remain a separate final delivery gate. Suggested commit:
 `feat(research): add dormant financial-only capability restriction`.
+
+## Post-delivery CI locator regression: evidence and minimal repair
+
+Commit `a34e3cafb81369ff38d5be732db33d7981a79584` was verified committed and
+normally pushed, with local/remote equality, empty index and the five protected
+exceptions unchanged. CI run41327271165, chromium job124909730625, then reported
+108 browser passes and one failure. All four new financial-only cases passed.
+This is not CI success and the local four-case PASS is not full-suite acceptance.
+
+The one failure is `research.spec.ts:101`, invalid company-wide provenance without
+erasing an independent answer. Its old line107 searched region "Read the evidence"
+for the mismatch alert. The reviewed layout now has a stable "Financial questions"
+region; "Read the evidence" is a nested h3, not a region. The real error context
+contains the exact alert "Evidence does not match this company and publication
+version." under the new region, together with the independent $1B Research Answer.
+The screenshot and full accessibility snapshot agree. The request trace shows:
+- capabilities GET started16:43:12.232Z, 200, completed about16:43:12.328Z;
+- sources GET pin0 started16:43:12.484Z, 200/version0, completed about12.503Z;
+- research-answer POST pin0 started16:43:12.905Z, 200/version0;
+- company context GET pin0 started16:43:12.906Z, 200/version0, with exact question
+  "What is the latest available revenue?" and limit5.
+Thus the malformed context was requested after full capability and inventory
+readiness, and the production rejection actually rendered. This is a stale test
+accessibility locator, not an early restricted-only submit or broken provenance
+validation. `scenario.ready()` already waits for the indexed-filing selector to
+be enabled; no artificial delay, product replay or added readiness workaround is
+needed for this observed failure.
+
+The retained original GitHub artifact13092261601 is 14416668 bytes, ZIP SHA256
+`4273ADE5B91F76019871C36B6BEF7DF3710CD4356B73B8717C0DF622FBFF698D`.
+It was downloaded through the supported GitHub artifact tool and only the relevant
+error-context, screenshot and trace were read, under
+`D:/Projects/finlens-ci-a34e3ca-diagnosis-20261101`. No unrelated files or private
+configuration were read or changed.
+
+Test-only correction: scope the unchanged alert expectation to the current
+"Financial questions" region. Also require exactly one malformed-context fixture
+reply and one actual company-context GET with pin0, exact q/limit and absent body;
+require one financial POST with pin0, exact question body and no query. The original
+$1B answer and zero evidence-passage checks remain. Production UI, capabilities,
+financial/citation validation and all route/lifecycle guards are untouched.
+Four new mounted cases test StrictMode on/off and both direct/context settlement
+orders. Each explicitly sends wrong-company citation identity, verifies the alert
+inside the actual named region, preserves the direct answer DOM/value and rejects
+evidence cards, without duplicate research/context requests. A valid company-wide
+control also remains covered.
+
+Actual focused checks from `frontend`, using existing E:/node.exe:
+- `--test --test-name-pattern='^mounted invalid company provenance|^mounted company-wide scope preserves'
+  tests/research-interactions.test.mjs`: 5 passed, zero failures/skips.
+- `node_modules/eslint/bin/eslint.js e2e/research.spec.ts`: exit0.
+- `node_modules/typescript/bin/tsc --noEmit --incremental false`: exit0.
+- Playwright `test e2e/research.spec.ts --project=desktop-chromium --grep
+  'invalid company-wide provenance is refused without erasing an independent direct answer$'
+  --list --reporter=list`: exactly one test in one file. The initial listing with
+  a leading ^ selected zero because Playwright matches the full project/file/title;
+  the corrected exact file/project plus suffix expression selects the intended
+  single case. Neither listing launched a browser or web server.
+
+Next gate: independent review of this three-file test/document patch, then one
+bounded isolated desktop execution of the sole failed case using the existing
+pinned image/limits and strict endpoint assertions. No broad suite, CI rerun, Git
+writes or runtime activation has occurred for this repair. All five protected
+exceptions and prior accepted production/financial-only test files remain intact.
+
+## Scoped CI locator repair acceptance
+
+Independent Astra review verified the original CI artifact, stale accessible-name
+root cause and exact three-file correction, with scoped PASS and five independently
+passing mounted tests. No product/fixture/validator changes were requested or made.
+One new isolated desktop attempt then selected only the failed research case; the
+four already-passing financial-only cases and full suites were not rerun locally.
+
+External gate:
+`D:/Projects/finlens-ci-locator-gate-44082abd8f6849bbb3b96105848ce778/launch-once.ps1`,
+SHA256 `FE18EF37ADFEDD58FC461297C9B0C2420D3BEB019348B48BB1073920040BCBE2`.
+Snapshot manifest SHA256:
+`CD07D87CFC5F916A85670986F9F57A2B2899A0CB5C60EC0AD16FB85FD7DF8945`.
+Runner SHA256: `7378F4AE13E86E9EB25EA06CF4CF8AE85FFAF2CAC5FF2453E7E06AB91DA91627`.
+The bound existing PowerShell7.6.5 runtime invoked this gate once. Outer preflight
+and the actual embedded inner source/hash/inventory/aggregate checks passed before
+launch: 65 source files, 1668014 bytes, all five protected exceptions. Five negative
+identity controls reject mismatched count/bytes/nonce/aggregate, including a stale
+copied byte-count constant. Full PowerShell and embedded-JavaScript syntax checks
+passed. The runner selected one desktop phase and one exact title, retained trace
+on success, and required that trace's hash/length in the exported artifact index.
+The existing Docker isolation/resource arguments, next-env staging, runtime copy
+and identity-owned cleanup bodies were unchanged; only exact source/test/phase/
+evidence bindings were adapted. No new generic harness or source modifications.
+
+Result: exactly one passed, zero failed/skipped/retried; container exit0 in9997ms,
+no timeout or OOM. Artifact root:
+`D:/Projects/finlens-annual-browser-artifacts-262db3d92f2b44678c5d3730ef7d3502`.
+The retained 770568-byte successful trace has SHA256
+`B20167790E871059535E03F3920732E7B93C79AFE0E962276A508CBE8ED826D7`.
+Its network records contain exactly one pin0 research-answer POST and one pin0
+company-context GET with the intended question and limit5; both respond200/version0.
+The successful scoped alert assertion resolves the existing Financial questions
+region alert; a recorded incremental DOM frame contains the complete provenance
+mismatch text, Research Answer and $1B together. The independent answer assertion
+also completes successfully. Trace DOM uses previous-frame references, so raw
+incremental frames are not treated as standalone full-page screenshots. This run
+adds no broad visual/focus/real-data acceptance claim.
+
+All17 indexed entries passed byte/hash checks, 815633 indexed bytes (18 files
+including the index). Artifact index SHA256:
+`CC7F76C690F2B2429A0DC3AF23FE40F13AAEF8ED38C79EF2B71DA41D6D567C74`.
+Exact owned container
+`0c2772001a64316d45de5722066ebe733ba3a3000aca14c4772d7ea0b604fbab`
+was absent after identity-checked cleanup; all owned host CLI processes reaped,
+inner ports3107/3108 closed, no extra live processes/QA copies remained, and only
+owned runtime staging/dependency links were removed. Snapshot and protected
+preservation gates passed. The original failing CI artifact remains unchanged.
+
+The same six optional WASM dependencies remain explicitly unverified. No external
+egress, published ports, downloads, credentials, physical DB/model, runtime
+activation, permissions/deployment changes or drive/file cleanup was introduced.
+Only this factual ExecPlan status/acceptance append followed the run; both reviewed
+test files remain frozen. This closes the local targeted reproduction, not the
+failed remote CI run: a separately gated verified repair commit/push and its fresh
+CI outcome remain necessary. No Git writes or CI rerun have occurred for this repair.
