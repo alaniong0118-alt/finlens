@@ -7,9 +7,12 @@ const date = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}
   && Number.isFinite(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 export function windowKey(w: ReportedWindow) { return `${w.start},${w.end}`; }
 function validWindow(v: unknown): v is ReportedWindow {
+  return validDurationWindow(v, "quarter");
+}
+function validDurationWindow(v: unknown, kind: "annual" | "quarter"): v is ReportedWindow {
   if (!record(v) || !date(v.start) || !date(v.end)) return false;
   const days = (Date.parse(v.end) - Date.parse(v.start)) / 86400000 + 1;
-  return days >= 75 && days <= 105;
+  return kind === "quarter" ? days >= 75 && days <= 105 : days >= 330 && days <= 390;
 }
 const operands: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
   revenue_growth_yoy: [["current", "revenue"], ["prior", "revenue"]],
@@ -51,15 +54,24 @@ export function validateQuarterResponse(value: unknown, company: Company, select
       || new Set(selected.map(windowKey)).size !== selected.length
       || selected.some(w => !validWindow(w) || !keys.includes(windowKey(w)))
       || value.columns.length !== selected.length) return bad();
+  validateStoredColumns(value.columns, company, selected, "quarter");
+  return value as QuarterComparison;
+}
+
+// Shared lineage checks only. Each owning response still enforces its own
+// selection, count, publication and resource contract before entering here.
+export function validateStoredColumns(columns: unknown, company: Company, selected: ReportedWindow[], kind: "annual" | "quarter"): QuarterComparison["columns"] {
+  const bad = () => { throw new Error("Stored financial evidence could not be verified."); };
+  if (!Array.isArray(columns) || columns.length !== selected.length) return bad();
   const sources = new Map<number, string>();
-  for (const [index, column] of value.columns.entries()) {
-    if (!record(column) || !validWindow(column.window) || windowKey(column.window) !== windowKey(selected[index])
+  for (const [index, column] of columns.entries()) {
+    if (!record(column) || !validDurationWindow(column.window, kind) || windowKey(column.window) !== windowKey(selected[index])
         || !record(column.metrics) || Object.keys(column.metrics).length !== COMPARISON_METRICS.length) return bad();
-    const anchor = { kind: "quarter", start: column.window.start, end: column.window.end, fiscal_year: null,
+    const anchor = { kind, start: column.window.start, end: column.window.end, fiscal_year: null,
       fiscal_period: null, fiscal_label_basis: "unknown" };
     for (const metric of COMPARISON_METRICS) {
       const point = column.metrics[metric];
-      if (!snapshotPoint(point, metric, company.cik, "quarter", anchor) || !point.period
+      if (!snapshotPoint(point, metric, company.cik, kind, anchor) || !point.period
           || point.period.fiscal_label_basis !== "unknown"
           || (point.status !== "available" && !point.reason)) return bad();
       const expected = operands[metric];
@@ -78,7 +90,7 @@ export function validateQuarterResponse(value: unknown, company: Company, select
         if (!input.period || input.unit !== "USD" || !input.fact_ids.length || !input.fact_ids.every(id => id > 0)
             || new Set(input.fact_ids).size !== input.fact_ids.length) return bad();
         const p = input.period, prior = metric === "revenue_growth_yoy" && input.role === "prior";
-        if (p.kind !== "quarter" || p.fiscal_year !== null || p.fiscal_period !== null || p.fiscal_label_basis !== "unknown" || !p.start) return bad();
+        if (p.kind !== kind || p.fiscal_year !== null || p.fiscal_period !== null || p.fiscal_label_basis !== "unknown" || !p.start) return bad();
         if (prior) {
           const starts = (Date.parse(anchor.start) - Date.parse(p.start)) / 86400000;
           const ends = (Date.parse(anchor.end) - Date.parse(p.end)) / 86400000;
@@ -102,5 +114,5 @@ export function validateQuarterResponse(value: unknown, company: Company, select
       }
     }
   }
-  return value as QuarterComparison;
+  return columns as QuarterComparison["columns"];
 }

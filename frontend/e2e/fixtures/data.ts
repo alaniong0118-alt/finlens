@@ -1,4 +1,4 @@
-import type { AnnualFinancialComparison, Citation, Company, CompanyContext, CompanyFreshness, FilingContext, FilingSource, FinancialPeriod, FinancialSummary, MetricHistory, NormalizedMetric, PeriodKind, ResearchAnswer } from '../../lib/finlens-api';
+import type { AnnualFinancialComparison, Citation, Company, CompanyContext, CompanyFreshness, FilingContext, FilingSource, FinancialPeriod, FinancialSummary, MetricHistory, NormalizedMetric, PeriodKind, ResearchAnswer, StoredFinancialCoverage } from '../../lib/finlens-api';
 
 // Test-only issuers and fixed observations. Never imported by application code.
 export const companies: Company[] = [
@@ -145,6 +145,39 @@ export function comparisonAnnual(ticker: string, year: number | null): AnnualFin
 export function comparisonFreshness(ticker: string, version: number): CompanyFreshness {
   comparisonCompany(ticker);
   return { ...freshness('AAA', version), ticker, latest_indexed_filing: null, scope: 'Synthetic annual comparison publication only.' };
+}
+
+// Coverage is explicit-action-only. Literal test observations reuse the reviewed
+// quarter fixture's complete FCF operands; annual dates are fixed fixture dates,
+// not derived quarters, discovered filings or a separate financial calculator.
+export function storedCoverage(ticker: string, kind: 'annual' | 'quarter', pin: number): StoredFinancialCoverage {
+  if (!['annual', 'quarter'].includes(kind) || !Number.isSafeInteger(pin) || pin < 0 || Object.is(pin, -0))
+    throw new Error('Invalid synthetic coverage scope');
+  const keys = reportedQuarterWindows.map(window => `${window.start},${window.end}`);
+  const columns = quarterWindows(ticker, kind === 'annual' ? keys.slice(0, 2) : keys).columns;
+  for (const [index, column] of columns.entries()) {
+    if (kind === 'annual') column.window = { start: index ? '2025-02-05' : '2025-01-01', end: '2025-12-31' };
+    for (const point of Object.values(column.metrics)) {
+      point.period = { kind, ...column.window, fiscal_year: null, fiscal_period: null, fiscal_label_basis: 'unknown' };
+      for (const input of point.inputs) input.period = { ...point.period };
+      for (const source of [...point.provenance, ...point.alternatives]) {
+        Object.assign(source, { canonical_metric: point.inputs.find(input => input.fact_ids.includes(source.fact_id))?.metric ?? point.metric });
+        source.period_start = column.window.start; source.period_end = column.window.end;
+        source.form = kind === 'annual' ? '10-K' : '10-Q';
+      }
+    }
+    const revenue = column.metrics.revenue;
+    revenue.alternatives = [{ ...revenue.provenance[0], fact_id: revenue.provenance[0].fact_id + 5000,
+      original_concept: 'Synthetic_CoverageAlternative', value: '123.45' }];
+  }
+  const source_reference_count = columns.reduce((count, column) => count + Object.values(column.metrics)
+    .reduce((sum, point) => sum + point.provenance.length + point.alternatives.length
+      + point.inputs.reduce((n, input) => n + input.fact_ids.length, 0), 0), 0);
+  const issuer = company(ticker);
+  return { ticker, company_name: issuer.name, company_cik: issuer.cik, requested_period: kind,
+    coverage_scope: 'stored_reported_windows', selection_policy: 'Synthetic stored windows; no source completeness claim.',
+    data_version: pin, facts_version: pin, evidence_version: pin, window_count: columns.length,
+    cell_count: columns.length * 11, source_reference_count, columns };
 }
 
 export function freshness(ticker: string, version: number): CompanyFreshness {

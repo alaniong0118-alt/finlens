@@ -747,6 +747,13 @@ export type QuarterComparison = {
   selection_policy: string; available_windows: ReportedWindow[];
   columns: { window: ReportedWindow; metrics: Record<string, NormalizedMetric> }[];
 };
+export type StoredFinancialCoverage = {
+  ticker: string; company_name: string; company_cik: string;
+  requested_period: "annual" | "quarter"; coverage_scope: "stored_reported_windows";
+  selection_policy: string; data_version: number; facts_version: number; evidence_version: number;
+  window_count: number; cell_count: number; source_reference_count: number;
+  columns: QuarterComparison["columns"];
+};
 export type MetricHistory = {
   ticker: string; company_cik: string; metric: string; unit: string; requested_period: PeriodKind;
   status: NormalizedMetric["status"]; reason: string | null; history: NormalizedMetric[];
@@ -817,6 +824,9 @@ export function getQuarterFinancials(ticker: string, windows: ReportedWindow[], 
   for (const window of windows) query.append("period", `${window.start},${window.end}`);
   const suffix = query.size ? `?${query}` : "";
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/quarters${suffix}`, { signal }, true);
+}
+export function getStoredCoverage(ticker: string, period: "annual" | "quarter", signal: AbortSignal): Promise<StoredFinancialCoverage> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/coverage?period=${period}`, { signal }, true);
 }
 export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });

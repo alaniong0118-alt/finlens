@@ -12,6 +12,7 @@ import CompanyComparison from "@/components/company-comparison";
 import SecRiskComparison from "@/components/sec-risk-comparison";
 import AnnualPeriodComparison from "@/components/annual-period-comparison";
 import QuarterWindowComparison from "@/components/quarter-window-comparison";
+import FinancialCoverage from "@/components/financial-coverage";
 
 export default function Home() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -84,6 +85,7 @@ export default function Home() {
         <FinancialInsights company={company} />
         <AnnualPeriodComparison company={company} />
         <QuarterWindowComparison company={company} />
+        <FinancialCoverage company={company} />
         <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} /></div>
       </ResearchFreshness>}
       <CompanyComparison companies={companies} />

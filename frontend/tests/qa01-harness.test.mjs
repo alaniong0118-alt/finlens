@@ -30,6 +30,7 @@ const data = load('e2e/fixtures/data.ts');
 const api = load('lib/finlens-api.ts');
 const contract = load('lib/company-comparison.ts');
 const quarterContract = load('lib/quarter-window-comparison.ts');
+const coverageContract = load('lib/financial-coverage.ts');
 const presentation = load('lib/research.ts');
 const { installIgnoredAbort } = load('e2e/fixtures/ignored-abort.ts');
 const insights = load('lib/financial-insights.ts');
@@ -766,4 +767,87 @@ test('QA-01 installed HTTP/WebSocket routes preserve fail-closed boundaries with
     websocket({ url: () => url, connectToServer() { connected++; }, close() { closed++; } });
   }
   assert.equal(connected, 1); assert.equal(closed, 2);
+});
+
+function coverageRequest(ticker = 'AAA', pin = '0', period = 'annual', changes = {}) {
+  return { method: 'GET', path: `/companies/${ticker}/financials/coverage`, ticker, pin,
+    query: new URLSearchParams({ period }), body: null, request: { postData: () => null }, ...changes };
+}
+test('QA-01 stored coverage fixtures pass actual annual/quarter lineage and count validation including zero', () => {
+  for (const [ticker, pin] of [['AAA', 0], ['BBB', 1]]) for (const kind of ['annual', 'quarter']) {
+    const body = data.storedCoverage(ticker, kind, pin);
+    assert.equal(coverageContract.validateCoverage(body, data.company(ticker), kind, pin), body);
+    assert.equal(body.columns.length, kind === 'annual' ? 2 : 4);
+    assert.equal(body.cell_count, body.columns.length * 11);
+    for (const column of body.columns) {
+      assert.equal(column.metrics.free_cash_flow.status, 'available');
+      assert.equal(column.metrics.free_cash_flow.inputs.length, 2);
+      assert.equal(column.metrics.revenue_growth_yoy.status, 'unavailable');
+      assert.equal(column.metrics.gross_margin.status, 'not_applicable');
+      assert.equal(column.metrics.revenue.alternatives.length, 1);
+    }
+  }
+});
+test('QA-01 coverage request guard admits one exact period and rejects bodies, duplicates and invented pins', () => {
+  const scenario = new Scenario({}, {});
+  for (const kind of ['annual', 'quarter']) scenario.validateRequest(coverageRequest('AAA', '0', kind));
+  for (const changes of [{ method: 'POST' }, { body: {} }, { request: { postData: () => 'null' } },
+    { request: { postData: () => '' } }, { query: new URLSearchParams() },
+    { query: new URLSearchParams('period=annual&period=annual') }, { query: new URLSearchParams('period=annual&extra=1') },
+    { query: new URLSearchParams('period=instant') }, { path: '/companies/BBB/financials/coverage' },
+    { pin: '00' }, { pin: '-0' }, { pin: '1' }, { pin: undefined }, { pin: '9007199254740992' }])
+    assert.throws(() => scenario.validateRequest(coverageRequest('AAA', '0', 'annual', changes)));
+  const obsolete = coverageRequest('BBB', '0'); scenario.validateRequest(obsolete);
+  assert.deepEqual(scenario.defaultReply(obsolete), { status: 409, code: 'DATA_VERSION_CHANGED', version: '1' });
+});
+test('QA-01 actual installed coverage route validates before overrides and preserves unknown-route denial', async () => {
+  let intercept;
+  const context = { on() {}, async routeWebSocket() {}, async route(pattern, callback) { intercept = callback; } };
+  const scenario = new Scenario(context, { on() {} }); await scenario.install();
+  let overrides = 0; scenario.overrides.push(() => { overrides++; return undefined; });
+  async function deliver(query, raw = null) {
+    const result = {}, request = { url: () => `http://127.0.0.1:3107/api/finlens/companies/AAA/financials/coverage${query}`,
+      method: () => 'GET', headers: () => ({ 'x-finlens-data-version': '0' }), postData: () => raw,
+      postDataJSON: () => raw === null ? null : JSON.parse(raw) };
+    await intercept({ request: () => request, async fulfill(reply) { result.reply = reply; }, async abort(reason) { result.abort = reason; } });
+    return result;
+  }
+  for (const kind of ['annual', 'quarter']) {
+    const result = await deliver(`?period=${kind}`);
+    assert.equal(result.reply.headers['X-FinLens-Data-Version'], '0');
+    coverageContract.validateCoverage(JSON.parse(result.reply.body), data.company('AAA'), kind, 0);
+  }
+  assert.equal(overrides, 2);
+  for (const query of ['', '?period=annual&period=annual', '?period=instant', '?period=quarter&fetch=true'])
+    assert.equal((await deliver(query)).abort, 'blockedbyclient');
+  assert.equal((await deliver('?period=annual', 'null')).abort, 'blockedbyclient');
+  assert.equal(overrides, 2, 'Invalid coverage requests must not reach overrides');
+  assert.equal(scenario.violations.length, 5);
+});
+test('QA-01 coverage native cancellation must bind the real routed object; no new replay exception', () => {
+  const { AnnualLifecycle } = load('e2e/fixtures/annual-period-lifecycle.ts');
+  const errors = [], recorder = new AnnualLifecycle(message => errors.push(message));
+  const request = { url: () => 'http://127.0.0.1:3107/api/finlens/companies/AAA/financials/coverage?period=annual',
+    method: () => 'GET', headers: () => ({ 'x-finlens-data-version': '0' }), postData: () => null,
+    failure: () => ({ errorText: 'net::ERR_ABORTED' }) };
+  recorder.started(request); recorder.failed(request);
+  const signature = JSON.stringify(['GET', '/companies/AAA/financials/coverage', 'period=annual', '0', null]);
+  assert.deepEqual(recorder.snapshot([], [signature]).rejectedUnbound, [1]);
+  const routed = { ...coverageRequest(), request };
+  const result = recorder.snapshot([routed], []);
+  assert.deepEqual(result.bindingErrors, []); assert.deepEqual(result.rejectedUnbound, []);
+  assert.equal(result.rows[0].state, 'cancelled'); assert.equal(result.rows[0].response, null);
+  assert.deepEqual(errors, []);
+});
+test('QA-01 coverage reuses the exact accepted focus geometry oracle and both projects select its case', () => {
+  function geometry(file) {
+    const source = ts.createSourceFile(file, readFileSync(resolve(frontend, file), 'utf8'), ts.ScriptTarget.Latest, true);
+    const node = source.statements.find(item => ts.isFunctionDeclaration(item) && item.name?.text === 'focusGeometry');
+    assert.ok(node); return node.getText(source);
+  }
+  assert.equal(geometry('e2e/financial-coverage.spec.ts'), geometry('e2e/quarter-window-comparison.spec.ts'));
+  const config = load('playwright.config.ts').default;
+  assert.equal(config.projects[0].use.viewport.width, 1440);
+  assert.equal(config.projects[1].use.viewport.width, 390);
+  assert.ok(config.projects[1].testMatch.includes('**/financial-coverage.spec.ts'));
 });

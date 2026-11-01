@@ -27,6 +27,7 @@ from app.database import HttpSessionLocal, InsightsSessionLocal, database_failur
 from app.financial_insights_contract import Budget, InsightsFailure, budget_scope, current_budget
 from app.financial_insights_service import build_insights, registry_guard
 from app.quarter_window_comparison import build_quarter_comparison, parse_quarter_request
+from app.financial_coverage import build_coverage, parse_coverage_request
 from app.activation_lifecycle import _financial_read
 from app.embedding_service import EncoderDependencyError
 from app.financial_analysis import (
@@ -121,16 +122,16 @@ class VersionedRoute(APIRoute):
                     response = await request_validation_exception_handler(request, exc)
                 except Exception as exc:
                     if isinstance(exc, InsightsFailure):
-                        response = quarter_error(exc) if self.path == "/companies/{ticker}/financials/quarters" else insights_error(exc)
+                        response = bounded_financial_error(self.path, exc)
                         failure = None
                     else:
                         response = None
                     failure = database_failure(exc)
-                    if self.path in {"/companies/{ticker}/financials/insights", "/companies/{ticker}/financials/quarters"} and response is None:
+                    if self.path in {"/companies/{ticker}/financials/insights", "/companies/{ticker}/financials/quarters", "/companies/{ticker}/financials/coverage"} and response is None:
                         if failure and failure[1] == "DATABASE_TIMEOUT":
-                            response = insights_error(InsightsFailure("INSIGHTS_DEADLINE_EXCEEDED"))
+                            response = bounded_financial_error(self.path, InsightsFailure("INSIGHTS_DEADLINE_EXCEEDED"))
                         elif failure is None:
-                            response = insights_error(InsightsFailure())
+                            response = bounded_financial_error(self.path, InsightsFailure())
                     if isinstance(exc, EncoderDependencyError):
                         failure = (503, "RETRIEVAL_UNAVAILABLE",
                                    "Filing evidence search is unavailable. Try again later.")
@@ -151,7 +152,7 @@ class VersionedRoute(APIRoute):
 
         @latency.route
         async def handle(request):
-            if self.path not in {"/companies/{ticker}/financials/insights", "/companies/{ticker}/financials/quarters"}:
+            if self.path not in {"/companies/{ticker}/financials/insights", "/companies/{ticker}/financials/quarters", "/companies/{ticker}/financials/coverage"}:
                 return await versioned(request)
             budget = Budget()
             try:
@@ -163,9 +164,9 @@ class VersionedRoute(APIRoute):
                         budget.deadline()
                 return response
             except InsightsFailure as exc:
-                return quarter_error(exc) if self.path == "/companies/{ticker}/financials/quarters" else insights_error(exc)
+                return bounded_financial_error(self.path, exc)
             except Exception:
-                return insights_error(InsightsFailure())
+                return bounded_financial_error(self.path, InsightsFailure())
         return handle
 
 
@@ -179,6 +180,22 @@ def quarter_error(error):
         return JSONResponse({"detail": "Quarter comparison is unavailable for the current source-authorization configuration."},
             status_code=error.status, headers={"X-FinLens-Error-Code": error.code, "Cache-Control": "no-store"})
     return insights_error(error)
+
+
+def coverage_error(error):
+    detail = {
+        "INSIGHTS_CONFIGURATION_UNSUPPORTED": "Stored coverage is unavailable for the current source-authorization configuration.",
+        "INSIGHTS_RESOURCE_LIMIT": "Stored coverage exceeds the supported limits. No partial map is shown.",
+        "INSIGHTS_DEADLINE_EXCEEDED": "Stored coverage could not complete in time. Please retry explicitly.",
+    }.get(error.code, "Stored financial coverage could not be verified.")
+    return JSONResponse({"detail": detail}, status_code=error.status,
+        headers={"X-FinLens-Error-Code": error.code, "Cache-Control": "no-store"})
+
+
+def bounded_financial_error(path, error):
+    if path == "/companies/{ticker}/financials/coverage":
+        return coverage_error(error)
+    return quarter_error(error) if path == "/companies/{ticker}/financials/quarters" else insights_error(error)
 
 
 class PublishedInsightsResponse(Response):
@@ -357,6 +374,22 @@ def reported_quarter_comparison(ticker: str, request: Request):
     registry_guard(configuration)
     budget.deadline()
     return PublishedInsightsResponse(body, budget, configuration, quarter_error)
+
+
+@app.get("/companies/{ticker}/financials/coverage")
+def stored_financial_coverage(ticker: str, request: Request):
+    pin, kind = parse_coverage_request(request)
+    budget = current_budget.get()
+    if budget is None:
+        raise InsightsFailure()
+    with read_session(InsightsSessionLocal) as session:
+        try:
+            body, configuration = build_coverage(session, ticker.upper(), pin, kind, budget)
+        except UnknownCompany:
+            raise HTTPException(404, detail="Unknown company.")
+    registry_guard(configuration)
+    budget.deadline()
+    return PublishedInsightsResponse(body, budget, configuration, coverage_error)
 
 
 @app.get("/companies/{ticker}/financials/insights")

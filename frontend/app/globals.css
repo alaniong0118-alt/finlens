@@ -196,4 +196,9 @@ footer { margin:32px 0 5px; border-top:1px solid var(--border); padding-top:18px
 .quarter-comparison .provenance a:focus-visible { outline-offset:-6px; }
 .quarter-comparison .provenance summary,
 .quarter-comparison .provenance a { padding-inline:8px; }
+.financial-coverage .comparison-scroll:focus-visible,
+.financial-coverage .provenance summary:focus-visible,
+.financial-coverage .provenance a:focus-visible { outline-offset:-6px; }
+.financial-coverage .provenance summary,
+.financial-coverage .provenance a { padding-inline:8px; }
 @media (max-width:767px) { .comparison-controls { grid-template-columns:minmax(0,1fr); } .comparison-actions label { width:100%; } .comparison-table th,.comparison-table td { padding:12px; } }

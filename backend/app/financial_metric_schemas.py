@@ -148,6 +148,32 @@ class ReportedQuarterComparison(BaseModel):
     columns: list[ReportedQuarterColumn]
 
 
+class StoredCoverageWindow(BaseModel):
+    start: date
+    end: date
+
+
+class StoredCoverageColumn(BaseModel):
+    window: StoredCoverageWindow
+    metrics: dict[str, NormalizedMetric]
+
+
+class StoredFinancialCoverage(BaseModel):
+    ticker: str
+    company_name: str
+    company_cik: str
+    requested_period: Literal["annual", "quarter"]
+    coverage_scope: Literal["stored_reported_windows"] = "stored_reported_windows"
+    selection_policy: str
+    data_version: int = Field(ge=0, le=9007199254740991, strict=True)
+    facts_version: int = Field(ge=0, le=9007199254740991, strict=True)
+    evidence_version: int = Field(ge=0, le=9007199254740991, strict=True)
+    window_count: int = Field(ge=0, le=64, strict=True)
+    cell_count: int = Field(ge=0, le=704, strict=True)
+    source_reference_count: int = Field(ge=0, le=4096, strict=True)
+    columns: list[StoredCoverageColumn] = Field(max_length=64)
+
+
 class FiscalPeriodRequest(BaseModel):
     fiscal_year: int = Field(ge=1900, le=2099)
     quarter: int | None = Field(default=None, ge=1, le=4)
