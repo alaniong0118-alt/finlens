@@ -66,7 +66,7 @@ function coverage(kind = 'annual', issuer = company, pin = 0) {
     coverage_scope: 'stored_reported_windows', selection_policy: 'Synthetic stored coverage', data_version: pin, facts_version: pin,
     evidence_version: pin, window_count: 2, cell_count: 22, source_reference_count: 2, columns };
 }
-async function mount(ctx, initial = 0) {
+async function mount(ctx, initial = 0, strict = false) {
   const requests = [], changed = ctx.mock.fn(); let issuer = company, version = initial;
   ctx.mock.method(globalThis,'fetch',(path,init) => {
     assert.match(String(path),/^\/api\/finlens\/companies\/(AAA|BBB)\/financials\/coverage\?period=(annual|quarter)(&end_from=\d{4}-\d{2}-\d{2}&end_to=\d{4}-\d{2}-\d{2})?$/);
@@ -74,7 +74,7 @@ async function mount(ctx, initial = 0) {
   });
   const host=document.createElement('div'); document.body.append(host); const root=createRoot(host);
   async function render(next={}) { if('company' in next)issuer=next.company; if('version' in next)version=next.version;
-    await act(async()=>root.render(React.createElement(Publication.Provider,{value:{version,changed}},React.createElement(Comparison,{company:issuer})))); }
+    const panel=React.createElement(Publication.Provider,{value:{version,changed}},React.createElement(Comparison,{company:issuer})); await act(async()=>root.render(strict?React.createElement(React.StrictMode,null,panel):panel)); }
   async function release(request,body,pin=0,status=200) { await act(async()=>request.resolve(new Response(JSON.stringify(body),{status,headers:{'X-FinLens-Data-Version':String(pin)}}))); }
   async function click(name) { const button=[...host.querySelectorAll('button')].find(b=>b.textContent===name); assert.ok(button,name); await act(async()=>button.click()); }
   async function period(value) { await act(async()=>{const select=host.querySelector('select');select.value=value;select.dispatchEvent(new Event('change',{bubbles:true}));}); }
@@ -320,3 +320,73 @@ test('new date controls retain scoped responsive sizing and 44px target styles',
   assert.match(css,/\.financial-coverage input\[type="date"\] \{[^}]*width:100%[^}]*max-width:100%[^}]*min-height:44px/);
   assert.match(css,/\.financial-coverage input\[type="date"\]:focus-visible \{ outline:3px solid var\(--accent\); outline-offset:-6px;/);
 });
+
+// Unlike release(), deliver headers now and hold the actual transport's JSON read.
+// Deliberately ignore abort so the test proves body completion, not only cancellation.
+async function coverageBody(ctx,app,request,conflict=false) {
+  let resolve,reject,started=0,settled=0;
+  const body=new Promise((yes,no)=>{resolve=yes;reject=no;});
+  const response=new Response(null,{status:conflict?409:200,headers:{
+    'X-FinLens-Data-Version':conflict?'1':'0',
+    ...(conflict?{'X-FinLens-Error-Code':'DATA_VERSION_CHANGED'}:{}),
+  }});
+  ctx.mock.method(response,'json',async()=>{started++;try{return await body;}finally{settled++;}});
+  await act(async()=>request.resolve(response));
+  assert.equal(started,1,'Headers must reach an actively pending JSON read before scope changes');
+  assert.equal(settled,0);
+  return async(outcome,payload)=>{
+    await act(async()=>{if(outcome==='body-error')reject(new Error('Obsolete body read failed'));else resolve(payload);});
+    assert.equal(settled,1,'The ignored-abort body must actually finish before checking isolation');
+  };
+}
+
+for(const strict of [false,true])for(const order of ['old-first','current-first'])
+for(const outcome of ['success','publication-conflict','body-error']) {
+  test(`coverage range A-B-A isolates started JSON ${outcome} ${order} strict ${strict}`,{timeout:5000},async ctx=>{
+    const app=await mount(ctx,0,strict);
+    await app.dates('2025-01-01','2025-12-31');
+    await app.click('Load stored coverage');const old=app.requests[0];
+    const finishOld=await coverageBody(ctx,app,old,outcome==='publication-conflict');
+    assert.equal(app.changed.mock.callCount(),0,'Headers alone must not invalidate publication zero');
+
+    await app.dates('2024-01-01','2024-12-31');
+    await app.dates('2025-01-01','2025-12-31');
+    assert.ok(old.init.signal.aborted);
+    assert.equal(app.requests.length,1,'Range changes never start replacement requests');
+    assert.equal(app.host.querySelector('tbody'),null);
+    await app.click('Load stored coverage');const current=app.requests[1];
+    assert.equal(current.path,old.path,'A-B-A intentionally restores identical URL scope');
+    assert.equal(current.init.headers['X-FinLens-Data-Version'],'0');
+    assert.notEqual(current.init.signal,old.init.signal);
+    assert.equal(current.init.signal.aborted,false);
+
+    const marked=marker=>{
+      const value=inRange(coverage(),'2025-01-01','2025-12-31');
+      for(const column of value.columns)column.metrics.gross_profit.reason=marker;
+      helper.validateCoverage(value,company,'annual',0,helper.coverageRange('2025-01-01','2025-12-31'));
+      return value;
+    };
+    const stale=outcome==='publication-conflict'?{detail:'Obsolete publication conflict'}:marked('Obsolete body marker');
+    const load=()=>[...app.host.querySelectorAll('button')].find(button=>button.textContent==='Load stored coverage');
+    const status=()=>app.host.querySelector('[role="status"]').textContent;
+    if(order==='old-first') {
+      await finishOld(outcome,stale);
+      assert.equal(status(),'Loading stored financial coverage…','Old catch/finally cannot clear successor loading');
+      assert.equal(load().disabled,true);
+      assert.equal(current.init.signal.aborted,false);
+      assert.equal(app.host.querySelector('tbody'),null);
+      await app.click('Load stored coverage');assert.equal(app.requests.length,2,'Successor keeps its duplicate-load guard');
+    }
+    await app.release(current,marked('Current body marker'));
+    const table=app.host.querySelector('table'),ready=status();assert.ok(table);
+    if(order==='current-first')await finishOld(outcome,stale);
+    assert.equal(app.host.querySelector('table'),table,'Old success/error cannot replace the current map');
+    assert.equal(status(),ready);
+    assert.match(app.host.textContent,/Current body marker/);
+    assert.doesNotMatch(app.host.textContent,/Obsolete body marker|Obsolete body read failed|Obsolete publication conflict|Published data changed/);
+    assert.match(app.host.textContent,/Publication version 0/);
+    assert.equal(app.changed.mock.callCount(),0,'An obsolete 409 must not invalidate the replacement publication');
+    assert.equal(load().disabled,false);
+    assert.equal(app.requests.length,2,'No automatic replay or capability/evidence fan-out');
+  });
+}
