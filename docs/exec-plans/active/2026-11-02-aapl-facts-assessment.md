@@ -1,6 +1,6 @@
 # Dormant canonical AAPL facts assessment
 
-Status: active — offline diagnostic repair awaiting independent review; no further live run in this task
+Status: active — native read-only assessment complete; closeout documentation awaiting review
 Roadmap phase: bounded freshness assessment preparation
 
 ## Objective
@@ -316,3 +316,72 @@ Actual offline verification, using the same guarded commands documented above:
 Freeze the same five repository files for one focused closure review. Preserve
 all earlier manifests, patches and failed native evidence; historical cause/counts
 remain unknown. No further native run precedes that review.
+
+## Verified native closeout (2026-11-02)
+
+This section supersedes the earlier pending-review/native-readiness statuses;
+their failed receipts and historical unknowns remain unchanged. Protocol 2 was
+independently reviewed and delivered at
+`2a866d704ceb64d8281d3cfcfaad5ec20408f7e9`. The following operations had separate
+user approval; none authorizes a non-dry-run refresh or account activation.
+
+### Bounded logical backup
+
+The exact archive `finlens-463d36230db2474c91560276473a0cd4.dump` is 9,966,019
+bytes, SHA-256
+`6394255352AA8E857E9A903B5FA89FC79763EADEAD61C527B05495C424ED3C34`.
+Retained native evidence established seven table count/length/hash equalities,
+including vector and publication data, plus extensions, revision and sequence
+names. Strict schema text initially differed; the original FAILED receipt was
+not rewritten. Subsequent bounded schema-only diagnostics and independent
+semantic review established equivalence of exactly three CHECK array-cast versus
+element-cast expressions. No global comparator or normalizer was weakened.
+The append-only supplemental logical-restore receipt is SHA-256
+`897C46F431279438410C457B693BD8F8D15F467DC9247226B028F154DA96CF48`.
+Sequence values/is_called, owners/ACLs/global roles, PITR and full writable
+recovery remain unverified. This is qualified logical evidence for this archive,
+not complete recovery acceptance.
+
+### One additive migration
+
+After independent review and fresh prerequisites, one bounded native transaction
+upgraded `f94c6f41e0cb` to `a7c730103001` in 8.632 seconds, with acknowledged
+commit. The three dormant ownership tables were empty; 18 columns, 13 constraints,
+7 indexes and 10 C-collated identifier columns passed checks. Six existing data
+tables retained equal counts/serialized lengths/hashes; existing schema and
+extensions were unchanged. Source container/volume identity, archive, historical
+evidence and five protected files were preserved; owned cleanup was confirmed.
+No account rows, authentication activation or permission changes were performed.
+The migration result receipt is SHA-256
+`465D7F2B85A61491C22F520BBEBB532FEAC5E845FDB9BD8B7799463EC3E9D87B`.
+
+### Canonical AAPL read-only assessment
+
+An external preflight refused before launching any assessment; its exact failing
+identity field remains unknown. A DateTime/string comparison defect was
+subsequently reproduced offline and repaired. The original failed receipt remains
+preserved. The external
+repair reused the previously reviewed UTC helper unchanged; 13 existing plus
+45 identity checks passed offline and independent review. Fresh five-field
+container/image/running/start/volume checks then passed before and after the run.
+
+The committed supervisor and worker ran once, under the approved child-only
+development context and existing local PostgreSQL read-only safeguards. Protocol
+2 reported `WORKER_COMPLETED`, last confirmed stage `assessment_completed`, exit
+0, no failure/cleanup classification and verified worker exit after 2,350 ms.
+For AAPL/CIK `0000320193`, the canonical facts dry-run returned `no_change`,
+`would_insert=0`, publication version `1 -> 1`, `facts_inserted=0` and
+`filings_published=0`. Actual `sec_http_attempts` remains null/uninstrumented;
+neither request count nor historical failure causes are inferred from timing.
+Assessment receipt SHA-256:
+`98DC5241BC436E149B4EF5BBF721A34827EEF0F5D75F4D2F2C99D0AF8C8D86A9`.
+Post-verification receipt SHA-256:
+`54A8C83BFD1C68BFFF328E2322079F57A6B737E7DF890991DAB7A7E86127C5EE`.
+These sanitized receipts remain outside the repository; no contact value or raw
+source/configuration body is copied here. The original PostgreSQL identity,
+Git baseline, empty index and five protected exceptions were unchanged.
+
+This closes the assessment diagnostic loop. No formal refresh, publication or
+freshness-metadata update occurred. It does not establish latest filing coverage,
+current freshness, full recovery, auth activation, full DEP acceptance or an
+externally accessible beta. No further native operation was performed afterward.
