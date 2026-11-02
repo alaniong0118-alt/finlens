@@ -13,6 +13,7 @@ import SecRiskComparison from "@/components/sec-risk-comparison";
 import AnnualPeriodComparison from "@/components/annual-period-comparison";
 import QuarterWindowComparison from "@/components/quarter-window-comparison";
 import FinancialCoverage from "@/components/financial-coverage";
+import BalanceDateComparison from "@/components/balance-date-comparison";
 
 export default function Home() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -83,11 +84,12 @@ export default function Home() {
       </div>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
       {!filingEnabled && <p role="status">{capabilities?.filing_research_enabled === false ? "Financial-only capability restriction is active." : "Filing research capabilities are not verified."} Stored financial research remains available. This does not verify runtime readiness or data completeness.</p>}
-      <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#quarter-window-title">Reported windows</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
+      <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#quarter-window-title">Reported windows</a><a href="#balance-date-title">Balance dates</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
         <FinancialInsights company={company} />
         <AnnualPeriodComparison company={company} />
         <QuarterWindowComparison company={company} />
+        <BalanceDateComparison company={company} />
         <FinancialCoverage company={company} />
         <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} filingResearchEnabled={filingEnabled} /></div>
       </ResearchFreshness>}
