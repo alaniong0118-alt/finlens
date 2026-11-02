@@ -525,13 +525,24 @@ HTTP_DB_ROUTES = sorted(READONLY_ROUTES - {("GET", "/healthz"), ("GET", "/capabi
 def test_every_http_database_path_uses_bounded_factory(monkeypatch, method, path, profile):
     monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile(profile))
     factory = Mock(side_effect=TimeoutError(SENSITIVE))
-    monkeypatch.setattr(main, "HttpSessionLocal", factory)
+    bounded = path in {"/companies/{ticker}/financials/insights",
+                       "/companies/{ticker}/financials/coverage",
+                       "/companies/{ticker}/financials/quarters"}
+    monkeypatch.setattr(main, "HttpSessionLocal", bomb if bounded else factory)
+    monkeypatch.setattr(main, "InsightsSessionLocal", factory if bounded else bomb)
     monkeypatch.setattr(embedding, "_get_model", bomb)
     monkeypatch.setattr(main, "answer_filing_question", bomb)
-    actual = path.replace("{ticker}", "TEST").replace("{accession_number}", "fixture").replace("{metric}", "revenue")
+    accession = "0000000001-25-000001" if path.endswith("/tone") else "fixture"
+    actual = path.replace("{ticker}", "TEST").replace("{accession_number}", accession).replace("{metric}", "revenue").replace("{chunk_id}", "chunk_0000")
+    assert "{" not in actual and "}" not in actual
     if path.endswith("/financials/insights"):
-        monkeypatch.setattr(main, "InsightsSessionLocal", factory)
         response = TestClient(main.app).request(method, actual, params={"mode": "discover"},
+            headers={"X-FinLens-Data-Version": "0"})
+    elif path.endswith("/financials/coverage"):
+        response = TestClient(main.app).request(method, actual, params={"period": "quarter"},
+            headers={"X-FinLens-Data-Version": "0"})
+    elif path.endswith(("/financials/quarters", "/tone")):
+        response = TestClient(main.app).request(method, actual,
             headers={"X-FinLens-Data-Version": "0"})
     else:
         response = TestClient(main.app).request(method, actual, params={"q": "revenue"}, json={"question": "revenue"})
@@ -576,10 +587,13 @@ def install_encoder(monkeypatch, tmp_path, profile, constructor):
 
 @pytest.mark.parametrize("failure", [TypeError(SENSITIVE), AttributeError(SENSITIVE), AssertionError(SENSITIVE), ValueError(SENSITIVE)])
 def test_encoder_programming_errors_are_not_outages(monkeypatch, tmp_path, failure):
-    install_encoder(monkeypatch, tmp_path, "sec_readonly", Mock(side_effect=failure))
+    constructor = Mock(side_effect=failure)
+    install_encoder(monkeypatch, tmp_path, "sec_readonly", constructor)
     with pytest.raises(type(failure)) as exc:
         embedding.embed_texts(["query"])
     assert not isinstance(exc.value, embedding.EncoderDependencyError)
+    assert exc.value is failure
+    constructor.assert_called_once_with(str(tmp_path), local_files_only=True)
 
 
 @pytest.mark.parametrize("cache", [None, object(), "missing-cache/modules.json"])

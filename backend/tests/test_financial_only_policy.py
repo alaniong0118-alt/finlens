@@ -154,8 +154,9 @@ def test_restricted_quarter_still_requires_a_pin_before_session():
     assert TestClient(main.app).get("/companies/TEST/financials/quarters").status_code == 422
 
 
-def test_restricted_real_coverage_keeps_zero_pin_and_readonly_transaction(monkeypatch):
-    coverage_policy.test_sec_readonly_real_route_keeps_zero_pin_engine_and_readonly_transaction(monkeypatch)
+@pytest.mark.parametrize("pin", [0, 7])
+def test_restricted_real_coverage_keeps_pin_and_readonly_transaction(monkeypatch, pin):
+    coverage_policy.test_sec_readonly_real_route_keeps_zero_pin_engine_and_readonly_transaction(monkeypatch, pin)
 
 
 @pytest.mark.parametrize("owner,name", [("revenue_scope_authorizations", "REVENUE_SELECTION_AUTHORIZATIONS"),
