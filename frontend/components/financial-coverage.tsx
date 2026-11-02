@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { describeApiError, FinLensApiError, getStoredCoverage, versionedController, type Company, type StoredFinancialCoverage } from "@/lib/finlens-api";
+import { describeApiError, FinLensApiError, getStoredCoverage, versionedController, type Company, type CoverageEndDateRange, type StoredFinancialCoverage } from "@/lib/finlens-api";
 import { COMPARISON_METRICS } from "@/lib/company-comparison";
-import { validateCoverage } from "@/lib/financial-coverage";
+import { coverageRange, validateCoverage } from "@/lib/financial-coverage";
 import { formatDate, METRIC_LABELS } from "@/lib/research";
 import { MetricProvenance, revealHistorySourceFocus } from "@/components/financial-research";
 import { useResearchVersion } from "@/components/research-freshness";
@@ -10,6 +10,9 @@ import { useResearchVersion } from "@/components/research-freshness";
 export default function FinancialCoverage({ company }: { company: Company }) {
   const { version, changed } = useResearchVersion();
   const [kind, setKind] = useState<"annual" | "quarter">("annual");
+  const [from, setFrom] = useState(""), [to, setTo] = useState("");
+  let range: CoverageEndDateRange | null = null, rangeError = "";
+  try { range = coverageRange(from, to); } catch (error) { rangeError = (error as Error).message; }
   const verified = version !== null && Number.isSafeInteger(version) && version >= 0 && !Object.is(version, -0);
   return <section className="panel company-comparison financial-coverage" aria-labelledby="coverage-title">
     <div className="section-heading"><div><p className="eyebrow">Stored evidence</p><h2 id="coverage-title">Financial coverage map</h2></div>
@@ -18,12 +21,17 @@ export default function FinancialCoverage({ company }: { company: Company }) {
     <p className="small muted">Inspect existing reported windows before comparing. Missing compatible values do not establish missing filings or complete SEC coverage. No acquisition starts here.</p>
     <label>Coverage period type <select value={kind} onChange={event => setKind(event.target.value as "annual" | "quarter")}>
       <option value="annual">Annual durations</option><option value="quarter">Reported quarter durations</option></select></label>
-    {verified ? <CoverageSession key={`${company.ticker}:${company.cik}:${version}:${kind}`} company={company} kind={kind} version={version!} changed={changed} />
-      : <><button type="button" className="secondary-button" disabled>Load stored coverage</button><p role="status">Waiting for a verified company publication.</p></>}
+    <fieldset><legend>Reported period end dates (inclusive)</legend>
+      <p className="small muted">Leave both dates blank for all stored windows, or enter both to inspect a bounded range. Existing resource limits still apply.</p>
+      <div className="comparison-actions"><label>Period end from <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
+        <label>Period end to <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label></div>
+    </fieldset>
+    {verified && !rangeError ? <CoverageSession key={`${company.ticker}:${company.cik}:${version}:${kind}:${from}:${to}`} company={company} kind={kind} version={version!} range={range} changed={changed} />
+      : <><button type="button" className="secondary-button" disabled>Load stored coverage</button><p role="status">{rangeError || "Waiting for a verified company publication."}</p></>}
   </section>;
 }
 
-function CoverageSession({ company, kind, version, changed }: { company: Company; kind: "annual" | "quarter"; version: number; changed: () => void }) {
+function CoverageSession({ company, kind, version, range, changed }: { company: Company; kind: "annual" | "quarter"; version: number; range: CoverageEndDateRange | null; changed: () => void }) {
   const [data, setData] = useState<StoredFinancialCoverage | null>(null), [busy, setBusy] = useState(false), [invalid, setInvalid] = useState(false);
   const [message, setMessage] = useState("Choose Load stored coverage to inspect this publication. Nothing is fetched automatically.");
   const alive = useRef(false), operation = useRef<AbortController | null>(null), changedRef = useRef(changed);
@@ -43,9 +51,9 @@ function CoverageSession({ company, kind, version, changed }: { company: Company
     operation.current = controller; setData(null); setBusy(true); setMessage("Loading stored financial coverage…");
     const current = () => alive.current && operation.current === controller && !controller.signal.aborted;
     try {
-      const response = await getStoredCoverage(company.ticker, kind, controller.signal);
+      const response = await getStoredCoverage(company.ticker, kind, controller.signal, range);
       if (!current()) return;
-      const result = validateCoverage(response, company, kind, version);
+      const result = validateCoverage(response, company, kind, version, range);
       setData(result); setMessage(result.window_count ? `Coverage ready: ${result.window_count} stored windows, ${result.cell_count} metric cells.`
         : "No supported stored windows were found for this metric set. This does not establish absence of filings.");
     } catch (error) {
@@ -54,6 +62,7 @@ function CoverageSession({ company, kind, version, changed }: { company: Company
   }
   return <>
     <p className="small muted">Publication version {version} · {kind === "annual" ? "Annual" : "Reported quarter"} durations · Existing stored observations only</p>
+    <p className="small muted">{range ? `Reported period ends ${range.from_date} through ${range.to_date}, inclusive. Complete within this selected scope only; not complete historical coverage.` : "All supported stored period ends requested; no date filter or silent truncation."}</p>
     <div className="comparison-actions"><button type="button" className="primary-button" disabled={busy || invalid} onClick={load}>Load stored coverage</button>
       <button type="button" className="secondary-button" disabled={invalid} onClick={cancel}>{busy ? "Cancel coverage request" : "Clear coverage"}</button></div>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
@@ -61,7 +70,7 @@ function CoverageSession({ company, kind, version, changed }: { company: Company
       {data.columns.length > 0 && <>
         <p id="coverage-scroll-help" className="small muted">Scroll horizontally to inspect all metrics. Keyboard users can focus the table region and use arrow keys. Open a cell’s details for its original reason and source evidence.</p>
         <div className="table-scroll comparison-scroll" tabIndex={0} role="region" aria-label="Stored financial coverage matrix" aria-describedby="coverage-scroll-help" onFocus={revealHistorySourceFocus}>
-          <table className="comparison-table"><caption>{company.ticker} · {kind} stored coverage · Publication {version}</caption>
+          <table className="comparison-table"><caption>{company.ticker} · {kind} stored coverage · Publication {version}{data.end_date_range ? ` · Period ends ${data.end_date_range.from_date} through ${data.end_date_range.to_date} (inclusive)` : ""}</caption>
             <thead><tr><th scope="col">Actual reported dates</th>{COMPARISON_METRICS.map(metric => <th scope="col" key={metric}>{METRIC_LABELS[metric]}</th>)}</tr></thead>
             <tbody>{data.columns.map(column => {
               const dates = `${formatDate(column.window.start)} – ${formatDate(column.window.end)}`;

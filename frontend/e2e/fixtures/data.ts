@@ -1,4 +1,4 @@
-import type { AnnualFinancialComparison, Citation, Company, CompanyContext, CompanyFreshness, FilingContext, FilingSource, FinancialPeriod, FinancialSummary, MetricHistory, NormalizedMetric, PeriodKind, ResearchAnswer, StoredFinancialCoverage } from '../../lib/finlens-api';
+import type { AnnualFinancialComparison, Citation, Company, CompanyContext, CompanyFreshness, CoverageEndDateRange, FilingContext, FilingSource, FinancialPeriod, FinancialSummary, MetricHistory, NormalizedMetric, PeriodKind, ResearchAnswer, StoredFinancialCoverage } from '../../lib/finlens-api';
 
 // Test-only issuers and fixed observations. Never imported by application code.
 export const companies: Company[] = [
@@ -150,7 +150,24 @@ export function comparisonFreshness(ticker: string, version: number): CompanyFre
 // Coverage is explicit-action-only. Literal test observations reuse the reviewed
 // quarter fixture's complete FCF operands; annual dates are fixed fixture dates,
 // not derived quarters, discovered filings or a separate financial calculator.
-export function storedCoverage(ticker: string, kind: 'annual' | 'quarter', pin: number): StoredFinancialCoverage {
+export function coverageEndDates(query: URLSearchParams): CoverageEndDateRange | null {
+  const keys = [...query.keys()].sort().join(',');
+  if (new TextEncoder().encode(query.toString()).length > 64 || !['annual', 'quarter'].includes(query.get('period')!))
+    throw new Error('Invalid synthetic coverage query');
+  if (keys === 'period') return null;
+  if (keys !== 'end_from,end_to,period') throw new Error('Invalid synthetic coverage range keys');
+  const from = query.get('end_from')!, to = query.get('end_to')!;
+  for (const value of [from, to]) {
+    const time = Date.parse(`${value}T00:00:00Z`);
+    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) || value.startsWith('0000-')
+        || !Number.isFinite(time) || new Date(time).toISOString().slice(0, 10) !== value)
+      throw new Error('Invalid synthetic coverage end date');
+  }
+  if (from > to) throw new Error('Reversed synthetic coverage range');
+  return { from_date: from, to_date: to };
+}
+
+export function storedCoverage(ticker: string, kind: 'annual' | 'quarter', pin: number, range: CoverageEndDateRange | null = null): StoredFinancialCoverage {
   if (!['annual', 'quarter'].includes(kind) || !Number.isSafeInteger(pin) || pin < 0 || Object.is(pin, -0))
     throw new Error('Invalid synthetic coverage scope');
   const keys = reportedQuarterWindows.map(window => `${window.start},${window.end}`);
@@ -170,14 +187,15 @@ export function storedCoverage(ticker: string, kind: 'annual' | 'quarter', pin: 
     revenue.alternatives = [{ ...revenue.provenance[0], fact_id: revenue.provenance[0].fact_id + 5000,
       original_concept: 'Synthetic_CoverageAlternative', value: '123.45' }];
   }
-  const source_reference_count = columns.reduce((count, column) => count + Object.values(column.metrics)
+  const selected = range ? columns.filter(column => column.window.end >= range.from_date && column.window.end <= range.to_date) : columns;
+  const source_reference_count = selected.reduce((count, column) => count + Object.values(column.metrics)
     .reduce((sum, point) => sum + point.provenance.length + point.alternatives.length
       + point.inputs.reduce((n, input) => n + input.fact_ids.length, 0), 0), 0);
   const issuer = company(ticker);
   return { ticker, company_name: issuer.name, company_cik: issuer.cik, requested_period: kind,
     coverage_scope: 'stored_reported_windows', selection_policy: 'Synthetic stored windows; no source completeness claim.',
-    data_version: pin, facts_version: pin, evidence_version: pin, window_count: columns.length,
-    cell_count: columns.length * 11, source_reference_count, columns };
+    data_version: pin, facts_version: pin, evidence_version: pin, end_date_range: range, window_count: selected.length,
+    cell_count: selected.length * 11, source_reference_count, columns: selected };
 }
 
 export function freshness(ticker: string, version: number): CompanyFreshness {

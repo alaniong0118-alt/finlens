@@ -34,20 +34,22 @@ def test_exact_coverage_get_policy_does_not_admit_other_methods_or_reader():
     assert READER_ROUTES == frozenset({("GET", "/healthz"), ("GET", "/capabilities")})
 
 
-def test_sec_readonly_real_route_keeps_zero_pin_engine_and_readonly_transaction(monkeypatch):
+@pytest.mark.parametrize("pin", [0, 7])
+def test_sec_readonly_real_route_keeps_zero_pin_engine_and_readonly_transaction(monkeypatch, pin):
     rows = [source(date(2025, 1, 1), 90)]
     session, _ = session_for(rows)
-    company = dict(vars(COMPANY), data_version=0, facts_version=0, evidence_version=0)
+    company = dict(vars(COMPANY), data_version=pin, facts_version=pin, evidence_version=pin)
     session.execute.side_effect = [Mock(), Rows([company]),
         Rows([{"count": 1, "bytes": row_stats(rows[0]), "invalid": 0}]), Rows([vars(rows[0])])]
     session.get_bind.return_value.dialect.name = "postgresql"
-    session.scalar.return_value = 0
+    session.scalar.return_value = pin
     monkeypatch.setattr(main, "InsightsSessionLocal", lambda: session)
     monkeypatch.setattr(freshness_service, "schema_ready", lambda _: True)
-    response = TestClient(main.app).get(PATH + "?period=quarter", headers={"X-FinLens-Data-Version": "0"})
+    response = TestClient(main.app).get(PATH + "?period=quarter&end_from=2025-03-31&end_to=2025-03-31", headers={"X-FinLens-Data-Version": str(pin)})
     assert response.status_code == 200
-    assert response.headers["X-FinLens-Data-Version"] == "0" and response.headers["Cache-Control"] == "no-store"
-    assert response.json()["data_version"] == 0 and response.json()["cell_count"] == 11
+    assert response.headers["X-FinLens-Data-Version"] == str(pin) and response.headers["Cache-Control"] == "no-store"
+    assert response.json()["data_version"] == pin and response.json()["cell_count"] == 11
+    assert response.json()["end_date_range"] == {"from_date": "2025-03-31", "to_date": "2025-03-31"}
     assert "READ ONLY" in str(session.execute.call_args_list[0].args[0])
     assert session.close.called
 

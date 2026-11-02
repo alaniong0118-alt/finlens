@@ -27,7 +27,7 @@ from app.database import HttpSessionLocal, InsightsSessionLocal, database_failur
 from app.financial_insights_contract import Budget, InsightsFailure, budget_scope, current_budget
 from app.financial_insights_service import build_insights, registry_guard
 from app.quarter_window_comparison import build_quarter_comparison, parse_quarter_request
-from app.financial_coverage import build_coverage, parse_coverage_request
+from app.financial_coverage import CoverageBudget, build_coverage, parse_coverage_request
 from app.activation_lifecycle import _financial_read
 from app.embedding_service import EncoderDependencyError
 from app.financial_analysis import (
@@ -155,7 +155,7 @@ class VersionedRoute(APIRoute):
         async def handle(request):
             if self.path not in {"/companies/{ticker}/financials/insights", "/companies/{ticker}/financials/quarters", "/companies/{ticker}/financials/coverage"}:
                 return await versioned(request)
-            budget = Budget()
+            budget = CoverageBudget() if self.path == "/companies/{ticker}/financials/coverage" else Budget()
             try:
                 with budget_scope(budget), _financial_read():
                     registry_guard()
@@ -189,8 +189,21 @@ def coverage_error(error):
         "INSIGHTS_RESOURCE_LIMIT": "Stored coverage exceeds the supported limits. No partial map is shown.",
         "INSIGHTS_DEADLINE_EXCEEDED": "Stored coverage could not complete in time. Please retry explicitly.",
     }.get(error.code, "Stored financial coverage could not be verified.")
+    categories = {"windows": "stored-window count", "cells": "metric-cell count",
+        "company_input_windows": "complete company input window count",
+        "source_references": "source-reference count", "facts": "company fact inventory",
+        "input_bytes": "company input size", "work": "calculation work", "output_bytes": "response size",
+        "eligible": "eligible fact inventory", "group": "fact group size", "candidates": "candidate count",
+        "slot_candidates": "per-metric candidate count"}
+    category = getattr(error, "limit_category", None) if error.code == "INSIGHTS_RESOURCE_LIMIT" else None
+    headers = {"X-FinLens-Error-Code": error.code, "Cache-Control": "no-store"}
+    if category in categories:
+        detail += f" Limit category: {categories[category]}."
+        headers["X-FinLens-Limit-Category"] = category
+    if category in {"windows", "cells", "source_references", "output_bytes"}:
+        detail += " Choose a narrower reported-period end-date range."
     return JSONResponse({"detail": detail}, status_code=error.status,
-        headers={"X-FinLens-Error-Code": error.code, "Cache-Control": "no-store"})
+        headers=headers)
 
 
 def bounded_financial_error(path, error):
@@ -381,13 +394,13 @@ def reported_quarter_comparison(ticker: str, request: Request):
 
 @app.get("/companies/{ticker}/financials/coverage")
 def stored_financial_coverage(ticker: str, request: Request):
-    pin, kind = parse_coverage_request(request)
+    pin, kind, end_from, end_to = parse_coverage_request(request)
     budget = current_budget.get()
     if budget is None:
         raise InsightsFailure()
     with read_session(InsightsSessionLocal) as session:
         try:
-            body, configuration = build_coverage(session, ticker.upper(), pin, kind, budget)
+            body, configuration = build_coverage(session, ticker.upper(), pin, kind, budget, end_from, end_to)
         except UnknownCompany:
             raise HTTPException(404, detail="Unknown company.")
     registry_guard(configuration)

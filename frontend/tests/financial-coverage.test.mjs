@@ -69,7 +69,7 @@ function coverage(kind = 'annual', issuer = company, pin = 0) {
 async function mount(ctx, initial = 0) {
   const requests = [], changed = ctx.mock.fn(); let issuer = company, version = initial;
   ctx.mock.method(globalThis,'fetch',(path,init) => {
-    assert.match(String(path),/^\/api\/finlens\/companies\/(AAA|BBB)\/financials\/coverage\?period=(annual|quarter)$/);
+    assert.match(String(path),/^\/api\/finlens\/companies\/(AAA|BBB)\/financials\/coverage\?period=(annual|quarter)(&end_from=\d{4}-\d{2}-\d{2}&end_to=\d{4}-\d{2}-\d{2})?$/);
     return new Promise(resolve => requests.push({path:String(path),init,resolve}));
   });
   const host=document.createElement('div'); document.body.append(host); const root=createRoot(host);
@@ -78,8 +78,13 @@ async function mount(ctx, initial = 0) {
   async function release(request,body,pin=0,status=200) { await act(async()=>request.resolve(new Response(JSON.stringify(body),{status,headers:{'X-FinLens-Data-Version':String(pin)}}))); }
   async function click(name) { const button=[...host.querySelectorAll('button')].find(b=>b.textContent===name); assert.ok(button,name); await act(async()=>button.click()); }
   async function period(value) { await act(async()=>{const select=host.querySelector('select');select.value=value;select.dispatchEvent(new Event('change',{bubbles:true}));}); }
+  async function dates(from,to) { for(const [index,value] of [from,to].entries()) await act(async()=>{
+    const input=host.querySelectorAll('input[type=date]')[index];
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,value);
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  }); }
   await render();ctx.after(async()=>{await act(async()=>root.unmount());host.remove();});
-  return {host,requests,changed,render,release,click,period};
+  return {host,requests,changed,render,release,click,period,dates};
 }
 
 test('valid annual and quarter maps preserve overlaps and original states without fiscal-label inference',()=>{
@@ -220,4 +225,98 @@ test('empty response preserves an honest empty state; failed or malformed reload
   await app.click('Load stored coverage');assert.equal(app.host.querySelector('tbody'),null);
   await app.release(app.requests[2],{detail:'Stored coverage is unavailable for this configuration.'},0,503);
   assert.equal(app.host.querySelector('tbody'),null);assert.match(app.host.textContent,/unavailable for this configuration/);
+});
+
+function inRange(body,from,to) {
+  body.end_date_range={from_date:from,to_date:to};
+  body.columns=body.columns.filter(column=>column.window.end>=from&&column.window.end<=to);
+  body.window_count=body.columns.length;body.cell_count=body.window_count*metrics.length;recount(body);return body;
+}
+test('end-date ranges require paired real ISO dates in inclusive order',()=>{
+  assert.equal(helper.coverageRange('',''),null);
+  assert.deepEqual(helper.coverageRange('2024-02-29','2024-02-29'),{from_date:'2024-02-29',to_date:'2024-02-29'});
+  for(const [from,to] of [['2025-01-01',''],['','2025-01-01'],['2025-02-29','2025-03-01'],
+    ['0000-01-01','2025-03-01'],['2025-1-01','2025-03-01'],['2025-04-01','2025-03-01']])
+    assert.throws(()=>helper.coverageRange(from,to));
+});
+test('range echo and every returned end date must match the requested scope',()=>{
+  const range=helper.coverageRange('2025-01-01','2025-12-31');
+  const value=inRange(coverage(),'2025-01-01','2025-12-31');
+  assert.equal(helper.validateCoverage(value,company,'annual',0,range),value);
+  for(const mutate of [v=>{delete v.end_date_range;},v=>{v.end_date_range=null;},
+    v=>{v.end_date_range.to_date='2026-12-31';},v=>{v.end_date_range.extra=true;}]){
+    const invalid=structuredClone(value);mutate(invalid);assert.throws(()=>helper.validateCoverage(invalid,company,'annual',0,range));
+  }
+  assert.throws(()=>helper.validateCoverage(value,company,'annual',0));
+  const outside=inRange(completeCoverage('annual'),'2024-01-01','2025-12-31');
+  outside.end_date_range=range;assert.throws(()=>helper.validateCoverage(outside,company,'annual',0,range));
+});
+test('filtered YoY retains independently bound prior revenue outside the map, without recalculation',()=>{
+  for(const kind of ['annual','quarter']) {
+    const range=helper.coverageRange('2025-01-01','2025-12-31');
+    const value=inRange(completeCoverage(kind),range.from_date,range.to_date);
+    assert.equal(helper.validateCoverage(value,company,kind,0,range),value);
+    assert.equal(value.columns.length,1);assert.equal(value.columns[0].metrics.revenue_growth_yoy.value,'1');
+    for(const mutate of [
+      (s,i)=>{s.canonical_metric='net_income';},(s,i)=>{i.value='999';},(s,i)=>{s.value='999';},
+      (s,i)=>{s.unit='USD/share';},(s,i)=>{s.company_cik=other.cik;},(s,i)=>{s.period_end='2024-02-29';},
+      (s,i)=>{i.fact_ids=[999];},
+    ]) {
+      const bad=structuredClone(value),point=bad.columns[0].metrics.revenue_growth_yoy;
+      const input=point.inputs.find(i=>i.role==='prior'),source=point.provenance.find(s=>input.fact_ids.includes(s.fact_id));
+      mutate(source,input);assert.throws(()=>helper.validateCoverage(bad,company,kind,0,range));
+    }
+    const wider=helper.coverageRange('2024-01-01','2025-12-31');
+    const missing=structuredClone(value);missing.end_date_range=wider;
+    assert.throws(()=>helper.validateCoverage(missing,company,kind,0,wider),'prior within selected range must have raw projection');
+  }
+});
+test('range change clears results, aborts pending requests and preserves native date input identity',async ctx=>{
+  const app=await mount(ctx);await app.click('Load stored coverage');await app.release(app.requests[0],coverage());
+  const input=app.host.querySelector('input[type=date]');input.focus();
+  await app.dates('2025-01-01','2025-12-31');
+  assert.equal(app.host.querySelector('tbody'),null);assert.equal(app.requests.length,1);
+  assert.equal(app.host.querySelector('input[type=date]'),input);assert.equal(document.activeElement,input);
+  await app.click('Load stored coverage');const old=app.requests[1];
+  assert.equal(old.path,'/api/finlens/companies/AAA/financials/coverage?period=annual&end_from=2025-01-01&end_to=2025-12-31');
+  assert.equal(old.init.headers['X-FinLens-Data-Version'],'0');
+  await app.dates('2024-01-01','2024-12-31');assert.ok(old.init.signal.aborted);
+  await app.release(old,inRange(coverage(),'2025-01-01','2025-12-31'));assert.equal(app.host.querySelector('tbody'),null);
+  assert.equal(app.requests.length,2);await app.click('Load stored coverage');
+  const empty=inRange(coverage(),'2024-01-01','2024-12-31');await app.release(app.requests[2],empty);
+  assert.match(app.host.textContent,/2024-01-01 through 2024-12-31, inclusive/);
+  assert.match(app.host.textContent,/Complete within this selected scope only/);
+  await app.dates('','');assert.equal(app.requests.length,3);
+  await app.click('Load stored coverage');assert.equal(app.requests[3].path,'/api/finlens/companies/AAA/financials/coverage?period=annual');
+});
+test('incomplete/reversed ranges disable loading; safe limit detail is rendered literally with no partial map',async ctx=>{
+  const app=await mount(ctx);await app.dates('2025-01-01','');
+  assert.ok(app.host.querySelector('button').disabled);assert.match(app.host.textContent,/Enter both period-end dates/);
+  await app.dates('2025-04-01','2025-03-31');assert.ok(app.host.querySelector('button').disabled);
+  assert.equal(app.requests.length,0);await app.dates('2025-01-01','2025-12-31');await app.click('Load stored coverage');
+  await app.release(app.requests[0],{detail:'Stored coverage exceeds the supported limits. No partial map is shown. Limit category: source-reference count. <script>literal</script>'},0,503);
+  assert.equal(app.host.querySelector('tbody'),null);assert.equal(app.host.querySelector('script'),null);
+  assert.match(app.host.textContent,/source-reference count\. <script>literal<\/script>/);
+});
+test('filtered publication mismatch still invalidates and never replays automatically',async ctx=>{
+  const app=await mount(ctx);await app.dates('2025-01-01','2025-12-31');await app.click('Load stored coverage');
+  await app.release(app.requests[0],inRange(coverage('annual',company,1),'2025-01-01','2025-12-31'),1);
+  assert.equal(app.changed.mock.callCount(),1);assert.equal(app.host.querySelector('tbody'),null);
+  assert.equal(app.requests.length,1);assert.ok(app.host.querySelector('button').disabled);
+});
+test('filtered company and nonzero publication changes discard ignored-abort completions',async ctx=>{
+  const app=await mount(ctx);await app.dates('2025-01-01','2025-12-31');await app.click('Load stored coverage');
+  const alpha=app.requests[0];await app.render({company:other,version:1});assert.ok(alpha.init.signal.aborted);
+  await app.release(alpha,inRange(coverage(),'2025-01-01','2025-12-31'));assert.equal(app.host.querySelector('tbody'),null);
+  assert.equal(app.requests.length,1);await app.click('Load stored coverage');const beta=app.requests[1];
+  assert.match(beta.path,/companies\/BBB\/financials\/coverage/);assert.equal(beta.init.headers['X-FinLens-Data-Version'],'1');
+  await app.release(beta,inRange(coverage('annual',other,1),'2025-01-01','2025-12-31'),1);
+  assert.ok(app.host.querySelector('tbody'));await app.render({version:2});assert.equal(app.host.querySelector('tbody'),null);
+  assert.equal(app.requests.length,2);
+});
+test('new date controls retain scoped responsive sizing and 44px target styles',()=>{
+  const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
+  assert.match(css,/\.financial-coverage fieldset \{[^}]*min-width:0/);
+  assert.match(css,/\.financial-coverage input\[type="date"\] \{[^}]*width:100%[^}]*max-width:100%[^}]*min-height:44px/);
+  assert.match(css,/\.financial-coverage input\[type="date"\]:focus-visible \{ outline:3px solid var\(--accent\); outline-offset:-6px;/);
 });

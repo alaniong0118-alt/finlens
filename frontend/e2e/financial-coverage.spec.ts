@@ -209,3 +209,70 @@ test('stored coverage: explicit requests, source keyboard and stale isolation', 
     await info.attach('coverage-request-audit', { body: audit, contentType: 'application/json' });
   }
 });
+
+test('stored coverage: explicit inclusive end-date ranges and honest limit errors', async ({ page, scenario }, info) => {
+  const endpoint = '/companies/AAA/financials/coverage';
+  const panel = page.getByRole('region', { name: 'Financial coverage map', exact: true });
+  const grid = panel.getByRole('region', { name: 'Stored financial coverage matrix', exact: true });
+  const from = panel.getByLabel('Period end from', { exact: true }), to = panel.getByLabel('Period end to', { exact: true });
+  const load = panel.getByRole('button', { name: 'Load stored coverage', exact: true });
+  const requests = () => scenario.ledger.filter(request => request.path === endpoint);
+  const snapshot = () => lifecycle(scenario, replayCancellations('AAA', 0));
+  const rows = () => snapshot().rows.filter(row => JSON.parse(row.request)[1] === endpoint);
+  let fail = false;
+  const limitMessage = 'Stored coverage exceeds the supported limits. No partial map is shown. Limit category: complete company input window count.';
+  scenario.overrides.push(request => request.path === endpoint && fail
+    ? { status: 503, code: 'INSIGHTS_RESOURCE_LIMIT', body: { detail: limitMessage } } : undefined);
+  async function completed(count: number) {
+    await expect.poll(() => rows().filter(row => row.state === 'completed').length).toBe(count);
+    expect(requests()).toHaveLength(count);
+  }
+  try {
+    await scenario.open(); await scenario.ready();
+    await panel.getByRole('combobox', { name: 'Coverage period type', exact: true }).selectOption('quarter');
+    expect(requests()).toHaveLength(0); await expect(grid).toHaveCount(0);
+    await expect(from).toHaveAttribute('type', 'date'); await expect(to).toHaveAttribute('type', 'date');
+    // Fill validates application range behavior; it does not exercise the native
+    // OS calendar picker, which remains a separate manual acceptance limitation.
+    await from.fill('2025-03-31'); await expect(load).toBeDisabled();
+    await expect(panel.getByRole('status')).toContainText('Enter both period-end dates');
+    await to.fill('2025-01-01'); await expect(load).toBeDisabled();
+    expect(requests()).toHaveLength(0);
+    await to.fill('2025-03-31'); await expect(load).toBeEnabled(); expect(requests()).toHaveLength(0);
+    await load.click(); await expect(grid.locator('tbody > tr')).toHaveCount(2); await completed(1);
+    await expect(grid.locator('caption')).toContainText('Period ends 2025-03-31 through 2025-03-31 (inclusive)');
+    await expect(panel).toContainText('Complete within this selected scope only; not complete historical coverage.');
+    await expect(grid).toContainText('Jan 16, 2025 – Mar 31, 2025');
+    await expect(grid).toContainText('Jan 1, 2025 – Mar 31, 2025');
+    await expect(grid.locator('tbody td')).toHaveCount(22);
+    await info.attach('coverage-range-scope', { body: await page.screenshot(), contentType: 'image/png' });
+    await from.fill('2025-01-01'); await expect(grid).toHaveCount(0); expect(requests()).toHaveLength(1);
+    await to.fill('2025-09-30'); await expect(grid).toHaveCount(0); expect(requests()).toHaveLength(1);
+    await load.click(); await expect(grid.locator('tbody > tr')).toHaveCount(4); await completed(2);
+    await expect(grid.locator('caption')).toContainText('Period ends 2025-01-01 through 2025-09-30 (inclusive)');
+    fail = true; await load.click(); await expect(grid).toHaveCount(0);
+    await expect(panel.getByRole('status')).toHaveText(limitMessage); await completed(3);
+    await expect(panel.getByRole('status')).not.toContainText('Choose a narrower');
+    await info.attach('coverage-range-limit', { body: await page.screenshot(), contentType: 'image/png' });
+    fail = false; await from.fill('2025-03-31'); await to.fill('2025-03-31'); expect(requests()).toHaveLength(3);
+    await load.click(); await expect(grid.locator('tbody > tr')).toHaveCount(2); await completed(4);
+    await panel.getByRole('button', { name: 'Clear coverage', exact: true }).click();
+    await expect(grid).toHaveCount(0); await expect(from).toHaveValue('2025-03-31'); expect(requests()).toHaveLength(4);
+    const queries = ['period=quarter&end_from=2025-03-31&end_to=2025-03-31',
+      'period=quarter&end_from=2025-01-01&end_to=2025-09-30'];
+    const observed = rows(); expect(observed).toHaveLength(4);
+    for (const [index, row] of observed.entries()) {
+      expect(row.request).toBe(JSON.stringify(['GET', endpoint, queries[index === 1 || index === 2 ? 1 : 0], '0', null]));
+      expect(row.routed).toBe(true); expect(row.bodyAbsent).toBe(true); expect(row.error).toBeNull();
+      expect(row.state).toBe('completed'); expect(row.response).toEqual({ status: index === 2 ? 503 : 200,
+        version: '0', code: index === 2 ? 'INSIGHTS_RESOURCE_LIMIT' : null });
+    }
+    expect(snapshot().bindingErrors).toEqual([]); expect(snapshot().rejectedUnbound).toEqual([]);
+    expect(scenario.violations).toEqual([]);
+  } finally {
+    const result = snapshot(), audit = JSON.stringify({ synthetic: true, rows: rows(),
+      bindingErrors: result.bindingErrors, rejectedUnbound: result.rejectedUnbound, violations: scenario.violations });
+    expect(Buffer.byteLength(audit)).toBeLessThanOrEqual(32768);
+    await info.attach('coverage-range-request-audit', { body: audit, contentType: 'application/json' });
+  }
+});

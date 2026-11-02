@@ -1,12 +1,19 @@
 import { COMPARISON_METRICS } from "./company-comparison";
 import { validateStoredColumns, windowKey } from "./quarter-window-comparison";
-import type { Company, StoredFinancialCoverage } from "./finlens-api";
+import type { Company, CoverageEndDateRange, StoredFinancialCoverage } from "./finlens-api";
 
 export const COVERAGE_LIMITS = { windows: 64, cells: 704, sourceReferences: 4096 } as const;
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const canonicalMetric = (v: unknown) => record(v) ? v.canonical_metric : undefined;
 const version = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && !Object.is(v, -0);
-export function validateCoverage(value: unknown, company: Company, kind: "annual" | "quarter", pin: number): StoredFinancialCoverage {
+const date = (v: string) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v) && v.slice(0, 4) !== "0000"
+  && Number.isFinite(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
+export function coverageRange(from: string, to: string): CoverageEndDateRange | null {
+  if (!from && !to) return null;
+  if (!date(from) || !date(to) || from > to) throw new Error("Enter both period-end dates (YYYY-MM-DD), with From on or before To.");
+  return { from_date: from, to_date: to };
+}
+export function validateCoverage(value: unknown, company: Company, kind: "annual" | "quarter", pin: number, range: CoverageEndDateRange | null = null): StoredFinancialCoverage {
   const bad = () => { throw new Error("Stored coverage could not be verified for this company, period and publication."); };
   if (!version(pin) || !["annual", "quarter"].includes(kind) || !/^\d{10}$/.test(company.cik)
       || !record(value) || value.ticker !== company.ticker || value.company_cik !== company.cik
@@ -17,11 +24,17 @@ export function validateCoverage(value: unknown, company: Company, kind: "annual
       || value.columns.length > COVERAGE_LIMITS.windows || !version(value.window_count) || !version(value.cell_count)
       || !version(value.source_reference_count) || value.window_count !== value.columns.length
       || value.cell_count !== value.columns.length * COMPARISON_METRICS.length || Number(value.cell_count) > COVERAGE_LIMITS.cells) return bad();
+  if (range) {
+    coverageRange(range.from_date, range.to_date);
+    if (!record(value.end_date_range) || Object.keys(value.end_date_range).length !== 2
+        || value.end_date_range.from_date !== range.from_date || value.end_date_range.to_date !== range.to_date) return bad();
+  } else if (value.end_date_range != null) return bad();
   let references = 0;
   const selected = [];
   for (const column of value.columns) {
     if (!record(column) || !record(column.window) || typeof column.window.start !== "string" || typeof column.window.end !== "string"
         || !record(column.metrics) || Object.keys(column.metrics).length !== COMPARISON_METRICS.length) return bad();
+    if (range && (column.window.end < range.from_date || column.window.end > range.to_date)) return bad();
     selected.push({ start: column.window.start, end: column.window.end });
     for (const metric of COMPARISON_METRICS) {
       const point = column.metrics[metric];
@@ -37,9 +50,9 @@ export function validateCoverage(value: unknown, company: Company, kind: "annual
   }
   if (new Set(selected.map(windowKey)).size !== selected.length || value.source_reference_count !== references) return bad();
   validateStoredColumns(value.columns, company, selected, kind);
-  // This complete map contains the raw metric projections for every returned
-  // operand period. Bind lineage to those projections, without recalculating
-  // any derived value or extending the selected-window comparison contract.
+  // Bind operands to raw projections in the displayed map. A filtered YoY's
+  // prior revenue may be outside it: retain exact source/metric/value/unit/date
+  // binding below and the shared prior-role/period/identity checks above.
   const columns = value.columns as StoredFinancialCoverage["columns"];
   const windows = new Map(columns.map(column => [windowKey(column.window), column]));
   const derived = new Set(["revenue_growth_yoy", "gross_margin", "operating_margin", "net_margin", "free_cash_flow"]);
@@ -55,10 +68,13 @@ export function validateCoverage(value: unknown, company: Company, kind: "annual
     for (const input of point.inputs) {
       if (!input.period?.start) return bad();
       const base = windows.get(windowKey({ start: input.period.start, end: input.period.end }))?.metrics[input.metric];
-      if (!base || derived.has(input.metric) || base.status !== "available" || base.value !== input.value || base.unit !== input.unit
+      const outsidePrior = !!range && metric === "revenue_growth_yoy" && input.role === "prior" && input.metric === "revenue"
+        && (input.period.end < range.from_date || input.period.end > range.to_date) && input.fact_ids.length === 1;
+      if (derived.has(input.metric) || (!base && !outsidePrior)) return bad();
+      if (base && (base.status !== "available" || base.value !== input.value || base.unit !== input.unit
           || base.period?.kind !== input.period.kind || base.period.start !== input.period.start || base.period.end !== input.period.end
           || base.provenance.length !== input.fact_ids.length
-          || base.provenance.some(source => !input.fact_ids.includes(source.fact_id))) return bad();
+          || base.provenance.some(source => !input.fact_ids.includes(source.fact_id)))) return bad();
       if (input.fact_ids.some(id => !point.provenance.some(source => source.fact_id === id
           && canonicalMetric(source) === input.metric && source.value === input.value && source.unit === input.unit
           && source.period_start === input.period!.start && source.period_end === input.period!.end))) return bad();

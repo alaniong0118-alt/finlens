@@ -181,6 +181,9 @@ footer { margin:32px 0 5px; border-top:1px solid var(--border); padding-top:18px
 .comparison-actions { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:16px 0; }
 .comparison-actions .secondary-button { width:auto; min-height:44px; margin:0; }
 .comparison-actions label { min-width:180px; }
+.financial-coverage fieldset { min-width:0; border:1px solid var(--border); border-radius:10px; padding:12px; margin:16px 0; }
+.financial-coverage input[type="date"] { display:block; width:100%; min-width:0; max-width:100%; min-height:44px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--border); border-radius:10px; padding:11px 12px; margin-top:6px; scroll-margin:8px; }
+.financial-coverage input[type="date"]:focus-visible { outline:3px solid var(--accent); outline-offset:-6px; }
 .comparison-scroll { margin-top:12px; border:1px solid var(--border); border-radius:10px; }
 .comparison-table { min-width:640px; }
 .comparison-table caption { text-align:left; padding:12px; color:var(--muted); }

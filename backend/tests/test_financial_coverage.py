@@ -15,9 +15,9 @@ from test_financial_insights import COMPANY, Rows, row_stats, session_for, fact
 from test_quarter_window_comparison import source
 
 
-def build(monkeypatch, rows, kind="quarter", budget=None):
+def build(monkeypatch, rows, kind="quarter", budget=None, end_from=None, end_to=None):
     monkeypatch.setattr(coverage, "bounded_load", lambda *_: (COMPANY, (0, 0, 0), rows, registry_guard()))
-    body, _ = coverage.build_coverage(None, "TEST", 0, kind, budget or Budget())
+    body, _ = coverage.build_coverage(None, "TEST", 0, kind, budget or coverage.CoverageBudget(), end_from, end_to)
     return json.loads(body)
 
 
@@ -103,6 +103,8 @@ def test_all_derived_values_reuse_canonical_engine_and_complete_source_inputs(mo
     assert latest["metrics"]["free_cash_flow"]["value"] == "15"
     assert latest["metrics"]["revenue_growth_yoy"]["value"] == "0.2"
     assert all(latest["metrics"][m]["status"] == "available" for m in ["gross_margin", "operating_margin", "net_margin"])
+    selected = build(monkeypatch, rows, kind, end_from=date(2025, 1, 1), end_to=date(2025, 12, 31))
+    assert selected["window_count"] == 1 and selected["columns"][0] == latest
 
 
 def test_actual_64_window_map_returns_all_704_cells(monkeypatch):
@@ -176,10 +178,12 @@ def test_publication_zero_real_route_and_stale_pin(monkeypatch):
     monkeypatch.setattr(main, "InsightsSessionLocal", Mock(side_effect=[session, stale_session]))
     monkeypatch.setattr(freshness_service, "schema_ready", lambda _: True)
     with TestClient(main.app) as client:
-        good = client.get("/companies/TEST/financials/coverage?period=quarter", headers={"X-FinLens-Data-Version": "0"})
-        stale = client.get("/companies/TEST/financials/coverage?period=quarter", headers={"X-FinLens-Data-Version": "1"})
+        path = "/companies/TEST/financials/coverage?period=quarter&end_from=2025-03-31&end_to=2025-03-31"
+        good = client.get(path, headers={"X-FinLens-Data-Version": "0"})
+        stale = client.get(path, headers={"X-FinLens-Data-Version": "1"})
     assert good.status_code == 200 and good.headers["X-FinLens-Data-Version"] == "0"
     assert good.json()["data_version"] == 0 and session.close.called
+    assert good.json()["end_date_range"] == {"from_date": "2025-03-31", "to_date": "2025-03-31"}
     assert stale.status_code == 409 and stale.headers["X-FinLens-Error-Code"] == "DATA_VERSION_CHANGED"
     assert stale_session.close.called
 
@@ -227,3 +231,110 @@ def test_configuration_change_during_session_cleanup_cannot_publish(monkeypatch)
         response = client.get("/companies/TEST/financials/coverage?period=quarter", headers={"X-FinLens-Data-Version": "7"})
     assert response.status_code == 503 and response.headers["X-FinLens-Error-Code"] == "INSIGHTS_CONFIGURATION_UNSUPPORTED"
     assert "columns" not in response.json()
+
+
+def test_65_windows_reject_unfiltered_but_complete_inclusive_range_succeeds(monkeypatch):
+    rows = [source(date(2025, 1, 1) + timedelta(days=i), 90, identifier=i + 1) for i in range(65)]
+    with pytest.raises(coverage.CoverageLimitFailure) as error:
+        build(monkeypatch, rows)
+    assert error.value.limit_category == "windows"
+    assert "Choose a narrower" in json.loads(main.coverage_error(error.value).body)["detail"]
+    lower, upper = date(2025, 4, 1), date(2025, 4, 30)
+    body = build(monkeypatch, rows, end_from=lower, end_to=upper)
+    assert body["window_count"] == 30 and body["cell_count"] == 330
+    assert {column["window"]["end"] for column in body["columns"]} == {
+        (lower + timedelta(days=i)).isoformat() for i in range(30)}
+    assert body["end_date_range"] == {"from_date": str(lower), "to_date": str(upper)}
+    assert body["columns"][0]["window"]["end"] == str(upper)
+    assert body["columns"][-1]["window"]["end"] == str(lower)
+
+
+def test_filter_preserves_same_end_overlaps_and_outside_range_yoy_inventory(monkeypatch):
+    rows = [source(date(2024, 1, 1), 91, identifier=1, value="100"),
+            source(date(2025, 1, 1), 90, identifier=2, value="120"),
+            source(date(2025, 1, 2), 89, "NetIncomeLoss", 3)]
+    body = build(monkeypatch, rows, end_from=date(2025, 3, 31), end_to=date(2025, 3, 31))
+    assert body["window_count"] == 2
+    assert {column["window"]["start"] for column in body["columns"]} == {"2025-01-01", "2025-01-02"}
+    point = next(c for c in body["columns"] if c["window"]["start"] == "2025-01-01")["metrics"]["revenue_growth_yoy"]
+    assert point["value"] == "0.2" and point["inputs"][1]["period"]["end"] == "2024-03-31"
+    empty = build(monkeypatch, rows, end_from=date(2023, 1, 1), end_to=date(2023, 12, 31))
+    assert empty["columns"] == [] and empty["end_date_range"]["to_date"] == "2023-12-31"
+
+
+@pytest.mark.parametrize("query", [
+    "period=quarter&end_from=2025-01-01", "period=quarter&end_to=2025-01-01",
+    "period=quarter&end_from=2025-02-29&end_to=2025-03-01",
+    "period=quarter&end_from=0000-01-01&end_to=2025-03-01",
+    "period=quarter&end_from=2025-3-01&end_to=2025-03-31",
+    "period=quarter&end_from=2025-04-01&end_to=2025-03-31",
+    "period=quarter&end_from=2025-01-01&end_from=2025-03-31",
+    "period=quarter&end_from=2025-01-01&unexpected=2025-03-31",
+])
+def test_invalid_end_date_filters_reject_before_loading(query):
+    with pytest.raises(HTTPException) as error:
+        coverage.parse_coverage_request(request(query))
+    assert error.value.status_code == 422
+
+
+def test_filter_parsing_preserves_unfiltered_and_inclusive_leap_day():
+    assert coverage.parse_coverage_request(request()) == (0, "annual", None, None)
+    assert coverage.parse_coverage_request(request("end_to=2024-02-29&period=quarter&end_from=2024-02-29")) == (
+        0, "quarter", date(2024, 2, 29), date(2024, 2, 29))
+
+
+@pytest.mark.parametrize("limit", ["source_references", "work", "output_bytes"])
+def test_narrow_scope_does_not_bypass_remaining_limits(monkeypatch, limit):
+    rows = [source(date(2025, 1, 1), 90)]
+    budget = coverage.CoverageBudget()
+    if limit == "source_references":
+        monkeypatch.setattr(coverage, "COVERAGE_LIMITS", MappingProxyType(dict(windows=64, cells=704, source_references=0)))
+    elif limit == "work":
+        budget.counts["work"] = 2_000_000
+    else:
+        from app import financial_insights_contract as contract
+        monkeypatch.setattr(contract, "LIMITS", MappingProxyType(dict(contract.LIMITS, output_bytes=1)))
+    with pytest.raises(coverage.CoverageLimitFailure) as error:
+        build(monkeypatch, rows, budget=budget, end_from=date(2025, 3, 31), end_to=date(2025, 3, 31))
+    assert error.value.limit_category == limit
+    response = main.coverage_error(error.value)
+    assert response.status_code == 503 and response.headers["X-FinLens-Limit-Category"] == limit
+    assert "No partial map is shown" in json.loads(response.body)["detail"]
+
+
+def test_unknown_limit_category_is_not_exposed_or_invented():
+    for error in (InsightsFailure("INSIGHTS_RESOURCE_LIMIT"), coverage.CoverageLimitFailure("<secret>")):
+        response = main.coverage_error(error)
+        assert response.status_code == 503 and "X-FinLens-Limit-Category" not in response.headers
+        assert json.loads(response.body) == {"detail": "Stored coverage exceeds the supported limits. No partial map is shown."}
+
+
+def test_route_uses_coverage_budget_and_safe_category_without_creating_a_session(monkeypatch):
+    def limited(*_args):
+        budget = main.current_budget.get()
+        assert isinstance(budget, coverage.CoverageBudget)
+        budget.check("work", 2_000_001)
+    factory = Mock(side_effect=AssertionError("No session after failed budget check"))
+    monkeypatch.setattr(main, "InsightsSessionLocal", factory)
+    monkeypatch.setattr(main, "registry_guard", limited)
+    response = TestClient(main.app).get("/companies/TEST/financials/coverage?period=annual", headers={"X-FinLens-Data-Version": "0"})
+    assert response.status_code == 503 and response.headers["X-FinLens-Limit-Category"] == "work"
+    assert "calculation work" in response.json()["detail"] and not factory.called
+
+
+@pytest.mark.parametrize("kind,filtered", [("annual", False), ("annual", True), ("quarter", True)])
+def test_company_input_windows_do_not_offer_ineffective_range_narrowing(monkeypatch, kind, filtered):
+    rows = [fact(year=1900 + index, id=index + 1) for index in range(257)]
+    bounds = {"end_from": date(1800, 1, 1), "end_to": date(1800, 12, 31)} if filtered else {}
+    control = build(monkeypatch, rows[:1], kind, **bounds)
+    assert control["window_count"] == (1 if kind == "annual" and not filtered else 0)
+    with pytest.raises(coverage.CoverageLimitFailure) as error:
+        build(monkeypatch, rows, kind, **bounds)
+    assert error.value.limit_category == "company_input_windows"
+    response = main.coverage_error(error.value)
+    assert response.status_code == 503
+    assert response.headers["X-FinLens-Error-Code"] == "INSIGHTS_RESOURCE_LIMIT"
+    assert response.headers["X-FinLens-Limit-Category"] == "company_input_windows"
+    detail = json.loads(response.body)["detail"]
+    assert "complete company input window count" in detail and "No partial map is shown" in detail
+    assert "narrower" not in detail

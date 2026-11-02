@@ -158,12 +158,18 @@ class StoredCoverageColumn(BaseModel):
     metrics: dict[str, NormalizedMetric]
 
 
+class CoverageEndDateRange(BaseModel):
+    from_date: date
+    to_date: date
+
+
 class StoredFinancialCoverage(BaseModel):
     ticker: str
     company_name: str
     company_cik: str
     requested_period: Literal["annual", "quarter"]
     coverage_scope: Literal["stored_reported_windows"] = "stored_reported_windows"
+    end_date_range: CoverageEndDateRange | None = None
     selection_policy: str
     data_version: int = Field(ge=0, le=9007199254740991, strict=True)
     facts_version: int = Field(ge=0, le=9007199254740991, strict=True)

@@ -851,3 +851,59 @@ test('QA-01 coverage reuses the exact accepted focus geometry oracle and both pr
   assert.equal(config.projects[1].use.viewport.width, 390);
   assert.ok(config.projects[1].testMatch.includes('**/financial-coverage.spec.ts'));
 });
+
+test('QA-01 coverage range fixtures echo exact inclusive scope with complete counts and lineage', () => {
+  for (const [ticker, pin] of [['AAA', 0], ['BBB', 1]]) for (const [kind, from, to, count] of [
+    ['quarter', '2025-03-31', '2025-03-31', 2], ['quarter', '2025-07-14', '2025-09-30', 2],
+    ['annual', '2025-12-31', '2025-12-31', 2], ['annual', '2024-01-01', '2024-12-31', 0],
+  ]) {
+    const range=data.coverageEndDates(new URLSearchParams({period:kind,end_from:from,end_to:to}));
+    assert.deepEqual(range,{from_date:from,to_date:to});
+    const body=data.storedCoverage(ticker,kind,pin,range);
+    assert.equal(coverageContract.validateCoverage(body,data.company(ticker),kind,pin,range),body);
+    assert.equal(body.window_count,count);assert.equal(body.cell_count,count*11);
+    assert.ok(body.columns.every(column=>column.window.end>=from&&column.window.end<=to));
+    assert.equal(data.storedCoverage(ticker,kind,pin).window_count,kind==='annual'?2:4,'No fixture inventory mutation');
+  }
+});
+
+test('QA-01 coverage range guard rejects malformed pairs, ordering, duplicate and unknown keys before overrides', () => {
+  const scenario=new Scenario({},{});
+  const valid='period=quarter&end_from=2024-02-29&end_to=2024-02-29';
+  scenario.validateRequest(coverageRequest('AAA','0','quarter',{query:new URLSearchParams(valid)}));
+  assert.deepEqual(data.coverageEndDates(new URLSearchParams(valid)),{from_date:'2024-02-29',to_date:'2024-02-29'});
+  for(const query of [
+    'period=quarter&end_from=2025-01-01','period=quarter&end_to=2025-01-01',
+    'period=quarter&end_from=2025-02-29&end_to=2025-03-01',
+    'period=quarter&end_from=0000-01-01&end_to=2025-03-01',
+    'period=quarter&end_from=2025-1-01&end_to=2025-03-01',
+    'period=quarter&end_from=2025-04-01&end_to=2025-03-01',
+    'period=quarter&end_from=2025-01-01&end_from=2025-03-01',
+    'period=quarter&end_from=2025-01-01&unknown=2025-03-01',
+    'period=quarter&end_from=2025-01-01&end_to=2025-03-01&extra=xxxxxxxxxxxxxxxx',
+  ]) assert.throws(()=>scenario.validateRequest(coverageRequest('AAA','0','quarter',{query:new URLSearchParams(query)})));
+});
+
+test('QA-01 installed coverage range route remains publication pinned and records every response before overrides', async () => {
+  let intercept;
+  const context={on(){},async routeWebSocket(){},async route(_pattern,callback){intercept=callback;}};
+  const scenario=new Scenario(context,{on(){}});await scenario.install();let calls=0;
+  scenario.overrides.push(()=>{calls++;return undefined;});
+  async function deliver(query,pin='0',raw=null) {
+    const result={},request={url:()=>`http://127.0.0.1:3107/api/finlens/companies/AAA/financials/coverage?${query}`,
+      method:()=>'GET',headers:()=>({'x-finlens-data-version':pin}),postData:()=>raw,postDataJSON:()=>JSON.parse(raw)};
+    await intercept({request:()=>request,async fulfill(reply){result.reply=reply;},async abort(reason){result.abort=reason;}});
+    return result;
+  }
+  const query='period=quarter&end_from=2025-03-31&end_to=2025-03-31';
+  const good=await deliver(query),body=JSON.parse(good.reply.body);
+  assert.equal(good.reply.headers['X-FinLens-Data-Version'],'0');assert.equal(body.window_count,2);
+  coverageContract.validateCoverage(body,data.company('AAA'),'quarter',0,data.coverageEndDates(new URLSearchParams(query)));
+  scenario.versions.AAA=1;const stale=await deliver(query);
+  assert.equal(stale.reply.status,409);assert.equal(stale.reply.headers['X-FinLens-Error-Code'],'DATA_VERSION_CHANGED');
+  assert.equal(calls,2);
+  for(const [invalid,raw] of [[query+'&end_from=2025-01-01',null],[query.replace('03-31&end_to','04-01&end_to'),null],[query,'null']])
+    assert.equal((await deliver(invalid,'0',raw)).abort,'blockedbyclient');
+  assert.equal(calls,2,'Invalid scoped requests cannot reach overrides');
+  assert.equal(scenario.ledger.length,5);assert.equal(scenario.violations.length,3);
+});

@@ -148,9 +148,10 @@ export class Scenario {
     }
     if (method !== 'GET' || body !== null) throw new Error(`Invalid method/body ${path}`);
     if (suffix === 'financials/coverage') {
-      if (path !== `/companies/${ticker}/financials/coverage` || params !== 'period'
+      if (path !== `/companies/${ticker}/financials/coverage`
           || !['annual', 'quarter'].includes(query.get('period')!) || item.request.postData() !== null
           || !Number.isSafeInteger(Number(pin)) || String(Number(pin)) !== pin) throw new Error('Invalid stored-coverage request');
+      data.coverageEndDates(query);
       return;
     }
     if (suffix === 'financials/quarters') {
@@ -191,7 +192,7 @@ export class Scenario {
     }
     if (path.endsWith('/freshness')) return { body: data.freshness(issuer, version), version: null };
     if (pin !== String(version)) return { status: 409, code: 'DATA_VERSION_CHANGED', version: String(version) };
-    if (path.endsWith('/financials/coverage')) return { body: data.storedCoverage(issuer, query.get('period') as 'annual' | 'quarter', version) };
+    if (path.endsWith('/financials/coverage')) return { body: data.storedCoverage(issuer, query.get('period') as 'annual' | 'quarter', version, data.coverageEndDates(query)) };
     if (path === `/companies/${issuer}/financials/insights`) {
       // Existing generic recovery cases may advance publications; never manufacture
       // successful insights for versions outside the two authorized fixture inputs.
