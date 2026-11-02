@@ -266,6 +266,198 @@ def test_exception_and_dependency_output_never_leak(monkeypatch, capsys):
     assert json.loads(output.out)["code"] == "ASSESSMENT_UNVERIFIED"
 
 
+@pytest.mark.parametrize("code,stage", [
+    ("EXPLICIT_NETWORK_CONSENT_REQUIRED", "not_started"),
+    ("EXPLICIT_DEVELOPMENT_REQUIRED", "not_started"),
+    ("DEVELOPMENT_REQUIRED", "network_admitted"),
+    ("LOCAL_DATABASE_REQUIRED", "network_admitted"),
+    ("READ_ONLY_UNVERIFIED", "database_configured"),
+    ("UNEXPECTED_DATABASE_OPERATION", "schema_verified"),
+    ("CONNECTION_OPTIONS_CHANGED", "database_configured"),
+    ("PROXY_CONFIGURATION_UNSUPPORTED", "development_verified"),
+    ("PROXY_CONFIGURATION_UNVERIFIED", "development_verified"),
+    ("AAPL_IDENTITY_MISMATCH", "schema_verified"),
+    ("CANONICAL_ASSESSMENT_FAILED", "source_admitted"),
+    ("INVALID_CANONICAL_RESULT", "source_returned"),
+    ("ASSESSMENT_UNVERIFIED", "not_started"),
+    ("OUTPUT_LIMIT", "source_returned"),
+])
+def test_each_safe_refusal_keeps_protocol_stage_not_transport_count(monkeypatch, capsys, code, stage):
+    def fail():
+        assess._confirmed(stage)
+        raise assess.AssessmentRejected(code)
+    monkeypatch.setattr(assess, "_assess", fail)
+    assert assess.main(["--allow-network"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report == {"protocol": 2, "scope": assess.SCOPE, "status": "BLOCKED", "code": code,
+                      "last_confirmed_stage": stage, "sec_http_attempts": None, "result": None,
+                      "failure": {"category": "LOCAL_GUARD_REFUSAL", "exception_type": "AssessmentRejected", "sqlstate": None},
+                      "cleanup_failure": None}
+    assert assess._progress.get() is None
+
+
+def test_canonical_catch_cannot_erase_first_safe_refusal(monkeypatch, capsys):
+    def swallowed():
+        assess._confirmed("schema_verified")
+        try:
+            raise assess.AssessmentRejected("PROXY_CONFIGURATION_UNSUPPORTED")
+        except assess.AssessmentRejected:
+            pass  # Mirrors canonical refresh's error-to-result boundary.
+        raise assess.AssessmentRejected("CANONICAL_ASSESSMENT_FAILED")
+    monkeypatch.setattr(assess, "_assess", swallowed)
+    assert assess.main(["--allow-network"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["code"] == "PROXY_CONFIGURATION_UNSUPPORTED"
+    assert report["last_confirmed_stage"] == "schema_verified"
+    assert report["sec_http_attempts"] is None
+
+
+def test_loader_failure_confirms_admission_only_without_fake_http_count(monkeypatch, capsys):
+    from app import sec_client
+    monkeypatch.setattr(assess, "_network_admission", lambda: None)
+    monkeypatch.setattr(sec_client, "get_company_facts", Mock(side_effect=RuntimeError("SYNTHETIC_SECRET")))
+    def source():
+        assess._confirmed("schema_verified")
+        return assess._aapl_facts(assess.CIK)
+    monkeypatch.setattr(assess, "_assess", source)
+    assert assess.main(["--allow-network"]) == 1
+    output = capsys.readouterr().out
+    report = json.loads(output)
+    assert report["last_confirmed_stage"] == "source_admitted"
+    assert report["sec_http_attempts"] is None and "SYNTHETIC_SECRET" not in output
+
+
+def test_success_protocol_keeps_zero_version_and_unknown_transport_count(monkeypatch, capsys):
+    from app import sec_client
+    from app.refresh_contracts import RefreshResult
+    monkeypatch.setattr(assess, "_network_admission", lambda: None)
+    monkeypatch.setattr(sec_client, "get_company_facts", Mock(return_value={}))
+    row = RefreshResult(ticker="AAPL", stream="facts", status="no_change").model_dump(mode="json")
+    result = assess._sanitized_result({"dry_run": True, "error": None, "companies": [row]})
+    def done():
+        assess._confirmed("schema_verified")
+        assess._aapl_facts(assess.CIK)
+        return result
+    monkeypatch.setattr(assess, "_assess", done)
+    assert assess.main(["--allow-network"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "ASSESSED" and report["code"] is None
+    assert report["last_confirmed_stage"] == "assessment_completed"
+    assert report["sec_http_attempts"] is None and report["result"]["version_after"] == 0
+    assert assess.main([]) == 1  # A later invocation cannot inherit progress.
+    assert json.loads(capsys.readouterr().out)["last_confirmed_stage"] == "not_started"
+
+
+@pytest.mark.parametrize("class_name,state,category", [
+    ("InvalidPassword", "28P01", "DATABASE_AUTH_REJECTED"),
+    ("InvalidCatalogName", "3D000", "DATABASE_TARGET_MISSING"),
+    ("ConnectionFailure", "08006", "DATABASE_CONNECTION_FAILED"),
+    ("TooManyConnections", "53300", "DATABASE_CAPACITY"),
+    ("ReadOnlySqlTransaction", "25006", "READ_ONLY_REJECTED_OPERATION"),
+    ("InsufficientPrivilege", "42501", "DATABASE_PERMISSION"),
+    ("UndefinedTable", "42P01", "SCHEMA_OBJECT_MISSING"),
+    ("UndefinedColumn", "42703", "SCHEMA_OBJECT_MISSING"),
+    ("QueryCanceled", "57014", "QUERY_CANCELED_OR_TIMEOUT"),
+    ("LockNotAvailable", "55P03", "LOCK_NOT_AVAILABLE"),
+])
+def test_actual_wrapped_psycopg_types_classify_without_private_text(class_name, state, category):
+    import psycopg
+    from sqlalchemy.exc import OperationalError
+    original = getattr(psycopg.errors, class_name)("SYNTHETIC_SECRET")
+    error = OperationalError("SYNTHETIC_PRIVATE_SQL", {"password": "SYNTHETIC_SECRET"}, original)
+    diagnostic = assess._classify_failure(error)
+    assert diagnostic["category"] == category and diagnostic["sqlstate"] == state
+    assert diagnostic["exception_type"] in {"PsycopgError", "PsycopgOperationalError"}
+    assert "SYNTHETIC" not in json.dumps(diagnostic)
+
+
+def test_unknown_sqlstate_dynamic_names_and_strings_cannot_escape():
+    import psycopg
+    class SensitiveDynamicName(RuntimeError):
+        sqlstate = "28P01"  # Not a verified psycopg exception.
+        def __str__(self): raise AssertionError("Must never stringify")
+    assert assess._classify_failure(SensitiveDynamicName()) == {
+        "category": "UNCLASSIFIED", "exception_type": "other", "sqlstate": None}
+    assert assess._classify_failure(psycopg.errors.RaiseException("SYNTHETIC_SECRET")) == {
+        "category": "DATABASE_ERROR_UNCLASSIFIED", "exception_type": "PsycopgError", "sqlstate": None}
+
+
+def test_unknown_operational_sqlstate_does_not_become_connection_failure():
+    import psycopg
+    error = psycopg.errors.SerializationFailure("SYNTHETIC_SECRET")
+    assert isinstance(error, psycopg.OperationalError)
+    assert assess._classify_failure(error) == {"category": "DATABASE_ERROR_UNCLASSIFIED",
+        "exception_type": "PsycopgOperationalError", "sqlstate": None}
+
+
+@pytest.mark.parametrize("cause,expected", [("auth", "DATABASE_AUTH_REJECTED"),
+    ("schema", "SCHEMA_REQUIREMENT_UNSATISFIED"), ("timeout", "POOL_TIMEOUT"),
+    ("unknown", "UNCLASSIFIED"), ("cofailure", "SCHEMA_REQUIREMENT_UNSATISFIED"),
+    ("cleanup_only", "POOL_TIMEOUT")])
+def test_entire_readiness_boundary_preserves_primary_and_cleanup(monkeypatch, capsys, cause, expected):
+    import psycopg
+    from sqlalchemy.exc import OperationalError, TimeoutError
+    from scripts import setup_demo
+    primary = {
+        "auth": OperationalError("SYNTHETIC_SQL", {}, psycopg.errors.InvalidPassword("SYNTHETIC_SECRET")),
+        "schema": setup_demo.DemoSetupError("SYNTHETIC_SECRET"),
+        "timeout": TimeoutError("SYNTHETIC_SECRET"), "unknown": RuntimeError("SYNTHETIC_SECRET"),
+        "cofailure": setup_demo.DemoSetupError("SYNTHETIC_SECRET"), "cleanup_only": None,
+    }[cause]
+    session = Mock()
+    session.close.side_effect = TimeoutError("SYNTHETIC_CLOSE_SECRET") if cause in {"cofailure", "cleanup_only"} else None
+    engine = SimpleNamespace(dispose=Mock(side_effect=TypeError("SYNTHETIC_DISPOSE_SECRET") if cause == "cofailure" else None))
+    factory = Mock(return_value=session)
+    factory.kw = {"bind": engine}
+    monkeypatch.setattr(assess, "_network_admission", lambda: None)
+    monkeypatch.setattr(assess, "_make_factory", lambda *a: factory)
+    monkeypatch.setattr(setup_demo, "check_schema", Mock(side_effect=primary))
+    assert assess.main(["--allow-network"]) == 1
+    output = capsys.readouterr().out
+    report = json.loads(output)
+    assert report["protocol"] == 2 and report["code"] == "ASSESSMENT_UNVERIFIED"
+    assert report["last_confirmed_stage"] == "database_configured"
+    assert report["failure"]["category"] == expected and report["result"] is None
+    assert report["sec_http_attempts"] is None and "SYNTHETIC" not in output
+    if cause in {"cofailure", "cleanup_only"}:
+        assert report["cleanup_failure"]["category"] == "POOL_TIMEOUT"
+        session.invalidate.assert_called_once()
+    else:
+        assert report["cleanup_failure"] is None
+    session.close.assert_called_once()
+    engine.dispose.assert_called_once()
+
+
+def test_direct_readiness_call_reraises_original_when_both_cleanups_fail(monkeypatch):
+    from scripts import setup_demo
+    primary = setup_demo.DemoSetupError("SYNTHETIC_SECRET")
+    session = Mock()
+    session.close.side_effect = TypeError("SYNTHETIC_CLOSE_SECRET")
+    engine = SimpleNamespace(dispose=Mock(side_effect=RuntimeError("SYNTHETIC_DISPOSE_SECRET")))
+    factory = Mock(return_value=session); factory.kw = {"bind": engine}
+    monkeypatch.setattr(assess, "_network_admission", lambda: None)
+    monkeypatch.setattr(assess, "_make_factory", lambda *a: factory)
+    monkeypatch.setattr(setup_demo, "check_schema", Mock(side_effect=primary))
+    with pytest.raises(setup_demo.DemoSetupError) as found: assess._assess()
+    assert found.value is primary
+
+
+def test_cleanup_local_guard_cannot_replace_primary_code(monkeypatch, capsys):
+    from scripts import setup_demo
+    def fail_close(): raise assess.AssessmentRejected("READ_ONLY_UNVERIFIED")
+    session = Mock();session.close.side_effect = fail_close
+    factory = Mock(return_value=session);factory.kw = {"bind": SimpleNamespace(dispose=Mock())}
+    monkeypatch.setattr(assess, "_network_admission", lambda: None)
+    monkeypatch.setattr(assess, "_make_factory", lambda *a: factory)
+    monkeypatch.setattr(setup_demo, "check_schema", Mock(side_effect=setup_demo.DemoSetupError("SYNTHETIC_SECRET")))
+    assert assess.main(["--allow-network"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["code"] == "ASSESSMENT_UNVERIFIED"
+    assert report["failure"]["category"] == "SCHEMA_REQUIREMENT_UNSATISFIED"
+    assert report["cleanup_failure"]["category"] == "LOCAL_GUARD_REFUSAL"
+    assert assess._cleanup_active.get() is False
+
+
 def payload(value="100", accession="0000320193-25-000001"):
     return {"cik": 320193, "facts": {"us-gaap": {"Revenues": {"units": {"USD": [{
         "val": Decimal(value), "start": "2024-01-01", "end": "2024-12-31", "filed": "2025-02-01",

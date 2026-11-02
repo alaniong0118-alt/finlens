@@ -1,6 +1,6 @@
 # Dormant canonical AAPL facts assessment
 
-Status: active — offline candidate frozen for independent review; live use not authorized
+Status: active — offline diagnostic repair awaiting independent review; no further live run in this task
 Roadmap phase: bounded freshness assessment preparation
 
 ## Objective
@@ -91,7 +91,9 @@ or an atomic guarantee against concurrent platform configuration changes.
 - [x] Worker and supervisor implemented; existing runtime code remains unchanged.
 - [x] Focused offline validation completed; five protected hashes unchanged.
 - [ ] Independent review and later delivery gate.
-- [ ] Separate approval for configuration/DB/contact/SEC acquisition; not granted.
+- [ ] Separate live approval was not granted at the initial dormant freeze; later
+  exact approvals and the one failed native attempt are recorded below. Further
+  execution is stopped during the current offline repair.
 
 ## Test and validation strategy
 
@@ -162,11 +164,84 @@ worker identity/timing; source bodies and private exceptions are not retained.
 Five-file scope, no shared runtime changes, focused checks pass, protected files
 unchanged and independent review closes findings. Live acquisition remains dormant.
 
+## Subsequent approved run and offline diagnostic repair
+
+The initial five-file dormant implementation was reviewed and delivered in
+`f384d58bbf6d70576e30e29323e83505c9eb0c18`. This repair starts there, with the
+same five protected exceptions and initially empty index; no shared refresh,
+database, SEC client, admission policy or runtime launcher changes are included.
+
+After separate explicit approval for local reads/SEC contact and a process-only
+development context, one native attempt ran. Its worker exited 1 after 827 ms;
+the supervisor exited 1 after 1,339 ms. The 354-byte receipt retained only
+`WORKER_REFUSED`, with null result. It did not establish the refusal stage,
+native read-only readiness, actual SEC HTTP attempts, would-insert or conflicts.
+Do not infer historical HTTP count or refusal cause from elapsed time.
+
+Evidence remains outside the repository at
+`D:\Projects\finlens-aapl-facts-approved-dc32149bd9814afa901fb4423a075885`.
+The receipt SHA-256 is
+`99D33A6FB49615919B94C38537CCCB8FCABD3AD901443AF0553A6A78D4CF4207`.
+Both owned PIDs were absent; the existing PG container and listener creation
+identity matched. A false listener mismatch caused by JSON `System.DateTime`
+versus formatted-string comparison remains in the original evidence, alongside
+`cleanup-reconciliation.json` (SHA-256
+`1ADCC15E26454BCACD94A3B24BDDD8856CF6ECE36B74DF1267784E51BC4160B7`).
+Neither original record is overwritten by this repair. The process-only profile
+did not persist, and no publication/freshness result is claimed.
+
+Root cause: the worker already emitted an allowlisted BLOCKED JSON code, but
+the supervisor discarded stdout for every nonzero exit before validating it.
+The narrow repair adds protocol version 1: fixed scope, status, safe code,
+last confirmed stage, null `sec_http_attempts`, and a validated result or null.
+The worker tracks only completed boundaries, with a context reset per invocation;
+the first local safe refusal survives canonical refresh's exception-to-result
+conversion. A source admission is not proof of a sent HTTP request; source return
+means parsed payload returned, not completed financial admission. No HTTP client
+instrumentation was added, so all reported request counts remain unknown/null.
+
+The supervisor incrementally bounds both pipes as before, validates even exit-1
+stdout, and persists only the validated fields. Exit code/status/stage/code must
+agree. Invalid UTF-8/JSON, unknown/duplicate fields, excess size/depth, contradictory
+stages and any non-null uninstrumented HTTP count fail closed. Raw stderr and
+exception/config/contact text are never copied. The 600-second worker deadline,
+16 KiB per-pipe bound, 64 KiB exclusive receipt, SQL guards and cleanup semantics
+are unchanged. Invalid/missing protocol leaves stage and request count unknown.
+Worker and wrapper must be delivered together; an old/new protocol mismatch is
+rejected rather than interpreted as a successful assessment.
+
+Current offline checks (no native acquisition, config/registry reads or DB):
+
+- Same guarded Python command documented above, selecting
+  `tests/test_aapl_facts_assessment.py --maxfail=2`: **79 passed**, four existing
+  UTC-default deprecation warnings. Coverage includes every safe refusal category,
+  context reset, swallowed guard refusal, source-call failure, and unknown counts.
+- Same installed PowerShell command for
+  `backend/tests/test_aapl_facts_assessment.ps1`: **60 passed, 0 failed**. Only
+  short synthetic local children and mocks ran; positive and negative protocol,
+  nonzero exit, missing/oversized/malformed JSON, duplicate keys, stage/count
+  contradictions, deadline/output and sanitized failed-receipt behavior passed.
+  Fixtures retained at
+  `D:\Projects\finlens-aapl-assessment-offline-35c821e399a94cedae99861206682781`.
+- External future-cleanup helper/test only, at
+  `D:\Projects\finlens-aapl-protocol-review-0aa92b10480b41819a6a3527ad1fd099`,
+  normalizes explicit-offset strings, JSON DateTime and DateTimeOffset to UTC ticks.
+  Unspecified timestamps and malformed/overflow dates are rejected. Running the
+  same installed PowerShell with `-File <that directory>\test-owned-utc-identity.ps1`
+  passed **13 synthetic checks**, without looking up any process or native state.
+
+Next gate is independent review of this five-file repair and the two external
+UTC helper/test files. No further assessment ran, no actual platform proxy lookup
+was performed, and no source/Git delivery or activation is authorized by this
+offline repair record. Existing historical refusals remain untouched.
+
 ## Final outcome
 
-Five new files are frozen for P2 closure review, with 62 Python focused checks
-passing and 25 PowerShell checks for unchanged supervisor/test bytes. The broader
-legacy regression failure and independent baseline evidence are preserved above.
+Initial dormant delivery passed independent P2 closure with 62 Python and 25
+PowerShell checks. The current diagnostic repair has 79 Python, 60 PowerShell
+and 13 external synthetic UTC checks passing; its independent review is pending.
+The broader legacy regression failure and independent baseline evidence remain
+preserved above. This task does not recover the missing historical refusal code.
 Native PostgreSQL enforcement, actual SEC result, process termination under an OS
 failure, user-interrupted supervisor recovery, and live data freshness remain
 unverified. Killing the supervisor itself can leave the worker alive; the script
@@ -176,3 +251,68 @@ metadata is updated by assessment, even if it finds new observations.
 
 Suggested future commit:
 `feat(ops): add dormant read-only AAPL facts assessment`.
+
+## Protocol 2 connection/schema classifier (offline, pending review)
+
+The reviewed protocol-1 candidate was tried once under subsequent exact phase
+approval. Evidence is preserved at
+`D:\Projects\finlens-aapl-protocol-native-702a34975c7e4f9da504368e28891aa0`.
+Its worker returned `ASSESSMENT_UNVERIFIED`, last confirmed `database_configured`,
+exit 1, 848 ms; supervisor exit 1, 1,360 ms. Schema/native read-only readiness was
+not confirmed, coordinator/source acquisition were not reached, and instrumented
+HTTP count remained null. Both owned processes exited; original PG identities,
+candidate/protected hashes and parent environment were preserved. The final receipt
+SHA-256 is `DCB5583E24A9C6A7B9A7A874D6D1020DC355B38B47109F6962D7A94F7EDD7EFB`.
+This does not identify the earlier or current underlying native exception.
+
+Read-only offline probes found no connect-argument/API incompatibility: installed
+SQLAlchemy 2.1.2, psycopg 3.3.6 and libpq 18.4 accepted synthetic options; actual
+SQLAlchemy `do_connect` dispatch reached the intercepted connector. Real
+SQLAlchemy begin/session/coordinator with fake DBAPI passed three read-only begin
+checks, and psycopg adapted empty immutabledict/named parameters. Real schema
+checker controls accepted valid synthetic inventory and rejected missing table,
+column, migration head and vector with DemoSetupError. Mock authentication and
+mock missing schema both reproduced the same generic code/stage. Therefore neither
+is claimed as the real cause; no admission/schema requirement was changed.
+
+The scoped repair now emits protocol **2**, adding fixed-shaped `failure` and
+`cleanup_failure` fields (category, static exception type label, allowlisted
+SQLSTATE or null). Only a verified psycopg exception may supply SQLSTATE; unknown
+states are suppressed. Classifiers never inspect exception strings, SQL, DSNs,
+parameters or dynamic class names. Unrecognized errors remain UNCLASSIFIED/other.
+Classification itself cannot replace an original exception if it fails.
+
+The first primary diagnostic is saved before session close. Session-close failure
+attempts invalidation; its first safe cleanup category is separate. Engine-dispose
+failure cannot override the primary. A cleanup-only failure still refuses the
+assessment. A scoped cleanup context prevents a local guard raised during cleanup
+from stealing the original refusal code. This does not prove native cleanup under
+OS failure. Deadline, read-only options, complete schema gate, coordinator binding,
+canonical dry-run semantics, source scope and request-count unknowns are unchanged.
+Worker/wrapper must be updated together; protocol-1/malformed/inconsistent fields
+are rejected, and any failure or cleanup diagnostic forbids success.
+
+Actual offline verification, using the same guarded commands documented above:
+
+- `tests/test_aapl_facts_assessment.py --maxfail=2`: **99 passed**, four existing
+  UTC-default warnings. First classifier iteration passed 97; an additional cleanup
+  guard co-failure regression brought it to 98; unknown operational SQLSTATE
+  classification is covered in the final 99-case file. A non-allowlisted server
+  SQLSTATE is unclassified, never mislabeled as a connection failure.
+- `backend/tests/test_aapl_facts_assessment.ps1`: **80 passed, 0 failed**. The first
+  iteration passed 78; cleanup-guard co-failure brought it to 79, and the final run
+  adds unknown operational SQLSTATE. Eight actual
+  candidate-producer -> supervisor-parser synthetic fixtures cover authentication,
+  schema, pool timeout, two unknown SQLSTATE types, primary plus multiple cleanup failures,
+  cleanup guard and cleanup-only failure. These children use the maintained offline
+  guard, fake sessions and no-op source admission, not live configuration/DB/SEC.
+  Fixtures remain at
+  `D:\Projects\finlens-aapl-assessment-offline-2350f88a665640d4a785c2d6a9f5a3a2`.
+- Existing external UTC helper/test bytes remain unchanged; their prior 13-check
+  result is not claimed as a new execution. No native workload, proxy discovery,
+  private configuration, real DB/SEC, model, browser, Git delivery or settings
+  change occurred in this classifier implementation task.
+
+Freeze the same five repository files for one focused closure review. Preserve
+all earlier manifests, patches and failed native evidence; historical cause/counts
+remain unknown. No further native run precedes that review.
