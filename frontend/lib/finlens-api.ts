@@ -837,8 +837,8 @@ export function getStoredCoverage(ticker: string, period: "annual" | "quarter", 
   if (range) { query.set("end_from", range.from_date); query.set("end_to", range.to_date); }
   return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/coverage?${query}`, { signal }, true);
 }
-export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal): Promise<MetricHistory> {
-  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal });
+export function getMetricHistory(ticker: string, metric: string, period: PeriodKind, signal?: AbortSignal, requirePublishedVersion = false): Promise<MetricHistory> {
+  return requestJson(`/companies/${encodeURIComponent(ticker)}/financials/metrics/${encodeURIComponent(metric)}?period=${period}&limit=12`, { signal }, requirePublishedVersion);
 }
 export function getFilingContext(ticker: string, accession: string, query: string, signal?: AbortSignal, requirePublishedVersion = false): Promise<FilingContext> {
   const params = new URLSearchParams({ q: query, limit: "5" });
