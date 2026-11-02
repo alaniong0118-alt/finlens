@@ -2,6 +2,8 @@
 import builtins
 from contextlib import nullcontext
 import importlib
+from pathlib import Path
+import shlex
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -172,3 +174,34 @@ def test_show_run_preserves_ledger_precedence_without_tickers(monkeypatch, capsy
     assert '"run_id": "fixture"' in capsys.readouterr().out
     for sentinel in forbidden:
         sentinel.assert_not_called()
+
+
+def test_freshness_runbook_refresh_examples_match_guarded_cli_without_live_work(monkeypatch, tmp_path):
+    from app import database, refresh_service, sec_client
+    from scripts import refresh_data, setup_demo, sync_financial_facts
+    document = (Path(__file__).resolve().parents[2] / "docs" / "data-freshness.md").read_text(encoding="utf-8")
+    examples = [shlex.split(line.split("-m scripts.refresh_data ", 1)[1])
+                for line in document.splitlines() if "-m scripts.refresh_data " in line]
+    assert len(examples) == 3  # Facts assessment, ledger inspection, fixed canary.
+    for args in examples:
+        assert "--all" not in args and "--bootstrap" not in args
+    commands = [args for args in examples if "--show-run" not in args]
+    # Real CLI parsing/request construction, with all operational dependencies fake.
+    factory = Mock(side_effect=lambda: nullcontext(SimpleNamespace()))
+    monkeypatch.setattr(database, "SessionLocal", factory)
+    monkeypatch.setattr(setup_demo, "check_schema", Mock())
+    contact = Mock(return_value={})
+    monkeypatch.setattr(sec_client, "get_sec_headers", contact)
+    monkeypatch.setattr(sync_financial_facts, "report_path", lambda _: tmp_path / "unused.json")
+    monkeypatch.setattr(sync_financial_facts, "write_report", Mock())
+    service = Mock(return_value={"run_id": "offline-doc-example", "error": None, "companies": []})
+    monkeypatch.setattr(refresh_service, "refresh", service)
+    for args in commands:
+        assert refresh_data.main(args) == 0
+        request = service.call_args.args[1]
+        assert request.tickers == ["AAPL"] and request.max_seconds == 300 and request.max_run_seconds == 600
+        if request.dry_run:
+            assert request.stream == "facts" and request.publication_scope is None
+        else:
+            assert request.stream == "both" and request.publication_scope == "aapl-10k-2025" and request.max_filings == 1
+    assert service.call_count == 2 and contact.call_count == 2

@@ -79,6 +79,11 @@ For routine prepared-demo startup use [local-demo.md](local-demo.md). The follow
 
 Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **Steps 1–4 are completed on development; retain them as cutover guidance for other authorized targets. Do not repeat them on the accepted database. Steps 5–6 still require separate live-canary authorization and the linked plan's gates.** Keep private database/contact settings in ignored env files. No OpenAI key is required.
 
+The refresh CLI, including dry runs and `--show-run`, is development-only. It is
+not available inside `sec_readonly` or the financial-only service. A separately
+authorized operator process must satisfy its existing profile guard; do not
+change a running service's profile or bypass its startup gates to run it.
+
 1. Stop source-writing jobs; record read-only counts/full-row fingerprints and take an operator-managed backup. Confirm isolated tests and independent review first.
 2. Stop API for the migration/bootstrap cutover. On an existing dataset, migration alone creates empty manifests; do not serve the migrated catalog before validated bootstrap.
 3. Apply the additive revision and offline bootstrap:
@@ -92,16 +97,47 @@ Run backend commands from `backend/` using `.venv/Scripts/python.exe`. **Steps 1
 Bootstrap validates the complete stored inventory, retains rows/vectors and records version-zero manifests without fabricated check dates. It is idempotent, only intended before versioned publication, and must be resolved before restart if invalid accessions are reported. Fresh clones instead migrate then run the existing `scripts.setup_demo`; no legacy bootstrap is needed.
 
 4. Restart API (schema capability is cached); verify readiness, sources, unknown freshness and unchanged original fingerprints. Keep scheduler disabled.
-5. After separate live acquisition authorization, validate private SEC contact and cached encoder; perform one-company discovery-only dry-run followed by a small canary. The narrowly authorized AAPL publication must use the opt-in gate below rather than the unrestricted example:
+5. After separate live acquisition authorization, validate private SEC contact.
+For a financial-only trial, a one-company facts assessment can use the following
+explicitly bounded dry run. It does not fetch filing documents or invoke the
+encoder. This example is a proposed operator action, not authorization to run it;
+use a new report filename if the example destination already exists.
 
 ```powershell
-.venv/Scripts/python.exe -m scripts.refresh_data --ticker AAPL --dry-run --allow-network --report reports/canary-discovery.json
-.venv/Scripts/python.exe -m scripts.refresh_data --ticker AAPL --allow-network --max-filings 1 --max-seconds 300 --max-run-seconds 600 --report reports/canary-publication.json
+.venv/Scripts/python.exe -m scripts.refresh_data --ticker AAPL --stream facts --dry-run --allow-network --max-seconds 300 --max-run-seconds 600 --report reports/aapl-facts-assessment.json
 ```
 
-`--dry-run` still acquires source metadata/Company Facts and requires network authorization. It performs no database/operational writes and no embedding work. `would_insert` means observations for facts, filings for evidence; committed counters stay zero. Successful dry-run status is `would_update`/`no_change`, not a freshness certification.
+`--dry-run` still acquires source metadata/Company Facts and requires network
+authorization. It reads the database, takes coordinator locks and writes its new
+report, but performs no financial or operational row writes and no embedding
+work. `would_insert` means observations for facts, filings for evidence; committed
+counters stay zero. It does not advance publication versions or check/success
+timestamps. Successful dry-run status is `would_update`/`no_change`, not a freshness
+certification. A successful non-dry-run no-change check can update those timestamps
+without increasing a version; version zero alone does not prove no check occurred.
 
-6. Audit appended identities, original-row fingerprints, revisions, source lineage, independent stream statuses and UI version invalidation. Repeat no-op/recovery, then explicitly approve broader rollout. Use repeated `--ticker`, `--all`, `--stream facts|evidence|both`, bounded `--max-filings`, stream `--max-seconds` and total `--max-run-seconds`. No selection/no `--allow-network` means no acquisition.
+Evidence/both-stream publication needs separate scope approval and the prepared
+encoder. The narrowly authorized AAPL publication must use the fixed opt-in gate
+below; the facts-only assessment does not authorize that publication or generic
+new filings. Existing UCR source/rights/custody admission remains a separate gate.
+
+6. Audit appended identities, original-row fingerprints, revisions, source lineage,
+independent stream statuses and UI version invalidation. Repeat no-op/recovery,
+then explicitly approve broader rollout. Use explicit repeated `--ticker` values
+within the existing 35-ticker cap, `--stream facts|evidence|both`, bounded
+`--max-filings`, stream `--max-seconds` and total `--max-run-seconds`. `--all` and
+`--bootstrap` are rejected before operational work, including in dry runs. Do not
+batch or raise limits to bypass this boundary. Missing selection or
+`--allow-network` means no acquisition.
+
+Ordinary non-dry-run refresh without `--publication-scope` first recovers **all**
+abandoned `running` attempts under exclusive coordinator admission, not just the
+selected tickers. It may mark attempts interrupted and update their companies'
+stream failure metadata. `--ticker AAPL` limits the subsequent financial refresh,
+not this recovery metadata scope. Before authorizing a publication, inspect and
+review the existing ledger and possible recovery effects; do not promise
+AAPL-only metadata changes. Dry runs skip recovery and publication writes. The
+fixed canary instead rejects unsettled attempts before persistent writes.
 
 Reports use new filenames and atomic replacement of that run's checkpoints. To reconstruct a committed run after report loss:
 
@@ -170,6 +206,9 @@ sources acquired by a later invocation.
 ## Scheduling: disabled
 
 `Refresh-FinLens.ps1` is an opt-in explicit-issuer wrapper, not a registered task. It requires nonempty `-Ticker` selection (at most 35), `-EnableLiveRefresh` and process-local `FINLENS_REFRESH_ENABLED=1`. It never selects the full catalog or enables scheduling. Missing selections fail before Python starts. Scheduling remains excluded from the local demo; existing saved unselected actions now fail closed.
+
+The wrapper uses the CLI's default both-stream operation; it is not the facts-only
+dry-run assessment above and inherits the same development-only guard.
 
 After live canary/review and explicit scheduler authorization, a Windows Task Scheduler action can invoke:
 
