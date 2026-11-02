@@ -6,6 +6,7 @@ import { annualPeriodResponse, annualRowWarnings, validAnnualSelection, verifyAn
   type AnnualPeriodColumn } from "@/lib/annual-period-comparison";
 import { formatMetric, METRIC_LABELS, periodLabel } from "@/lib/research";
 import { MetricProvenance } from "@/components/financial-research";
+import AnnualComparisonChart from "@/components/annual-comparison-chart";
 import { useResearchVersion } from "@/components/research-freshness";
 
 type Operation = { controller: AbortController };
@@ -130,6 +131,7 @@ function AnnualSession({ company, version, changed, refresh }: { company: Compan
     {columns && !busy && !invalid && <>
       <p className="notice" role="note">Actual reporting dates differ across years. Matching units, fiscal labels or revenue bases do not establish equivalent accounting scope.
         Values are not ranked, converted between currencies or normalized. Revenue YoY is the server’s existing prior-year measure, not a calculation between selected columns.</p>
+      <AnnualComparisonChart columns={columns} />
       <p className="small muted table-scroll-help" id="annual-period-scroll-help">On narrow screens, scroll horizontally to inspect each year. Keyboard users can focus the table region and use arrow keys.</p>
       <div className="table-scroll comparison-scroll" tabIndex={0} role="region" aria-label="Selected company annual period metrics" aria-describedby="annual-period-scroll-help">
         <table className="comparison-table"><caption>{company.ticker} · Annual financial metrics · Publication version {version}</caption>

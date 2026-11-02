@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { describeApiError, FinLensApiError, getStoredCoverage, versionedController, type Company, type CoverageEndDateRange, type StoredFinancialCoverage } from "@/lib/finlens-api";
 import { COMPARISON_METRICS } from "@/lib/company-comparison";
 import { coverageRange, validateCoverage } from "@/lib/financial-coverage";
+import { presentCoverage, type CoverageMetricFilter, type CoverageStatusFilter } from "@/lib/coverage-presentation";
 import { formatDate, METRIC_LABELS } from "@/lib/research";
 import { MetricProvenance, revealHistorySourceFocus } from "@/components/financial-research";
 import { useResearchVersion } from "@/components/research-freshness";
@@ -33,12 +34,15 @@ export default function FinancialCoverage({ company }: { company: Company }) {
 
 function CoverageSession({ company, kind, version, range, changed }: { company: Company; kind: "annual" | "quarter"; version: number; range: CoverageEndDateRange | null; changed: () => void }) {
   const [data, setData] = useState<StoredFinancialCoverage | null>(null), [busy, setBusy] = useState(false), [invalid, setInvalid] = useState(false);
+  const [metricFilter, setMetricFilter] = useState<CoverageMetricFilter>("all"), [statusFilter, setStatusFilter] = useState<CoverageStatusFilter>("all");
+  const presentation = data ? presentCoverage(data, metricFilter, statusFilter) : null;
+  function resetFilters() { setMetricFilter("all"); setStatusFilter("all"); }
   const [message, setMessage] = useState("Choose Load stored coverage to inspect this publication. Nothing is fetched automatically.");
   const alive = useRef(false), operation = useRef<AbortController | null>(null), changedRef = useRef(changed);
   changedRef.current = changed;
   useEffect(() => { alive.current = true; return () => { alive.current = false; operation.current?.abort(); operation.current = null; }; }, []);
   function cancel() {
-    operation.current?.abort(); operation.current = null; setData(null); setBusy(false);
+    operation.current?.abort(); operation.current = null; setData(null); setBusy(false); resetFilters();
     setMessage(busy ? "Coverage request cancelled. Load explicitly to retry." : "Coverage cleared. Load explicitly to inspect again.");
   }
   async function load() {
@@ -48,7 +52,7 @@ function CoverageSession({ company, kind, version, range, changed }: { company: 
       controller.abort(); operation.current = null; setData(null); setBusy(false); setInvalid(true);
       setMessage("Published data changed. Verify the company publication before loading coverage again."); changedRef.current();
     });
-    operation.current = controller; setData(null); setBusy(true); setMessage("Loading stored financial coverage…");
+    operation.current = controller; setData(null); resetFilters(); setBusy(true); setMessage("Loading stored financial coverage…");
     const current = () => alive.current && operation.current === controller && !controller.signal.aborted;
     try {
       const response = await getStoredCoverage(company.ticker, kind, controller.signal, range);
@@ -67,15 +71,27 @@ function CoverageSession({ company, kind, version, range, changed }: { company: 
       <button type="button" className="secondary-button" disabled={invalid} onClick={cancel}>{busy ? "Cancel coverage request" : "Clear coverage"}</button></div>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
     {data && <><p className="small muted">Facts version {data.facts_version} · Evidence version {data.evidence_version}. Dates identify observed durations, not verified fiscal labels or historical as-of snapshots.</p>
-      {data.columns.length > 0 && <>
+      {presentation && <>
+        <p>In these loaded windows{data.end_date_range ? ` (period ends ${data.end_date_range.from_date} through ${data.end_date_range.to_date}, inclusive)` : ""}: {data.cell_count} total cells · {presentation.totals.available} available · {presentation.totals.unavailable} unavailable · {presentation.totals.not_applicable} not applicable.</p>
+        <fieldset><legend>Filter loaded coverage</legend>
+          <div className="comparison-actions"><label>Metric <select style={{ scrollMargin: "8px" }} value={metricFilter} onChange={event => setMetricFilter(event.target.value as CoverageMetricFilter)}>
+            <option value="all">All metrics</option>{COMPARISON_METRICS.map(metric => <option key={metric} value={metric}>{METRIC_LABELS[metric]}</option>)}</select></label>
+          <label>Status <select style={{ scrollMargin: "8px" }} value={statusFilter} onChange={event => setStatusFilter(event.target.value as CoverageStatusFilter)}>
+            <option value="all">All statuses</option><option value="available">Available</option><option value="unavailable">Unavailable</option><option value="not_applicable">Not applicable</option></select></label></div>
+        </fieldset>
+        <p role="status" aria-live="polite" aria-atomic="true">{presentation.visibleCount} matching cells in these loaded windows.</p>
+        {data.columns.length > 0 && presentation.visibleCount === 0 && <p>No cells match these filters. Change the metric or status to see more.</p>}
+      </>}
+      {presentation && presentation.visibleCount > 0 && <>
         <p id="coverage-scroll-help" className="small muted">Scroll horizontally to inspect all metrics. Keyboard users can focus the table region and use arrow keys. Open a cell’s details for its original reason and source evidence.</p>
         <div className="table-scroll comparison-scroll" tabIndex={0} role="region" aria-label="Stored financial coverage matrix" aria-describedby="coverage-scroll-help" onFocus={revealHistorySourceFocus}>
           <table className="comparison-table"><caption>{company.ticker} · {kind} stored coverage · Publication {version}{data.end_date_range ? ` · Period ends ${data.end_date_range.from_date} through ${data.end_date_range.to_date} (inclusive)` : ""}</caption>
-            <thead><tr><th scope="col">Actual reported dates</th>{COMPARISON_METRICS.map(metric => <th scope="col" key={metric}>{METRIC_LABELS[metric]}</th>)}</tr></thead>
-            <tbody>{data.columns.map(column => {
+            <thead><tr><th scope="col">Actual reported dates</th>{presentation.metrics.map(metric => <th scope="col" key={metric}>{METRIC_LABELS[metric]}</th>)}</tr></thead>
+            <tbody>{presentation.columns.map(column => {
               const dates = `${formatDate(column.window.start)} – ${formatDate(column.window.end)}`;
-              return <tr key={`${column.window.start},${column.window.end}`}><th scope="row">{dates}</th>{COMPARISON_METRICS.map(metric => {
+              return <tr key={`${column.window.start},${column.window.end}`}><th scope="row">{dates}</th>{presentation.metrics.map(metric => {
                 const point = column.metrics[metric];
+                if (statusFilter !== "all" && point.status !== statusFilter) return <td key={metric}><span className="small muted">Filtered out</span></td>;
                 return <td key={metric}><p>{point.status === "available" ? "Available" : point.status === "not_applicable" ? "Not applicable" : "Unavailable"}</p>
                   {point.reason && <p className="small metric-reason">{point.reason}</p>}
                   <MetricProvenance point={point} summary={`${METRIC_LABELS[metric]} ${dates}: details`} /></td>;

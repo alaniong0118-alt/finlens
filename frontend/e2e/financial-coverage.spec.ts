@@ -123,6 +123,25 @@ test('stored coverage: explicit requests, source keyboard and stale isolation', 
     }
 
     await panel.getByRole('button', { name: 'Clear coverage', exact: true }).focus();
+    for (const name of ['Metric', 'Status']) {
+      const control = panel.getByRole('combobox', { name, exact: true });
+      await page.keyboard.press('Tab'); await expect(control).toBeFocused();
+      const focus = await control.evaluate(element => {
+        const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+        const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const hit = document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+        return { left: rect.left - extent, right: rect.right + extent, top: rect.top - extent, bottom: rect.bottom + extent,
+          height: rect.height, width: innerWidth, viewportHeight: innerHeight, pageWidth: document.documentElement.scrollWidth,
+          visible: element.matches(':focus-visible'), outline: style.outlineStyle, outlineWidth: parseFloat(style.outlineWidth),
+          hit: !!hit && (hit === element || element.contains(hit)) };
+      });
+      await info.attach(`coverage-${name.toLowerCase()}-focus`, { body: JSON.stringify(focus), contentType: 'application/json' });
+      expect(focus.visible).toBe(true); expect(focus.outline).not.toBe('none'); expect(focus.outlineWidth).toBeGreaterThanOrEqual(3);
+      expect(focus.height).toBeGreaterThanOrEqual(44); expect(focus.hit).toBe(true);
+      expect(focus.left).toBeGreaterThan(-0.5); expect(focus.right).toBeLessThan(focus.width + 0.5);
+      expect(focus.top).toBeGreaterThan(-0.5); expect(focus.bottom).toBeLessThan(focus.viewportHeight + 0.5);
+      expect(focus.pageWidth).toBeLessThanOrEqual(focus.width);
+    }
     await page.keyboard.press('Tab'); await capture(grid, 'region', true);
     await page.keyboard.press('ArrowRight');
     const details = cells.first().locator('details.provenance'), toggle = details.locator(':scope > summary');
