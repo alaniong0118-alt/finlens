@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useId, useRef, useState, type 
 import { citationForClaim, describeApiError, FinLensApiError, versionedController, getAnswer, getFilingContext, getFilingSources, getResearchAnswer, searchableFilings, filingReadiness, filingToneIdentity,
   getCompanyContext, getKeywordFilingSources, captureKeywordRequest, getKeywordSearch, type KeywordRequest, type KeywordResponse,
   type Company, type FilingAnswer, type FilingContext, type EvidenceContext, type FilingSource, type ResearchAnswer } from "@/lib/finlens-api";
-import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, type QuestionScope } from "@/lib/research";
+import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, fiscalQuestionPeriods, guidedFiscalQuestion, type FiscalQuestionPeriod, type QuestionScope } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import DualFilingEvidence from "@/components/dual-filing-evidence";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
@@ -262,13 +262,20 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [guideMetric, setGuideMetric] = useState("revenue");
   const [guideScope, setGuideScope] = useState<QuestionScope>("latest_available");
+  const [guideMode, setGuideMode] = useState<"latest" | "historical" | "comparison">("latest");
+  const [guidePeriod, setGuidePeriod] = useState<FiscalQuestionPeriod>("annual");
+  const [guideYear, setGuideYear] = useState("");
+  const [guideLaterYear, setGuideLaterYear] = useState("");
   const [selectedPurpose, setPurpose] = useState<"general" | "risk" | "keyword">("general");
   const purpose = financialOnly ? "general" : selectedPurpose;
   const [riskGuide, setRiskGuide] = useState("supply_chain");
   const [searchedRisk, setSearchedRisk] = useState<{ owner: string; request: RiskRequest } | null>(null);
   const questionInput = useRef<HTMLTextAreaElement | null>(null);
   const presentation = METRIC_CATALOG.find(item => item.id === guideMetric)!;
-  const preparedQuestion = guidedQuestion(guideMetric, guideScope);
+  const comparing = guideMode === "comparison";
+  const guideMetrics = METRIC_CATALOG.filter(item => !comparing || fiscalQuestionPeriods(item.id, true).length > 0);
+  const preparedQuestion = guideMode === "latest" ? guidedQuestion(guideMetric, guideScope)
+    : guidedFiscalQuestion(guideMetric, guidePeriod, guideYear, comparing ? guideLaterYear : undefined);
   const controller = useRef<AbortController | null>(null);
   const scope = useRef(createRequestScope());
   const evidenceController = useRef<AbortController | null>(null);
@@ -397,15 +404,31 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       </fieldset> : <fieldset className="question-guide">
         <legend>Prepare a financial question</legend>
         <div className="guide-controls">
+          <label>Question preparation<select value={guideMode} onChange={event => {
+            const mode = event.target.value as typeof guideMode;
+            setGuideMode(mode);
+            if (mode === "comparison" && !fiscalQuestionPeriods(guideMetric, true).length) setGuideMetric("revenue");
+          }}>
+            <option value="latest">Latest value</option>
+            <option value="historical">Specific fiscal period</option>
+            <option value="comparison">Compare periods</option>
+          </select></label>
           <label>Question metric<select value={guideMetric} onChange={event => {
             const next = METRIC_CATALOG.find(item => item.id === event.target.value)!;
             setGuideMetric(next.id);
             if (!next.questionScopes.includes(guideScope)) setGuideScope("latest_available");
-          }}>{METRIC_GROUPS.map(group => <optgroup key={group.id} label={group.label}>{METRIC_CATALOG.filter(item => item.group === group.id).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label>
-          <label>Question reporting scope<select value={guideScope} onChange={event => setGuideScope(event.target.value as QuestionScope)}>{presentation.questionScopes.map(item => <option key={item} value={item}>{QUESTION_SCOPE_LABELS[item]}</option>)}</select></label>
+            if (!fiscalQuestionPeriods(next.id).some(item => item.id === guidePeriod)) setGuidePeriod("annual");
+          }}>{METRIC_GROUPS.map(group => <optgroup key={group.id} label={group.label}>{guideMetrics.filter(item => item.group === group.id).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label>
+          {guideMode === "latest" ? <label>Question reporting scope<select value={guideScope} onChange={event => setGuideScope(event.target.value as QuestionScope)}>{presentation.questionScopes.map(item => <option key={item} value={item}>{QUESTION_SCOPE_LABELS[item]}</option>)}</select></label>
+            : <>
+              <label>{comparing ? "Shared fiscal period" : "Requested fiscal period"}<select value={guidePeriod} onChange={event => setGuidePeriod(event.target.value as FiscalQuestionPeriod)}>{fiscalQuestionPeriods(guideMetric, comparing).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+              <label>{comparing ? "Earlier fiscal year" : "Fiscal year"}<input type="text" inputMode="numeric" maxLength={4} placeholder="2024" value={guideYear} onChange={event => setGuideYear(event.target.value)} /></label>
+              {comparing && <label>Later fiscal year<input type="text" inputMode="numeric" maxLength={4} placeholder="2025" value={guideLaterYear} onChange={event => setGuideLaterYear(event.target.value)} /></label>}
+            </>}
         </div>
         <p className="muted small">{presentation.description} {presentation.group === "balance" ? "This is a value as of a date, not a reporting-interval flow." : "Latest available may be an annual or YTD interval. A direct quarter requires a reported quarter observation."} Availability is checked only when you submit.</p>
-        <p className="question-preview">{preparedQuestion}</p>
+        {guideMode !== "latest" && <p className="muted small">Enter fiscal years from 1900 to 2099{comparing ? ", with the earlier year first. Both observations must use the same quarter or fiscal-year scope" : ""}. These are requested labels, not verified coverage. No annual or YTD substitution supplies a missing direct quarter.{comparing && " Margins compare in percentage points; EPS remains as filed, without a percentage comparison."}</p>}
+        <p className="question-preview" aria-live="polite">{preparedQuestion ?? "Enter valid fiscal years to prepare a question."}</p>
         <button type="button" className="secondary-button" disabled={!preparedQuestion} onClick={() => {
           if (preparedQuestion) { edit(preparedQuestion); questionInput.current?.focus(); }
         }}>Use question</button>

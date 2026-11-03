@@ -42,6 +42,30 @@ export function guidedQuestion(metric: string, scope: QuestionScope): string | n
   const wording = { latest_available: "latest available", quarter: "latest quarterly", annual: "latest annual" };
   return `What is the ${wording[scope]} ${entry.questionTerm}?`;
 }
+export const FISCAL_QUESTION_PERIODS = [
+  { id: "annual", label: "Fiscal year" },
+  { id: "q1", label: "Direct Q1" }, { id: "q2", label: "Direct Q2" },
+  { id: "q3", label: "Direct Q3" }, { id: "q4", label: "Direct Q4" },
+] as const;
+export type FiscalQuestionPeriod = typeof FISCAL_QUESTION_PERIODS[number]["id"];
+
+// Presentation vocabulary only: fiscal labels request backend selection, not
+// available coverage. A shared period prevents mixed-quarter comparisons.
+export function fiscalQuestionPeriods(metric: string, comparison = false) {
+  const entry = METRIC_CATALOG.find(item => item.id === metric);
+  if (!entry || comparison && (entry.group === "balance" || metric === "revenue_growth_yoy")) return [];
+  return FISCAL_QUESTION_PERIODS.filter(period => period.id === "annual" || entry.group !== "balance");
+}
+export function guidedFiscalQuestion(metric: string, period: FiscalQuestionPeriod, year: string, laterYear?: string): string | null {
+  const comparison = laterYear !== undefined;
+  if (!fiscalQuestionPeriods(metric, comparison).some(item => item.id === period)
+    || typeof year !== "string" || !/^(?:19|20)\d{2}$/.test(year)
+    || comparison && (typeof laterYear !== "string" || !/^(?:19|20)\d{2}$/.test(laterYear) || year >= laterYear)) return null;
+  const entry = METRIC_CATALOG.find(item => item.id === metric)!;
+  const label = (value: string) => `${period === "annual" ? "" : `${period.toUpperCase()} `}FY${value}`;
+  return comparison ? `Compare ${label(year)} and ${label(laterYear)} ${entry.questionTerm}.`
+    : `What was ${label(year)} ${entry.questionTerm}?`;
+}
 export const PERIOD_LABELS: Record<PeriodKind, string> = {
   quarter: "Direct quarter", annual: "Annual", half_year: "Half-year YTD",
   nine_months: "Nine-month YTD", instant: "As of date",

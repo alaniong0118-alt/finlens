@@ -1,0 +1,466 @@
+[
+  {
+    "ticker": "AAA",
+    "company_name": "Synthetic Alpha",
+    "question": "What was FY2024 revenue?",
+    "matched": true,
+    "status": "available",
+    "metric": "revenue",
+    "metric_label": "Revenue",
+    "period_intent": "annual",
+    "formatted_value": "$100.00",
+    "answer_text": "Synthetic Alpha's FY2024 revenue was $100.00.",
+    "explanation": null,
+    "observation": {
+      "metric": "revenue",
+      "unit": "USD",
+      "status": "available",
+      "value": "100",
+      "reason": null,
+      "period": {
+        "kind": "annual",
+        "start": "2024-01-01",
+        "end": "2024-12-31",
+        "fiscal_year": 2024,
+        "fiscal_period": "FY",
+        "fiscal_label_basis": "annual_period_end_year"
+      },
+      "formula": null,
+      "provenance": [
+        {
+          "fact_id": 6,
+          "canonical_metric": "revenue",
+          "company_cik": "0000900001",
+          "stored_metric": "Revenues",
+          "original_concept": "Revenues",
+          "value": "100",
+          "unit": "USD",
+          "period_start": "2024-01-01",
+          "period_end": "2024-12-31",
+          "stored_period_type": "fixture",
+          "source_fiscal_year": 2024,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2025-01-31",
+          "form": "10-K",
+          "accession_number": "0000900001-24-000000",
+          "source": "SEC Company Facts API: Revenues",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000124000000/0000900001-24-000000-index.html",
+          "stored_at": "2026-01-01T00:00:00"
+        }
+      ],
+      "alternatives": [],
+      "inputs": [],
+      "revenue_basis": "total_revenue"
+    },
+    "comparability": null,
+    "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+    "answer_kind": "historical_metric",
+    "requested_period": {
+      "fiscal_year": 2024,
+      "quarter": null
+    },
+    "comparison": null,
+    "formatted_absolute_change": null,
+    "formatted_percentage_change": null
+  },
+  {
+    "ticker": "AAA",
+    "company_name": "Synthetic Alpha",
+    "question": "What was Q2 FY2025 revenue?",
+    "matched": true,
+    "status": "unavailable",
+    "metric": "revenue",
+    "metric_label": "Revenue",
+    "period_intent": "quarter",
+    "formatted_value": null,
+    "answer_text": "Q2 FY2025 revenue is unavailable. No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+    "explanation": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+    "observation": {
+      "metric": "revenue",
+      "unit": "USD",
+      "status": "unavailable",
+      "value": null,
+      "reason": "No unique stored reporting period with the requested fiscal year/quarter label. Annual, YTD and unlabeled periods are not substituted.",
+      "period": null,
+      "formula": null,
+      "provenance": [],
+      "alternatives": [],
+      "inputs": []
+    },
+    "comparability": null,
+    "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+    "answer_kind": "historical_metric",
+    "requested_period": {
+      "fiscal_year": 2025,
+      "quarter": 2
+    },
+    "comparison": null,
+    "formatted_absolute_change": null,
+    "formatted_percentage_change": null
+  },
+  {
+    "ticker": "AAA",
+    "company_name": "Synthetic Alpha",
+    "question": "Compare FY2024 and FY2025 operating margin.",
+    "matched": true,
+    "status": "available",
+    "metric": "operating_margin",
+    "metric_label": "Operating margin",
+    "period_intent": "annual",
+    "formatted_value": "+10.00 percentage points",
+    "answer_text": "Operating margin increased from 20.00% in FY2024 to 30.00% in FY2025.",
+    "explanation": null,
+    "observation": null,
+    "comparability": null,
+    "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+    "answer_kind": "period_comparison",
+    "requested_period": {
+      "fiscal_year": 2024,
+      "quarter": null
+    },
+    "comparison": {
+      "status": "available",
+      "reason": null,
+      "earlier_period": {
+        "fiscal_year": 2024,
+        "quarter": null
+      },
+      "later_period": {
+        "fiscal_year": 2025,
+        "quarter": null
+      },
+      "earlier": {
+        "metric": "operating_margin",
+        "unit": "ratio",
+        "status": "available",
+        "value": "0.2",
+        "reason": null,
+        "period": {
+          "kind": "annual",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "fiscal_year": 2024,
+          "fiscal_period": "FY",
+          "fiscal_label_basis": "annual_period_end_year"
+        },
+        "formula": "operating_income / revenue",
+        "provenance": [
+          {
+            "fact_id": 36,
+            "canonical_metric": "operating_income",
+            "company_cik": "0000900001",
+            "stored_metric": "OperatingIncomeLoss",
+            "original_concept": "OperatingIncomeLoss",
+            "value": "20",
+            "unit": "USD",
+            "period_start": "2024-01-01",
+            "period_end": "2024-12-31",
+            "stored_period_type": "fixture",
+            "source_fiscal_year": 2024,
+            "source_fiscal_period": "FY",
+            "frame": null,
+            "filed": "2025-01-31",
+            "form": "10-K",
+            "accession_number": "0000900001-24-000000",
+            "source": "SEC Company Facts API: OperatingIncomeLoss",
+            "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000124000000/0000900001-24-000000-index.html",
+            "stored_at": "2026-01-01T00:00:00"
+          },
+          {
+            "fact_id": 6,
+            "canonical_metric": "revenue",
+            "company_cik": "0000900001",
+            "stored_metric": "Revenues",
+            "original_concept": "Revenues",
+            "value": "100",
+            "unit": "USD",
+            "period_start": "2024-01-01",
+            "period_end": "2024-12-31",
+            "stored_period_type": "fixture",
+            "source_fiscal_year": 2024,
+            "source_fiscal_period": "FY",
+            "frame": null,
+            "filed": "2025-01-31",
+            "form": "10-K",
+            "accession_number": "0000900001-24-000000",
+            "source": "SEC Company Facts API: Revenues",
+            "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000124000000/0000900001-24-000000-index.html",
+            "stored_at": "2026-01-01T00:00:00"
+          }
+        ],
+        "alternatives": [],
+        "inputs": [
+          {
+            "role": "operating_income",
+            "metric": "operating_income",
+            "value": "20",
+            "unit": "USD",
+            "period": {
+              "kind": "annual",
+              "start": "2024-01-01",
+              "end": "2024-12-31",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "fact_ids": [
+              36
+            ]
+          },
+          {
+            "role": "revenue",
+            "metric": "revenue",
+            "value": "100",
+            "unit": "USD",
+            "period": {
+              "kind": "annual",
+              "start": "2024-01-01",
+              "end": "2024-12-31",
+              "fiscal_year": 2024,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "fact_ids": [
+              6
+            ],
+            "revenue_basis": "total_revenue"
+          }
+        ]
+      },
+      "later": {
+        "metric": "operating_margin",
+        "unit": "ratio",
+        "status": "available",
+        "value": "0.3",
+        "reason": null,
+        "period": {
+          "kind": "annual",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "fiscal_year": 2025,
+          "fiscal_period": "FY",
+          "fiscal_label_basis": "annual_period_end_year"
+        },
+        "formula": "operating_income / revenue",
+        "provenance": [
+          {
+            "fact_id": 41,
+            "canonical_metric": "operating_income",
+            "company_cik": "0000900001",
+            "stored_metric": "OperatingIncomeLoss",
+            "original_concept": "OperatingIncomeLoss",
+            "value": "30",
+            "unit": "USD",
+            "period_start": "2025-01-01",
+            "period_end": "2025-12-31",
+            "stored_period_type": "fixture",
+            "source_fiscal_year": 2025,
+            "source_fiscal_period": "FY",
+            "frame": null,
+            "filed": "2026-01-31",
+            "form": "10-K",
+            "accession_number": "0000900001-25-000000",
+            "source": "SEC Company Facts API: OperatingIncomeLoss",
+            "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000125000000/0000900001-25-000000-index.html",
+            "stored_at": "2026-01-01T00:00:00"
+          },
+          {
+            "fact_id": 11,
+            "canonical_metric": "revenue",
+            "company_cik": "0000900001",
+            "stored_metric": "Revenues",
+            "original_concept": "Revenues",
+            "value": "100",
+            "unit": "USD",
+            "period_start": "2025-01-01",
+            "period_end": "2025-12-31",
+            "stored_period_type": "fixture",
+            "source_fiscal_year": 2025,
+            "source_fiscal_period": "FY",
+            "frame": null,
+            "filed": "2026-01-31",
+            "form": "10-K",
+            "accession_number": "0000900001-25-000000",
+            "source": "SEC Company Facts API: Revenues",
+            "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000125000000/0000900001-25-000000-index.html",
+            "stored_at": "2026-01-01T00:00:00"
+          }
+        ],
+        "alternatives": [],
+        "inputs": [
+          {
+            "role": "operating_income",
+            "metric": "operating_income",
+            "value": "30",
+            "unit": "USD",
+            "period": {
+              "kind": "annual",
+              "start": "2025-01-01",
+              "end": "2025-12-31",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "fact_ids": [
+              41
+            ]
+          },
+          {
+            "role": "revenue",
+            "metric": "revenue",
+            "value": "100",
+            "unit": "USD",
+            "period": {
+              "kind": "annual",
+              "start": "2025-01-01",
+              "end": "2025-12-31",
+              "fiscal_year": 2025,
+              "fiscal_period": "FY",
+              "fiscal_label_basis": "annual_period_end_year"
+            },
+            "fact_ids": [
+              11
+            ],
+            "revenue_basis": "total_revenue"
+          }
+        ]
+      },
+      "absolute_change": "0.1",
+      "percentage_change": null,
+      "percentage_status": "not_applicable",
+      "percentage_reason": "Ratio comparisons use percentage-point change, not percentage growth.",
+      "direction": "increase",
+      "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+    },
+    "formatted_absolute_change": "+10.00 percentage points",
+    "formatted_percentage_change": null
+  },
+  {
+    "ticker": "AAA",
+    "company_name": "Synthetic Alpha",
+    "question": "Compare Q2 FY2024 and Q2 FY2025 diluted eps.",
+    "matched": true,
+    "status": "available",
+    "metric": "diluted_eps",
+    "metric_label": "Diluted EPS",
+    "period_intent": "quarter",
+    "formatted_value": "+$0.77 per share",
+    "answer_text": "Diluted EPS increased from $1.23 per share in Q2 FY2024 to $2.00 per share in Q2 FY2025.",
+    "explanation": null,
+    "observation": null,
+    "comparability": {
+      "value_basis": "reported_as_filed",
+      "status": "unverified",
+      "reason": "SEC source values are preserved; cross-period stock-split/restatement share-basis comparability is not established."
+    },
+    "selection_policy": "Exact dates and units; establish revenue economic scope first, then latest filed, compatible concept priority, period-appropriate form, amendment, accession, fact ID.",
+    "answer_kind": "period_comparison",
+    "requested_period": {
+      "fiscal_year": 2024,
+      "quarter": 2
+    },
+    "comparison": {
+      "status": "available",
+      "reason": null,
+      "earlier_period": {
+        "fiscal_year": 2024,
+        "quarter": 2
+      },
+      "later_period": {
+        "fiscal_year": 2025,
+        "quarter": 2
+      },
+      "earlier": {
+        "metric": "diluted_eps",
+        "unit": "USD/share",
+        "status": "available",
+        "value": "1.2345",
+        "reason": null,
+        "period": {
+          "kind": "quarter",
+          "start": "2024-04-01",
+          "end": "2024-06-30",
+          "fiscal_year": 2024,
+          "fiscal_period": "Q2",
+          "fiscal_label_basis": "observed_annual_boundary"
+        },
+        "formula": null,
+        "provenance": [
+          {
+            "fact_id": 68,
+            "canonical_metric": "diluted_eps",
+            "company_cik": "0000900001",
+            "stored_metric": "EarningsPerShareDiluted",
+            "original_concept": "EarningsPerShareDiluted",
+            "value": "1.2345",
+            "unit": "USD/shares",
+            "period_start": "2024-04-01",
+            "period_end": "2024-06-30",
+            "stored_period_type": "fixture",
+            "source_fiscal_year": 2024,
+            "source_fiscal_period": "Q2",
+            "frame": null,
+            "filed": "2024-07-31",
+            "form": "10-Q",
+            "accession_number": "0000900001-24-000002",
+            "source": "SEC Company Facts API: EarningsPerShareDiluted",
+            "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000124000002/0000900001-24-000002-index.html",
+            "stored_at": "2026-01-01T00:00:00"
+          }
+        ],
+        "alternatives": [],
+        "inputs": []
+      },
+      "later": {
+        "metric": "diluted_eps",
+        "unit": "USD/share",
+        "status": "available",
+        "value": "2",
+        "reason": null,
+        "period": {
+          "kind": "quarter",
+          "start": "2025-04-01",
+          "end": "2025-06-30",
+          "fiscal_year": 2025,
+          "fiscal_period": "Q2",
+          "fiscal_label_basis": "observed_annual_boundary"
+        },
+        "formula": null,
+        "provenance": [
+          {
+            "fact_id": 73,
+            "canonical_metric": "diluted_eps",
+            "company_cik": "0000900001",
+            "stored_metric": "EarningsPerShareDiluted",
+            "original_concept": "EarningsPerShareDiluted",
+            "value": "2",
+            "unit": "USD/shares",
+            "period_start": "2025-04-01",
+            "period_end": "2025-06-30",
+            "stored_period_type": "fixture",
+            "source_fiscal_year": 2025,
+            "source_fiscal_period": "Q2",
+            "frame": null,
+            "filed": "2025-07-31",
+            "form": "10-Q",
+            "accession_number": "0000900001-25-000002",
+            "source": "SEC Company Facts API: EarningsPerShareDiluted",
+            "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000090000125000002/0000900001-25-000002-index.html",
+            "stored_at": "2026-01-01T00:00:00"
+          }
+        ],
+        "alternatives": [],
+        "inputs": []
+      },
+      "absolute_change": "0.7655",
+      "percentage_change": null,
+      "percentage_status": "not_applicable",
+      "percentage_reason": "EPS is reported as filed; stock-split/restatement share-basis comparability is unverified.",
+      "direction": "increase",
+      "formula": "absolute_change = later - earlier; percentage_change = (later - earlier) / earlier"
+    },
+    "formatted_absolute_change": "+$0.77 per share",
+    "formatted_percentage_change": null
+  }
+]

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, officialSecUrl, parseTheme, periodLabel, persistTheme, resolveTheme, METRIC_CATALOG, METRIC_GROUPS, METRIC_LABELS, SNAPSHOT_METRICS, guidedQuestion } from '../lib/research.ts';
+import { AI_UNAVAILABLE, createRequestScope, evidencePassages, epsWarning, formatMetric, historyChartRows, officialSecUrl, parseTheme, periodLabel, persistTheme, resolveTheme, METRIC_CATALOG, METRIC_GROUPS, METRIC_LABELS, SNAPSHOT_METRICS, guidedQuestion, fiscalQuestionPeriods, guidedFiscalQuestion } from '../lib/research.ts';
 import { describeApiError, getAnswer, getCapabilities, getFinancialSummary, getFilingContext, getMetricHistory } from '../lib/finlens-api.ts';
 
 // Compile the actual TSX components with the existing TypeScript dependency.
@@ -101,9 +101,44 @@ test('FD-01 catalog contains exactly the existing 15 metrics, grouped with corre
  assert.equal(guidedQuestion('total_assets','quarter'),null);
 });
 
-test('FD-01 every advertised guided question resolves with actual backend metric and period semantics offline', () => {
+test('guided fiscal preparation rejects invalid years and unsupported combinations without changing latest templates', () => {
+ for (const year of ['', '1899', '2100', '024', '20245', '2024.0', ' 2024', '2024 ', '20e2', '２０２４', 2024, null, undefined]) {
+  assert.equal(guidedFiscalQuestion('revenue', 'annual', year), null, String(year));
+  assert.equal(guidedFiscalQuestion('revenue', 'q1', '2024', year === undefined ? '' : year), null, String(year));
+ }
+ for (const [first, last] of [['2024','2024'], ['2025','2024']]) assert.equal(guidedFiscalQuestion('revenue','annual',first,last),null);
+ for (const metric of ['cash_and_equivalents','total_assets','total_liabilities']) {
+  assert.deepEqual(fiscalQuestionPeriods(metric).map(item=>item.id),['annual']);
+  assert.deepEqual(fiscalQuestionPeriods(metric,true),[]);
+  assert.equal(guidedFiscalQuestion(metric,'q1','2024'),null);
+  assert.equal(guidedFiscalQuestion(metric,'annual','2024','2025'),null);
+ }
+ assert.equal(METRIC_CATALOG.filter(item=>fiscalQuestionPeriods(item.id,true).length).length,11);
+ assert.equal(guidedFiscalQuestion('revenue_growth_yoy','annual','2024','2025'),null);
+ for (const period of ['quarter','instant','half_year','nine_months','q0','q5','Q1',null]) assert.equal(guidedFiscalQuestion('revenue',period,'2024'),null);
+ assert.equal(guidedFiscalQuestion('unsupported','annual','2024'),null);
+ assert.equal(guidedFiscalQuestion('operating_margin','annual','2024','2025'),'Compare FY2024 and FY2025 operating margin.');
+ assert.equal(guidedFiscalQuestion('diluted_eps','q2','2024','2025'),'Compare Q2 FY2024 and Q2 FY2025 diluted eps.');
+ assert.equal(guidedFiscalQuestion('revenue','annual','1900'),'What was FY1900 revenue?');
+ assert.equal(guidedFiscalQuestion('revenue','annual','2099'),'What was FY2099 revenue?');
+});
+
+test('FD-01 every advertised guided question resolves with actual backend metric, operation and period semantics offline', () => {
  const cases=METRIC_CATALOG.flatMap(entry=>entry.questionScopes.map(scope=>({metric:entry.id,scope,question:guidedQuestion(entry.id,scope)})));
  assert.equal(cases.length,39);
+ const fiscal=METRIC_CATALOG.flatMap(entry=>fiscalQuestionPeriods(entry.id).map(period=>({
+  metric:entry.id,period:period.id,question:guidedFiscalQuestion(entry.id,period.id,'2024'),year:2024,
+ }))).concat(METRIC_CATALOG.flatMap(entry=>fiscalQuestionPeriods(entry.id,true).map(period=>({
+  metric:entry.id,period:period.id,question:guidedFiscalQuestion(entry.id,period.id,'2024','2025'),year:2024,later:2025,
+ }))));
+ assert.equal(fiscal.length,118); // 63 historical + 55 comparisons, alongside the original 39.
+ fiscal.push(...['1900','2099'].map(year=>({metric:'revenue',period:'annual',year:Number(year),question:guidedFiscalQuestion('revenue','annual',year),missing:true})),
+  {metric:'revenue',period:'q2',year:2025,question:guidedFiscalQuestion('revenue','q2','2025'),missing:true},
+  {metric:'revenue',period:'annual',year:2024,later:2025,question:guidedFiscalQuestion('revenue','annual','2024','2025'),missing:true},
+  {metric:'revenue',period:'annual',year:1900,later:2099,question:guidedFiscalQuestion('revenue','annual','1900','2099'),missing:true},
+  {metric:'revenue',period:'q3',year:2023,later:2025,question:guidedFiscalQuestion('revenue','q3','2023','2025')});
+ const rejected=['Compare FY2024 and FY2025 revenue growth yoy.', 'Compare Q1 FY2024 and Q2 FY2025 revenue.',
+  'Compare FY2024 and Q1 FY2025 revenue.', 'FY2024 to FY2025 revenue CAGR', 'FY1899 revenue', 'FY2100 revenue'];
  const backend=fileURLToPath(new URL('../../backend/',import.meta.url));
  const python=['.venv/Scripts/python.exe','.venv/bin/python'].map(path=>fileURLToPath(new URL(`../../backend/${path}`,import.meta.url))).find(existsSync)??'python';
  const run=spawnSync(python,['-B','-c',`
@@ -128,7 +163,8 @@ with patch('sqlalchemy.engine.Engine.connect', side_effect=AssertionError('Datab
      patch('socket.create_connection', side_effect=AssertionError('Network access forbidden')):
     from app.models import Company, FinancialFact
     from app.financial_metric_registry import METRICS
-    from app.research_answer_service import answer_research_question
+    from app.research_answer_service import answer_research_question, recognize_operation
+    requests = json.load(sys.stdin)
     company = Company(id=1, ticker='TEST', name='Fixture company', cik='0000000001', exchange='NYSE')
     facts = []
     windows = [('2023-01-01','2023-12-31','10-K'), ('2024-01-01','2024-03-31','10-Q'),
@@ -154,9 +190,37 @@ with patch('sqlalchemy.engine.Engine.connect', side_effect=AssertionError('Datab
             if entity is FinancialFact: return facts
             raise AssertionError('Unexpected query')
     answers = [answer_research_question(DetachedSession(), 'TEST', item['question']).model_dump(mode='json')
-               for item in json.load(sys.stdin)]
-    print(json.dumps({'registry':list(METRICS),'answers':answers}))
-`],{cwd:backend,input:JSON.stringify(cases),encoding:'utf8',env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'},timeout:30000});
+               for item in requests['latest']]
+    latest_operations = [recognize_operation(item['question'],company,[company])[0].operation for item in requests['latest']]
+    facts = []
+    for metric, definition in METRICS.items():
+        if definition.kind == 'derived': continue
+        for year in (2023, 2024, 2025):
+            periods = [(date(year,1,1), date(year,12,31), 'FY')]
+            if definition.kind != 'instant':
+                periods += [(date(year,month,1), date(year,month+2,31 if month in (1,10) else 30), f'Q{q}')
+                            for q,month in enumerate((1,4,7,10),1)]
+            for start,end,label in periods:
+                concept = 'Revenues' if metric == 'revenue' else definition.concepts[0]
+                amount = {'revenue':'100','gross_profit':'40','operating_income':'20' if year<2025 else '30',
+                          'net_income':'10','diluted_eps':'1.2345' if year<2025 else '2',
+                          'operating_cash_flow':'30','capital_expenditures':'5'}.get(metric,'200')
+                facts.append(FinancialFact(id=len(facts)+1,company_cik=company.cik,metric=concept,
+                    value=Decimal(amount),unit=definition.source_unit,period_start=None if definition.kind=='instant' else start,
+                    period_end=end,period_type='fixture',fiscal_year=year,fiscal_period=label,frame=None,
+                    form='10-K' if label=='FY' else '10-Q',filed=end+timedelta(days=31),
+                    accession_number=f'0000000001-{year%100:02d}-{0 if label=="FY" else int(label[1:]):06d}',source=f'SEC Company Facts API: {concept}',created_at=datetime(2026,1,1)))
+    complete_facts = facts
+    historical = []
+    for item in requests['fiscal']:
+        facts = [] if item.get('missing') else complete_facts
+        operation, rejection = recognize_operation(item['question'],company,[company])
+        historical.append({'operation':operation.operation,'metric':operation.metric,'status':operation.status,
+            'periods':[p.model_dump(mode='json') for p in operation.periods], 'rejection':rejection,
+            'answer':answer_research_question(DetachedSession(),'TEST',item['question']).model_dump(mode='json')})
+    print(json.dumps({'registry':list(METRICS),'answers':answers,'latest_operations':latest_operations,'fiscal':historical,
+        'rejected':[answer_research_question(DetachedSession(),'TEST',q).model_dump(mode='json') for q in requests['rejected']]}))
+`],{cwd:backend,input:JSON.stringify({latest:cases,fiscal,rejected}),encoding:'utf8',env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'},timeout:30000,maxBuffer:8*1024*1024});
  assert.equal(run.status,0,run.stderr || run.error?.message);
  const result=JSON.parse(run.stdout);
  assert.deepEqual(result.registry.sort(),METRIC_CATALOG.map(entry=>entry.id).sort());
@@ -164,6 +228,7 @@ with patch('sqlalchemy.engine.Engine.connect', side_effect=AssertionError('Datab
   const entry=cases[index]; const instant=METRIC_CATALOG.find(item=>item.id===entry.metric).group==='balance';
   assert.equal(answer.matched,true,entry.question); assert.equal(answer.status,'available',entry.question);
   assert.equal(answer.metric,entry.metric); assert.equal(answer.period_intent,entry.scope);
+  assert.equal(result.latest_operations[index],'latest_value');
   assert.equal(answer.question,entry.question); assert.equal(answer.ticker,'TEST');
   const kind=instant?'instant':entry.scope==='latest_available'?'half_year':entry.scope;
   assert.equal(answer.observation.period.kind,kind,entry.question);
@@ -173,6 +238,35 @@ with patch('sqlalchemy.engine.Engine.connect', side_effect=AssertionError('Datab
   if(instant){assert.equal(answer.observation.period.start,null);assert.match(answer.answer_text,/as of June 30, 2025/);assert.doesNotMatch(answer.answer_text,/quarter ended|year ended/);}
   if(kind==='half_year')assert.match(answer.answer_text,/six-month YTD period/);
  });
+ result.fiscal.forEach(({operation,metric,status,periods,rejection,answer},index)=>{
+  const entry=fiscal[index], quarter=entry.period==='annual'?null:Number(entry.period.slice(1));
+  assert.equal(rejection,null,entry.question); assert.equal(status,'supported',entry.question);
+  assert.equal(metric,entry.metric); assert.equal(answer.metric,entry.metric); assert.equal(answer.matched,true);
+  assert.equal(operation,!entry.later?'historical_value':entry.metric.endsWith('_margin')?'percentage_point_difference':entry.metric==='revenue'?(entry.later-entry.year>1?'cumulative_period_growth':'revenue_level_comparison'):'metric_level_comparison');
+  assert.deepEqual(periods,[{fiscal_year:entry.year,quarter},...(entry.later?[{fiscal_year:entry.later,quarter}]:[])]);
+  assert.equal(answer.status,entry.missing?'unavailable':'available',entry.question);
+  assert.equal(answer.answer_kind,entry.later?'period_comparison':'historical_metric');
+  assert.equal(answer.period_intent,quarter?'quarter':'annual');
+  assert.deepEqual(answer.requested_period,periods[0]);
+  if(entry.missing){assert.ok(answer.explanation);assert.equal(answer.formatted_value,null);return;}
+  const points=entry.later?[answer.comparison.earlier,answer.comparison.later]:[answer.observation];
+  points.forEach((point,i)=>{
+   const instant=METRIC_CATALOG.find(item=>item.id===entry.metric).group==='balance', year=i?entry.later:entry.year;
+   assert.equal(point.metric,entry.metric);
+   if(!instant)assert.equal(point.period.fiscal_year,year,entry.question);
+   assert.equal(point.period.end,`${year}-${quarter?[null,'03-31','06-30','09-30','12-31'][quarter]:'12-31'}`);
+   assert.equal(point.period.kind,instant?'instant':quarter?'quarter':'annual');
+   if(instant)assert.equal(point.period.start,null);
+   assert.ok(point.provenance.length);assert.ok(point.provenance.every(source=>source.company_cik==='0000000001'));
+   if(quarter)assert.equal(point.period.fiscal_period,`Q${quarter}`);
+  });
+  if(entry.metric==='operating_margin'&&entry.later)assert.equal(answer.formatted_absolute_change,'+10.00 percentage points');
+  if(entry.metric==='diluted_eps'){
+   assert.equal(answer.comparability.value_basis,'reported_as_filed');
+   if(entry.later){assert.equal(answer.comparison.percentage_status,'not_applicable');assert.match(answer.comparison.percentage_reason,/as filed.*unverified/);assert.equal(answer.formatted_percentage_change,null);assert.equal(answer.comparison.absolute_change,'0.7655');}
+  }
+ });
+ for(const answer of result.rejected){assert.equal(answer.matched,false,answer.question);assert.equal(answer.status,'not_matched');}
 });
 
 test('company overview renders stored identity/readiness and does not fabricate metadata',()=>{

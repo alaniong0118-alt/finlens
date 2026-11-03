@@ -888,9 +888,10 @@ async function mount(ctx, configured = false, catalog = companies, { initialVers
   async function change(element, value) {
     assert.ok(element, 'Control must be rendered');
     await act(async () => {
-      const prototype = element.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLSelectElement.prototype;
+      const prototype = element.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype
+        : element.tagName === 'INPUT' ? dom.window.HTMLInputElement.prototype : dom.window.HTMLSelectElement.prototype;
       Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
-      element.dispatchEvent(new dom.window.Event(element.tagName === 'TEXTAREA' ? 'input' : 'change', { bubbles: true }));
+      element.dispatchEvent(new dom.window.Event(element.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
     });
   }
   async function click(text) {
@@ -2788,6 +2789,136 @@ test('FD-01 ignored-abort instant history and filing records cannot cross compan
   await app.release(sources, [{ ...filing('AAPL'), has_filing_chunks: false }]);
   assert.doesNotMatch(app.host.textContent, /AAPL-test-accession/);
   assert.ok(!app.host.querySelector('.recorded-filings'));
+});
+
+function fiscalYearInput(app, label) {
+  return [...app.host.querySelectorAll('.question-guide label')].find(item => item.firstChild?.textContent === label)?.querySelector('input');
+}
+async function prepareFiscalQuestion(app, { comparison = false, period = 'annual', metric = 'revenue', year = '2024', later = '2025' } = {}) {
+  await app.change(app.select('Question preparation'), comparison ? 'comparison' : 'historical');
+  await app.change(app.select('Question metric'), metric);
+  await app.change(app.select(comparison ? 'Shared fiscal period' : 'Requested fiscal period'), period);
+  await app.change(fiscalYearInput(app, comparison ? 'Earlier fiscal year' : 'Fiscal year'), year);
+  if (comparison) await app.change(fiscalYearInput(app, 'Later fiscal year'), later);
+  return app.host.querySelector('.question-preview').textContent;
+}
+
+for (const pin of [0, 7]) test(`guided fiscal questions prepare without fetching, validate and explicitly submit at pin ${pin}`, async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: pin, strict: true, capabilityPayload: financialOnlyCapabilities });
+  const editor = app.host.querySelector('textarea'), count = app.requests.length;
+  const historical = await prepareFiscalQuestion(app, { period: 'q2', year: '2025' });
+  assert.equal(historical, 'What was Q2 FY2025 revenue?');
+  assert.equal(editor.value, ''); assert.equal(app.requests.length, count);
+  await app.click('Use question'); assert.equal(document.activeElement, editor);
+  assert.equal(editor.value, historical); assert.equal(app.requests.length, count);
+  await app.click('Research question');
+  const old = app.request(companyPath('AAPL', 'research-answer'));
+  assert.deepEqual(JSON.parse(old.init.body), { question: historical });
+  assert.equal(old.init.headers['X-FinLens-Data-Version'], String(pin));
+  assert.equal(app.requests.length, count + 1);
+  const comparison = await prepareFiscalQuestion(app, { comparison: true });
+  assert.equal(comparison, 'Compare FY2024 and FY2025 revenue.');
+  assert.equal(editor.value, historical); assert.equal(old.init.signal.aborted, false, 'Preparation cannot edit or cancel existing work');
+  const metrics = [...app.select('Question metric').options].map(item => item.value);
+  assert.equal(metrics.length, 11);
+  for (const metric of ['revenue_growth_yoy','total_assets','total_liabilities','cash_and_equivalents']) assert.ok(!metrics.includes(metric));
+  await app.change(app.select('Question metric'), 'operating_margin');
+  assert.equal(app.host.querySelector('.question-preview').textContent, 'Compare FY2024 and FY2025 operating margin.');
+  assert.match(app.host.querySelector('.question-guide').textContent, /percentage points.*EPS remains as filed/);
+  await app.change(app.select('Question metric'), 'revenue');
+  const use = [...app.host.querySelectorAll('button')].find(item => item.textContent === 'Use question');
+  for (const year of ['', '1899', '2100', '2025', '2026']) {
+    await app.change(fiscalYearInput(app, 'Earlier fiscal year'), year);
+    assert.equal(use.disabled, true, year);
+    assert.equal(editor.value, historical); assert.equal(old.init.signal.aborted, false);
+  }
+  await app.change(fiscalYearInput(app, 'Earlier fiscal year'), '2024');
+  assert.equal(app.requests.length, count + 1);
+  await app.click('Use question');
+  assert.equal(editor.value, comparison); assert.equal(document.activeElement, editor); assert.equal(old.init.signal.aborted, true);
+  await app.click('Research question');
+  const current = app.request(companyPath('AAPL', 'research-answer'));
+  assert.equal(app.requests.length, count + 2);
+  assert.deepEqual(JSON.parse(current.init.body), { question: comparison });
+  await app.release(current, comparisonAnswer('AAPL', comparison, 'unavailable'), 200, pin);
+  assert.match(app.host.querySelector('.direct-answer').textContent, /Unavailable.*Incompatible revenue economic bases/);
+  assert.doesNotMatch(app.host.querySelector('.direct-answer').textContent, /\$0|\+10\.00%/);
+  await app.release(old, historicalAnswer('AAPL', historical, 2025, 2), 200, pin);
+  assert.match(app.host.querySelector('.direct-answer').textContent, /Incompatible revenue economic bases/);
+  assert.equal(editor.value, comparison); assertNoFilingRequests(app);
+});
+
+test('guided fiscal period choices do not advertise instant comparisons or YTD and preserve existing editor', async ctx => {
+  const app = await mount(ctx, false, companies, { capabilityPayload: financialOnlyCapabilities });
+  const count = app.requests.length;
+  await prepareFiscalQuestion(app, { metric: 'total_assets' });
+  assert.deepEqual([...app.select('Requested fiscal period').options].map(item => item.value), ['annual']);
+  await app.click('Use question');
+  const editor = app.host.querySelector('textarea'); assert.equal(editor.value, 'What was FY2024 total assets?');
+  await app.change(app.select('Question preparation'), 'comparison');
+  assert.equal(app.select('Question metric').value, 'revenue');
+  assert.deepEqual([...app.select('Shared fiscal period').options].map(item => item.value), ['annual','q1','q2','q3','q4']);
+  await app.change(app.select('Question preparation'), 'historical');
+  await app.change(app.select('Requested fiscal period'), 'q4');
+  await app.change(app.select('Question metric'), 'total_liabilities');
+  assert.equal(app.select('Requested fiscal period').value, 'annual');
+  await app.change(app.select('Question preparation'), 'latest');
+  assert.equal(app.select('Question reporting scope').value, 'latest_available');
+  assert.equal(app.requests.length, count); assert.equal(editor.value, 'What was FY2024 total assets?');
+});
+
+for (const pin of [0, 7]) for (const completed of [false, true])
+test(`guided fiscal capability transition retains ${completed ? 'completed' : 'pending'} work and focus pin ${pin}`, async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: pin, strict: true, deferCapabilities: true });
+  const question = await prepareFiscalQuestion(app, { comparison: completed });
+  await app.click('Use question'); await app.click('Research question');
+  const editor = app.host.querySelector('textarea'), guide = app.select('Question preparation');
+  const pending = app.request(companyPath('AAPL', 'research-answer'));
+  const fixture = completed ? comparisonAnswer('AAPL', question) : historicalAnswer('AAPL', question);
+  if (completed) await app.release(pending, fixture, 200, pin);
+  const answer = app.host.querySelector('.direct-answer'); assertNoFilingRequests(app);
+  const layout = financialEditorLayout(app);
+  await app.release(app.request('/capabilities'), { ...financialOnlyCapabilities, filing_research_enabled: true });
+  assertFinancialLayoutRetained(app, layout);
+  assert.equal(app.host.querySelector('textarea'), editor); assert.equal(document.activeElement, editor);
+  assert.equal(app.select('Question preparation'), guide); assert.equal(editor.value, question);
+  assert.equal(pending.init.signal.aborted, false);
+  if (completed) assert.equal(app.host.querySelector('.direct-answer'), answer);
+  else await app.release(pending, fixture, 200, pin);
+  assert.ok(app.host.querySelector('.direct-answer'));
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer')).length, 1);
+  assert.equal(app.requests.some(item => /\/context$|\/answer$/.test(item.path)), false);
+});
+
+for (const comparison of [false, true]) for (const invalidation of ['company', 'publication'])
+test(`guided fiscal ${comparison ? 'comparison' : 'historical'} ${invalidation} invalidates ignored-abort answers`, async ctx => {
+  const app = await mount(ctx, false, companies, { strict: true, capabilityPayload: financialOnlyCapabilities });
+  const question = await prepareFiscalQuestion(app, { comparison });
+  await app.click('Use question'); await app.click('Research question');
+  const old = app.request(companyPath('AAPL', 'research-answer'));
+  const ticker = invalidation === 'company' ? 'JPM' : 'AAPL';
+  if (invalidation === 'company') await app.change(app.select('Company'), ticker);
+  else await app.release(app.request(companyPath('AAPL', 'financials/summary')), {}, 409, 7);
+  assert.equal(old.init.signal.aborted, true); assert.equal(app.host.querySelector('.direct-answer'), null);
+  await app.release(app.request(companyPath(ticker, 'freshness')), freshnessFixture(ticker, 7));
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer')).length, 1, 'Repinning does not replay');
+  await prepareFiscalQuestion(app, { comparison }); await app.click('Use question'); await app.click('Research question');
+  const current = app.request(companyPath(ticker, 'research-answer'));
+  assert.equal(current.init.headers['X-FinLens-Data-Version'], '7');
+  await app.release(current, comparison ? comparisonAnswer(ticker, question) : historicalAnswer(ticker, question), 200, 7);
+  const text = app.host.querySelector('.direct-answer').textContent;
+  await app.release(old, { ...(comparison ? comparisonAnswer('AAPL', question) : historicalAnswer('AAPL', question)), answer_text: 'OBSOLETE FISCAL ANSWER' });
+  assert.equal(app.host.querySelector('.direct-answer').textContent, text);
+  assert.doesNotMatch(app.host.textContent, /OBSOLETE FISCAL ANSWER/); assertNoFilingRequests(app);
+});
+
+test('guided fiscal unknown publication cannot submit even a prepared valid request', async ctx => {
+  const app = await mount(ctx, false, companies, { initialVersion: null, capabilityPayload: financialOnlyCapabilities });
+  const question = await prepareFiscalQuestion(app, { comparison: true }); await app.click('Use question');
+  assert.equal(app.host.querySelector('textarea').value, question);
+  assert.equal([...app.host.querySelectorAll('button')].find(item => item.textContent === 'Research question').disabled, true);
+  await act(async () => app.host.querySelector('.search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(app.requests.filter(item => item.path.endsWith('/research-answer')).length, 0); assertNoFilingRequests(app);
 });
 
 for (const version of [0, 1]) test(`FD-01 guided questions prepare without requests and submit explicitly at pin ${version}`, async ctx => {
