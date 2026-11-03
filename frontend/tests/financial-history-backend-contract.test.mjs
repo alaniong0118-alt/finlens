@@ -1,7 +1,7 @@
 import test, { before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync, rmdirSync } from "node:fs";
+import { existsSync, statSync, mkdtempSync, readFileSync, writeFileSync, rmSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,22 +14,30 @@ const balance = load(join(frontend, "lib/balance-date-comparison.ts"));
 const flow = load(join(frontend, "lib/cash-flow-window-comparison.ts"));
 let fixture;
 
-function captureBackend({ run = spawnSync, platform = process.platform, output } = {}) {
+function fixedVenvPython(platform, isFile = path => statSync(path, { throwIfNoEntry: false })?.isFile() === true) {
+  const parts = platform === "win32" ? ["Scripts", "python.exe"] : platform === "linux" ? ["bin", "python"] : null;
+  if (!parts) throw new Error("History backend/client contract supports normal Windows and Linux fixed virtualenv layouts only.");
+  const python = join(backend, ".venv", ...parts);
+  if (!isFile(python)) throw new Error(`Missing fixed virtualenv interpreter: ${python}`);
+  return python;
+}
+
+function captureBackend({ run = spawnSync, platform = process.platform, output, isFile, report = () => {} } = {}) {
   // Fresh capture on every run: never a hand-authored or checked-in JSON body.
   // This is an in-process TestClient child, not a listening backend/service.
-  if (platform !== "win32") throw new Error("History backend/client contract requires Windows and installed backend/.venv/Lib/site-packages for the existing -I -S guarded runner. POSIX dependency bootstrap is unsupported.");
+  const python = fixedVenvPython(platform, isFile);
   let temporary;
   const target = output
     ?? join(temporary = mkdtempSync(join(tmpdir(), "finlens-history-contract-")), "responses.json");
   try {
-    const python = process.env.FINLENS_CONTRACT_PYTHON ?? join(backend, ".venv", "Scripts/python.exe");
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-      ["systemroot", "windir", "path", "temp", "tmp", "pathext", "comspec", "number_of_processors"].includes(key.toLowerCase())));
+      ["systemroot", "windir", "path", "temp", "tmp", "tmpdir", "pathext", "comspec", "number_of_processors"].includes(key.toLowerCase())));
     env.FINLENS_HISTORY_CONTRACT_OUTPUT = target;
     const result = run(python, ["-I", "-S", "-B", "tests/run_financial_insights.py",
-      "tests/test_financial_history_client_contract.py", "-k", "test_export_current_backend_responses"],
+      "tests/test_financial_history_client_contract.py"],
       { cwd: backend, env, encoding: "utf8", timeout: 60_000, maxBuffer: 1024 * 1024, windowsHide: true });
     assert.equal(result.status, 0, `${result.error ?? ""}\n${result.stdout}\n${result.stderr}\nCapture: ${target}`);
+    report(result.stdout);
     const captured = JSON.parse(readFileSync(target, "utf8"));
     assert.deepEqual(captured.capabilities, { research_mode: true, server_profile: "sec_readonly",
       ai_analysis_configured: false, ai_analysis_enabled: false, filing_research_enabled: false });
@@ -43,7 +51,41 @@ function captureBackend({ run = spawnSync, platform = process.platform, output }
   }
 }
 
-before(() => { fixture = captureBackend({ output: process.env.FINLENS_HISTORY_CONTRACT_OUTPUT }); });
+before(() => { fixture = captureBackend({ output: process.env.FINLENS_HISTORY_CONTRACT_OUTPUT,
+  report: output => process.stdout.write(output) }); });
+
+test("fixed interpreter paths select only the Windows or Linux checkout venv", () => {
+  for (const [platform, parts] of [["win32", ["Scripts", "python.exe"]], ["linux", ["bin", "python"]]]) {
+    const checked = [], expected = join(backend, ".venv", ...parts);
+    assert.equal(fixedVenvPython(platform, path => { checked.push(path); return true; }), expected);
+    assert.deepEqual(checked, [expected]);
+  }
+});
+
+test("missing fixed interpreters reject before child startup on both supported layouts", () => {
+  for (const platform of ["win32", "linux"]) {
+    let calls = 0;
+    assert.throws(() => captureBackend({ platform, isFile: () => false, run: () => { calls++; } }),
+      /Missing fixed virtualenv interpreter/);
+    assert.equal(calls, 0);
+  }
+});
+
+test("one isolated child selects the full backend matrix and reports it before consuming its export", () => {
+  let calls = 0; const reports = [];
+  const run = (python, args, options) => {
+    calls++;
+    assert.equal(python, fixedVenvPython(process.platform));
+    assert.deepEqual(args, ["-I", "-S", "-B", "tests/run_financial_insights.py", "tests/test_financial_history_client_contract.py"]);
+    assert.equal(options.cwd, backend); assert.equal(options.timeout, 60_000); assert.equal(options.windowsHide, true);
+    assert.ok(Object.keys(options.env).every(key => key === "FINLENS_HISTORY_CONTRACT_OUTPUT"
+      || ["systemroot", "windir", "path", "temp", "tmp", "tmpdir", "pathext", "comspec", "number_of_processors"].includes(key.toLowerCase())));
+    writeFileSync(options.env.FINLENS_HISTORY_CONTRACT_OUTPUT, JSON.stringify(fixture), "utf8");
+    return { status: 0, stdout: "Synthetic full-matrix stdout" };
+  };
+  assert.deepEqual(captureBackend({ run, report: output => reports.push(output) }), fixture);
+  assert.equal(calls, 1); assert.deepEqual(reports, ["Synthetic full-matrix stdout"]);
+});
 
 test("owned capture directories are removed after child startup exceptions and failed results", () => {
   for (const throws of [true, false]) {
@@ -90,10 +132,10 @@ test("caller-owned capture evidence survives parse failure", () => {
   } finally { try { rmSync(output, { force: true }); } finally { rmdirSync(directory); } }
 });
 
-test("unsupported POSIX configuration fails clearly before child startup", () => {
+test("unsupported platform fails clearly before child startup", () => {
   let calls = 0;
-  assert.throws(() => captureBackend({ platform: "linux", run: () => { calls++; } }),
-    /requires Windows.*backend\/\.venv\/Lib\/site-packages.*POSIX dependency bootstrap is unsupported/);
+  assert.throws(() => captureBackend({ platform: "darwin", run: () => { calls++; } }),
+    /supports normal Windows and Linux fixed virtualenv layouts only/);
   assert.equal(calls, 0);
 });
 

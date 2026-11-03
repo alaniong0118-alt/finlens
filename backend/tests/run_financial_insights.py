@@ -9,10 +9,27 @@ import os
 from pathlib import Path
 import socket
 import sys
+import sysconfig
 from threading import local
 
+
+def fixed_venv_site_packages(root, platform, version, implementation, free_threaded):
+    """Only the checkout's normal CPython venv; no site/.pth or fallback scan."""
+    if implementation != "cpython" or free_threaded or platform not in {"win32", "linux"}:
+        raise RuntimeError("Guarded offline tests require normal CPython on Windows or Linux.")
+    if platform == "win32":
+        packages = root / ".venv" / "Lib" / "site-packages"
+    else:
+        packages = root / ".venv" / "lib" / f"python{version[0]}.{version[1]}" / "site-packages"
+    if not packages.is_dir():
+        raise RuntimeError(f"Missing fixed virtualenv dependencies: {packages}")
+    return packages
+
+
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT / ".venv" / "Lib" / "site-packages"), str(ROOT), str(ROOT / "tests")]
+PACKAGES = fixed_venv_site_packages(ROOT, sys.platform, sys.version_info[:2], sys.implementation.name,
+                                    bool(sysconfig.get_config_var("Py_GIL_DISABLED")))
+sys.path[:0] = [str(PACKAGES), str(ROOT), str(ROOT / "tests")]
 os.environ.update(DATABASE_URL="postgresql+psycopg://fixture:fixture@127.0.0.1/fixture",
                   FINLENS_SERVER_PROFILE="development", PYTEST_DISABLE_PLUGIN_AUTOLOAD="1",
                   PYTHON_DOTENV_DISABLED="1")

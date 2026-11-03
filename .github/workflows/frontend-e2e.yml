@@ -15,11 +15,17 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'backend/app/**'
+      - 'backend/tests/**'
+      - 'backend/requirements-history-*.lock'
       - '.github/workflows/frontend-e2e.yml'
   push:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'backend/app/**'
+      - 'backend/tests/**'
+      - 'backend/requirements-history-*.lock'
       - '.github/workflows/frontend-e2e.yml'
 permissions:
   contents: read
@@ -44,6 +50,48 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run test:qa01
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6, node24
+        with:
+          python-version: '3.14.7'
+          architecture: 'x64'
+          check-latest: false
+          freethreaded: false
+      - name: Install hash-pinned history contract dependencies
+        working-directory: .
+        env:
+          PIP_CONFIG_FILE: /dev/null
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python -I -S -B -c 'import struct, sys, sysconfig; assert sys.version_info[:3] == (3, 14, 7) and struct.calcsize("P") == 8 and not sysconfig.get_config_var("Py_GIL_DISABLED"); print(sys.version)'
+          history_wheels="$RUNNER_TEMP/finlens-history-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir "$history_wheels"
+          python -I -S -B - "$history_wheels" <<'PY'
+          import hashlib, sys
+          from pathlib import Path
+          from urllib.request import urlopen
+          url = "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl"
+          expected = "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e"
+          lock = Path("backend/requirements-history-bootstrap.lock").read_text(encoding="utf-8")
+          if "pip==26.2.1" not in lock or "--hash=sha256:" + expected not in lock:
+              raise RuntimeError("Unexpected pip bootstrap lock")
+          with urlopen(url, timeout=60) as response:
+              if response.geturl() != url:
+                  raise RuntimeError("Unexpected pip wheel redirect")
+              data = response.read(1816633)
+          if len(data) != 1816632 or hashlib.sha256(data).hexdigest() != expected:
+              raise RuntimeError("Pip bootstrap wheel size/hash mismatch")
+          (Path(sys.argv[1]) / "pip-26.2.1-py3-none-any.whl").write_bytes(data)
+          PY
+          python -I -S -B -m venv --without-pip backend/.venv
+          history_python=backend/.venv/bin/python
+          "$history_python" -I -S -B -c 'import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("pip", run_name="__main__", alter_sys=True)' "$history_wheels/pip-26.2.1-py3-none-any.whl" --isolated --disable-pip-version-check --no-cache-dir install --ignore-installed --no-deps --no-index --find-links "$history_wheels" --only-binary=:all: --require-hashes --no-compile --prefix "$PWD/backend/.venv" -r backend/requirements-history-bootstrap.lock
+          history_pip='import runpy, sys, sysconfig; sys.path.insert(0, sysconfig.get_path("purelib")); runpy.run_module("pip", run_name="__main__", alter_sys=True)'
+          "$history_python" -I -S -B -c "$history_pip" --isolated --disable-pip-version-check --no-cache-dir download --only-binary=:all: --require-hashes --index-url https://pypi.org/simple --dest "$history_wheels" -r backend/requirements-history-contract.lock
+          "$history_python" -I -S -B -c "$history_pip" --isolated --disable-pip-version-check --no-cache-dir install --no-index --find-links "$history_wheels" --only-binary=:all: --require-hashes --no-compile --prefix "$PWD/backend/.venv" -r backend/requirements-history-contract.lock
+          "$history_python" -I -S -B -c "$history_pip" --isolated --disable-pip-version-check --no-cache-dir check
+      - name: Run backend and frontend history contract
+        run: npm run test:history-contract
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:isolation
       - run: npm run test:e2e

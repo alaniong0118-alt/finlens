@@ -9,6 +9,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "test": "node --test tests/*.test.mjs",
     "test:qa01": "node --test tests/qa01-*.test.mjs",
+    "test:history-contract": "node --test tests/financial-history-backend-contract.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:list": "playwright test --list --reporter=list",
     "test:e2e:report": "playwright show-report",
