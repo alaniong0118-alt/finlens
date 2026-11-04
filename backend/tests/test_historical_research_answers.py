@@ -8,8 +8,9 @@ from sqlalchemy import event
 from app import main
 from app.financial_metric_registry import METRICS
 from app.financial_metric_schemas import FiscalPeriodRequest
+from app.financial_metrics_service import FinancialMetrics
 from app.models import Company
-from test_financial_metrics import db, add, view
+from test_financial_metrics import db, add
 from test_research_answers import ask
 
 
@@ -214,11 +215,16 @@ def test_selected_company_mismatch_and_bounded_versioned_selects(db):
 
 
 def test_period_kind_mixing_cannot_compare_even_service_directly(db):
-    annual(db, 2024)
-    annual(db, 2025)
-    add(db, value="20", start="2025-04-01", end="2025-06-30", filed=date(2025, 8, 1))
-    result = view(db).compare_fiscal("revenue", FiscalPeriodRequest(fiscal_year=2024), FiscalPeriodRequest(fiscal_year=2025, quarter=2))
+    facts = [annual(db, 2024), annual(db, 2025),
+             add(db, value="20", start="2025-04-01", end="2025-06-30", filed=date(2025, 8, 1))]
+    # Direct comparison uses only these synthetic rows, without production evidence loading.
+    service = FinancialMetrics(db[1], facts)
+    result = service.compare_fiscal("revenue", FiscalPeriodRequest(fiscal_year=2024), FiscalPeriodRequest(fiscal_year=2025, quarter=2))
+    assert result.earlier.status == result.later.status == "available"
+    assert result.earlier.period.kind == "annual" and result.later.period.kind == "quarter"
     assert result.status == "unavailable" and result.absolute_change is None
+    assert result.percentage_change is None
+    assert "matching annual or same fiscal-quarter" in result.reason
 
 
 @pytest.mark.parametrize("metric", list(METRICS))
