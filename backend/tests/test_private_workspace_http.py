@@ -398,7 +398,7 @@ class HttpTests(CryptoFixtures):
                   and n.args[0].value == "/private-research"]
         self.assertEqual(len(mounts), 1)
         self.assertIsInstance(mounts[0].args[1], ast.Call)
-        self.assertEqual(mounts[0].args[1].func.id, "PrivateWorkspace")
+        self.assertEqual(mounts[0].args[1].func.id, "PrivateWorkspaceLogin")
         self.assertEqual(mounts[0].args[1].args, [])
         self.assertEqual(mounts[0].args[1].keywords, [])
 

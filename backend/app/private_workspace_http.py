@@ -1,10 +1,11 @@
 """Default-off ASGI adapter. No provider, settings, engine or credential loading.
 
-Only trusted server composition can establish a short-lived browser session.
-There is deliberately no HTTP login/token-installation endpoint. Process memory
-is a development boundary, not an accepted production/multi-worker session store.
+Only trusted composition/the separate PKCE wrapper can establish a browser session.
+This adapter accepts no raw HTTP token-installation request. Process memory is a
+development boundary, not an accepted production/multi-worker session store.
 """
 import asyncio
+from contextlib import nullcontext
 from dataclasses import dataclass
 import hmac
 import json
@@ -69,8 +70,8 @@ class PrivateWorkspace:
     def _cookie(handle="", age=0):
         return f"{COOKIE}={handle}; Max-Age={age}; Path=/; Secure; HttpOnly; SameSite=Strict"
 
-    def establish(self, token):
-        """Internal future login-callback seam; returns only a Set-Cookie value.
+    def establish(self, token, *, cancellation=None):
+        """Internal login-callback seam; returns only a Set-Cookie value.
 
         Verifies the actual token through the installed ownership verifier. No
         request can provide a session identifier, principal, origin or verifier.
@@ -79,24 +80,41 @@ class PrivateWorkspace:
         with self._lock:
             if self._service is None:
                 raise _Failure(503, "PRIVATE_WORKSPACE_UNAVAILABLE")
+            if cancellation is not None:
+                from app.research_ownership import Cancellation
+                if type(cancellation) is not Cancellation:
+                    raise _Failure(400, "REQUEST_DENIED")
+                if cancellation._cancelled:
+                    raise _Failure(401, "AUTH_REQUIRED")
             identity = self._service._verifier.verify_principal(token)
             lifetime = min(SESSION_SECONDS, identity.expires_at - self._clock())
             if lifetime < 1:
                 raise _Failure(401, "AUTH_REQUIRED")
-            investigation = self._service.create_session(token, "private-notes")
-            lifetime = min(SESSION_SECONDS, identity.expires_at - self._clock())
-            if lifetime < 1:
-                raise _Failure(401, "AUTH_REQUIRED")
-            now = self._monotonic()
-            self._sessions = {key: value for key, value in self._sessions.items()
-                if value.deadline > now and value.expires_at > self._clock()
-                and value.investigation.owner_key != investigation.owner_key}
-            if len(self._sessions) >= MAX_SESSIONS:
-                raise _Failure(503, "PRIVATE_WORKSPACE_UNAVAILABLE")
-            handle = secrets.token_urlsafe(32)
-            self._sessions[handle] = _Session(token, investigation, secrets.token_urlsafe(32),
-                                              now + lifetime, identity.expires_at)
-            return self._cookie(handle, int(lifetime))
+            investigation = (self._service.create_session(token, "private-notes", cancellation=cancellation)
+                             if cancellation is not None else self._service.create_session(token, "private-notes"))
+            with (cancellation._lock if cancellation is not None else nullcontext()):
+                if cancellation is not None and cancellation._cancelled:
+                    raise _Failure(401, "AUTH_REQUIRED")
+                lifetime = min(SESSION_SECONDS, identity.expires_at - self._clock())
+                if lifetime < 1:
+                    raise _Failure(401, "AUTH_REQUIRED")
+                now = self._monotonic()
+                self._sessions = {key: value for key, value in self._sessions.items()
+                    if value.deadline > now and value.expires_at > self._clock()
+                    and value.investigation.owner_key != investigation.owner_key}
+                if len(self._sessions) >= MAX_SESSIONS:
+                    raise _Failure(503, "PRIVATE_WORKSPACE_UNAVAILABLE")
+                handle = secrets.token_urlsafe(32)
+                self._sessions[handle] = _Session(token, investigation, secrets.token_urlsafe(32),
+                                                  now + lifetime, identity.expires_at)
+                return self._cookie(handle, int(lifetime))
+
+    def discard(self, handle):
+        """Trusted login lifecycle only: revoke an opaque handle without DB I/O."""
+        if type(handle) is not str or re.fullmatch(r"[A-Za-z0-9_-]{43}", handle) is None:
+            raise ValueError("Invalid internal browser handle.")
+        with self._lock:
+            self._sessions.pop(handle, None)
 
     def _handle(self, headers):
         raw = headers.get("cookie", "")

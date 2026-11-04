@@ -115,7 +115,9 @@ def test_restriction_never_opens_write_or_near_routes(method, path):
 
 
 @pytest.mark.parametrize("financial_only", [False, True])
-@pytest.mark.parametrize("method,path", [("GET", "/private-research/state"), ("POST", "/private-research/notes")])
+@pytest.mark.parametrize("method,path", [("GET", "/private-research/state"), ("POST", "/private-research/notes"),
+    ("POST", "/private-research/login/start"), ("GET", "/private-research/login/callback"),
+    ("POST", "/private-research/login/cancel")])
 def test_private_workspace_is_denied_before_adapter_in_readonly_profiles(monkeypatch, financial_only, method, path):
     monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile("sec_readonly", financial_only))
     private = next(route.app for route in main.app.routes if getattr(route, "path", None) == "/private-research")
@@ -132,6 +134,15 @@ def test_private_workspace_mount_is_unavailable_in_development_without_configura
     response = TestClient(main.app).get("/private-research/state")
     assert response.status_code == 503
     assert response.json() == {"code": "PRIVATE_WORKSPACE_UNAVAILABLE", "commit_state": "not_issued"}
+    assert response.headers["Cache-Control"] == "private, no-store"
+
+
+@pytest.mark.parametrize("method,path", [("POST", "/private-research/login/start"),
+    ("GET", "/private-research/login/callback"), ("POST", "/private-research/login/cancel")])
+def test_login_mount_is_unavailable_without_provider_or_invites(monkeypatch, method, path):
+    monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile("development"))
+    response = TestClient(main.app).request(method, path)
+    assert response.status_code == 503 and response.json() == {"code": "LOGIN_UNAVAILABLE"}
     assert response.headers["Cache-Control"] == "private, no-store"
 
 

@@ -45,7 +45,7 @@ socket.gethostname = lambda: "offline-test-host"
 class ImportGuard(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         allowed = {"app", "app.account_auth", "app.research_ownership", "app.research_contracts",
-                   "app.models", "app.orm_base"}
+                   "app.models", "app.orm_base", "app.private_workspace_login"}
         if (fullname.startswith("app.") and fullname not in allowed
                 or fullname.split(".")[0] in {"dotenv", "uvicorn", "fastapi", "torch", "sentence_transformers"}):
             forbidden()
