@@ -346,6 +346,31 @@ class LoginTests(CryptoFixtures):
             login.PrivateWorkspaceLogin(self.workspace, configuration=replace(self.cfg,
                 policy=replace(self.policy, client_id="different-client")), exchange=lambda _: None)
 
+    def test_explicit_login_fails_closed_when_auth_dependencies_are_unavailable(self):
+        original = login.import_module
+        for missing in ("app.account_auth", "cryptography.hazmat.primitives.asymmetric.rsa"):
+            with self.subTest(missing=missing):
+                def load(name):
+                    if name == missing:
+                        raise ModuleNotFoundError("synthetic-sensitive-missing-dependency")
+                    return original(name)
+                with patch.object(login, "import_module", side_effect=load):
+                    # Disabled construction and admission must never ask for auth.
+                    disabled = login.PrivateWorkspaceLogin()
+                    self.assertIsNone(disabled._auth)
+                    result = self.call("POST", "/login/start", app=disabled)
+                    self.assertEqual(result[0], 503)
+                    self.assertEqual(json.loads(result[1]), {"code": "LOGIN_UNAVAILABLE"})
+                    for compose in (lambda: replace(self.cfg), lambda: login.PrivateWorkspaceLogin(
+                            self.workspace, configuration=self.cfg, exchange=self.app._exchange)):
+                        with self.assertRaises(login.LoginFailure) as failure:
+                            compose()
+                        self.assertEqual((failure.exception.status, failure.exception.code),
+                                         (503, "LOGIN_UNAVAILABLE"))
+                        self.assertNotIn("synthetic-sensitive", repr(failure.exception))
+                self.assertEqual(self.db.events, []); self.assertEqual(self.requests, [])
+                self.assertEqual(self.workspace._sessions, {})
+
     def test_start_pkce_browser_cookie_and_exchange_contract(self):
         params, correlation, start = self.begin()
         self.assertEqual(set(params), {"response_type", "client_id", "redirect_uri", "scope", "state",

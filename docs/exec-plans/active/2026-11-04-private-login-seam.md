@@ -1,6 +1,6 @@
 # Default-off private-workspace login seam
 
-Status: active; offline integration candidate, delivery-cleanup correction awaiting re-review.
+Status: active; minimal-history import boundary correction awaiting independent review.
 
 ## Objective and baseline
 
@@ -211,3 +211,70 @@ again; the original eight-file candidate scope and other five raw hashes remain.
 The correction remains unstaged for re-review. Provider/JWKS, real PostgreSQL,
 HTTPS/proxy/log-redaction and browser acceptance remain unverified and excluded.
 No credentials, live database, migration, provider activation or deployment.
+
+## Minimal-history import boundary follow-up
+
+The reviewed eight-file seam was delivered as `234ec2b5624170b08b88ea6f60987fa64547f694`
+after exact raw/staged blob and protected-file verification. Push CI run
+`41855570646` failed collecting the history contract: unconfigured main imported
+the login module, which eagerly imported account_auth/PyJWT. QA01 passed; browser
+and isolation steps did not execute. The minimal history lock intentionally omits
+JWT/cryptography, while the normal backend requirements already pin both.
+
+Baseline for this correction is that delivered commit, empty index and the same
+five protected exceptions. Authorized scope: login module, existing login tests,
+existing history-contract tests and this plan. No main/mount, auth verifier,
+requirements/locks, workflow, provider, data or deployment changes.
+
+- [x] Reproduce before editing, using the preserved clean Windows 3.14.7 x64
+  minimal environment at `D:\Projects\finlens-history-ci-approved-20261102-r1`.
+  Its exact 35-package runtime closure plus pip matches the committed Windows
+  history lock and lacks both jwt and cryptography. The current guarded runner is
+  evaluated with only its package-root argument rebound to that read-only existing
+  closure. All application/test sources and effect guards remain current/unchanged.
+  `private-login-minimal-before.txt` reproduces the same collection error (exit 2).
+  This is not an Ubuntu reproduction or a new installed environment.
+- [x] Defer auth imports until explicit configuration, require both installed
+  authentication dependencies there, and fail closed with sanitized errors.
+- [x] Add disabled/default import and missing-dependency regression tests; rerun
+  actual history HTTP/serialization, admission and real signed synthetic login tests.
+- [x] Record exact scope/hashes and preserved protected files; leave unstaged for
+  independent review. No further commit or push is authorized by this correction.
+
+The module now uses a type-only policy annotation and loads the unchanged installed
+verifier/RSA dependency only when trusted code explicitly builds a configuration
+or configured wrapper. Missing imports produce sanitized `LOGIN_UNAVAILABLE` 503
+failures. Disabled construction loads neither authentication nor ownership modules.
+Configured requests use the same verifier types and token/clock limits; there is
+no substitute verifier, unverified identity path or new dependency/lock entry.
+
+Actual checks, normal CPython 3.14.7 x64, isolated/no-site/no-bytecode mode:
+
+- Preserved minimal closure + current guarded runner: history contract **45 passed**,
+  including the new real-main default-off import regression; default-off/read-only
+  admission **14 passed, 46 deselected**. The diagnostic helper changes only the
+  fixed package-root selector argument; effect guards and application sources are
+  unchanged. Helper: private workspace `minimal-login-history.py`.
+- In that same actual dependency-free environment, the selected import regression
+  passes again and **two explicit configuration/wrapper construction probes fail
+  closed with sanitized 503**, without loading jwt, cryptography or account_auth.
+- Existing full fixed environment: login **28 passed** with real in-memory signed
+  synthetic tokens and fake ownership store; verifier **16 passed**; private HTTP
+  **23 passed**. These cover both configured admission and missing-import injection,
+  state/replay/cancellation/delivery races and no account writes on denied setup.
+- Maintained `node --test tests/financial-history-backend-contract.test.mjs`:
+  fresh guarded backend capture **45 passed**, frontend bridge **15 passed**. Its
+  normal full fixed environment is distinct from the minimal-closure reproduction.
+  The initial Node launch stopped before tests with sandbox spawn EPERM; one approved
+  equivalent run passed. Both receipts are preserved, without changing any guard.
+- Receipts in the private workspace: `private-login-minimal-{before,after,admission,
+  missing-auth}.txt`, `private-login-import-boundary-{login,verifier,workspace,
+  bridge,bridge-authorized}.txt`. Existing Starlette/httpx and Node package-type
+  warnings are retained; no failure is relabeled a pass.
+
+No installs/downloads or new environment were created for this correction. The
+minimal Windows closure matches the lock; Ubuntu execution of this correction and
+exact-commit CI await review/delivery. The delivered baseline's CI remains failed
+and is not claimed green. Provider/JWKS, actual PostgreSQL, HTTPS/proxy/log redaction,
+browser/provider acceptance and production activation remain excluded. Four-file
+source-only rollback; no data or configuration rollback is needed.

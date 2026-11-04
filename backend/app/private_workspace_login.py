@@ -8,16 +8,20 @@ import base64
 from dataclasses import dataclass, field
 import hashlib
 import hmac
+from importlib import import_module
 import json
 import math
 import re
 import secrets
 from threading import Event, RLock
 import time
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
-from app.account_auth import AuthFailure, IssuerPolicy, SingleIssuerVerifier, MAX_TOKEN, MAX_LIFETIME, SKEW
 from app.private_workspace_http import COOKIE, SESSION_SECONDS, PrivateWorkspace
+
+if TYPE_CHECKING:
+    from app.account_auth import IssuerPolicy
 
 CORRELATION_COOKIE = "__Host-finlens-login"
 CALLBACK_PATH = "/private-research/login/callback"
@@ -37,6 +41,16 @@ class LoginFailure(ValueError):
 def _require(condition, status=400, code="LOGIN_INVALID"):
     if not condition:
         raise LoginFailure(status, code)
+
+
+def _authentication():
+    """Load the installed verifier only for explicit, trusted login composition."""
+    try:
+        auth = import_module("app.account_auth")
+        import_module("cryptography.hazmat.primitives.asymmetric.rsa")
+    except ImportError:
+        raise LoginFailure(503, "LOGIN_UNAVAILABLE") from None
+    return auth
 
 
 def _text(value, limit):
@@ -79,7 +93,7 @@ class InviteAdmission:
 
 @dataclass(frozen=True, slots=True, repr=False)
 class LoginConfiguration:
-    policy: IssuerPolicy
+    policy: "IssuerPolicy"
     authorization_endpoint: str
     token_endpoint: str
     origin: str
@@ -87,7 +101,8 @@ class LoginConfiguration:
     admission: InviteAdmission
 
     def __post_init__(self):
-        _require(type(self.policy) is IssuerPolicy and type(self.admission) is InviteAdmission
+        auth = _authentication()
+        _require(type(self.policy) is auth.IssuerPolicy and type(self.admission) is InviteAdmission
                  and self.admission.issuer == self.policy.issuer, 503, "LOGIN_CONFIGURATION_INVALID")
         _url(self.authorization_endpoint); _url(self.token_endpoint); _url(self.origin, origin=True)
         _require(type(self.scopes) is tuple and 0 < len(self.scopes) <= 16
@@ -153,12 +168,15 @@ class PrivateWorkspaceLogin:
     def __init__(self, workspace=None, *, configuration=None, exchange=None, clock=time.time, monotonic=time.monotonic):
         self._workspace = PrivateWorkspace() if workspace is None else workspace
         _require(type(self._workspace) is PrivateWorkspace, 503, "LOGIN_CONFIGURATION_INVALID")
+        self._auth = None
         if configuration is not None:
+            auth = _authentication()
             _require(type(configuration) is LoginConfiguration and callable(exchange)
                      and self._workspace._origin == configuration.origin
-                     and type(getattr(self._workspace._service, "_verifier", None)) is SingleIssuerVerifier
+                     and type(getattr(self._workspace._service, "_verifier", None)) is auth.SingleIssuerVerifier
                      and self._workspace._service._verifier._policy == configuration.policy,
                      503, "LOGIN_CONFIGURATION_INVALID")
+            self._auth = auth
         else:
             _require(exchange is None, 503, "LOGIN_CONFIGURATION_INVALID")
         self._configuration, self._exchange = configuration, exchange
@@ -185,7 +203,7 @@ class PrivateWorkspaceLogin:
                  and type(mono) in (int, float) and math.isfinite(mono), 503, "LOGIN_UNAVAILABLE")
         if self._sample is not None:
             old_wall, old_mono = self._sample
-            _require(mono >= old_mono and abs(wall - old_wall - (mono - old_mono)) <= SKEW,
+            _require(mono >= old_mono and abs(wall - old_wall - (mono - old_mono)) <= self._auth.SKEW,
                      503, "LOGIN_UNAVAILABLE")
         self._sample = wall, mono
         return wall, mono
@@ -300,7 +318,7 @@ class PrivateWorkspaceLogin:
             self._active(state, flow, "exchanging")
             _require(not attempt.cancelled.is_set())
         verifier = self._workspace._service._verifier
-        _require(type(verifier) is SingleIssuerVerifier and verifier._policy == cfg.policy,
+        _require(type(verifier) is self._auth.SingleIssuerVerifier and verifier._policy == cfg.policy,
                  503, "LOGIN_UNAVAILABLE")
         identity = verifier.verify_principal(token)
         cfg.admission.require_subject(identity)  # Must precede any account/session creation.
@@ -344,9 +362,9 @@ class PrivateWorkspaceLogin:
             _require(type(data) is dict and {"access_token", "token_type", "expires_in"} <= set(data)
                      and set(data) <= {"access_token", "token_type", "expires_in", "scope"}
                      and type(data["access_token"]) is str and data["access_token"].isascii()
-                     and 0 < len(data["access_token"]) <= MAX_TOKEN
+                     and 0 < len(data["access_token"]) <= self._auth.MAX_TOKEN
                      and type(data["token_type"]) is str and data["token_type"].lower() == "bearer"
-                     and type(data["expires_in"]) is int and 0 < data["expires_in"] <= MAX_LIFETIME
+                     and type(data["expires_in"]) is int and 0 < data["expires_in"] <= self._auth.MAX_LIFETIME
                      and ("scope" not in data or data["scope"] == " ".join(cfg.scopes)), 503, "LOGIN_UNAVAILABLE")
             cookie = await asyncio.wait_for(asyncio.to_thread(self._finish, attempt, data["access_token"]), 5)
             return 303, b"", [(b"location", (cfg.origin + "/investigations").encode()),
@@ -361,7 +379,7 @@ class PrivateWorkspaceLogin:
             if isinstance(error, LoginFailure):
                 error.consumed = attempt.flow is not None
                 raise
-            if isinstance(error, AuthFailure) or getattr(error, "code", "") == "AUTH_REQUIRED":
+            if isinstance(error, self._auth.AuthFailure) or getattr(error, "code", "") == "AUTH_REQUIRED":
                 raise LoginFailure(401, "LOGIN_DENIED", consumed=True) from None
             raise LoginFailure(503, "LOGIN_UNAVAILABLE", consumed=True) from None
         finally:

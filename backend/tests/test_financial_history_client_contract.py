@@ -7,6 +7,7 @@ from datetime import date
 import json
 import os
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -36,6 +37,16 @@ CONCEPTS.update(operating_cash_flow="NetCashProvidedByUsedInOperatingActivities"
 
 def forbidden(*args, **kwargs):
     raise AssertionError("Contract tests allow only fake read-only sessions")
+
+
+def test_default_off_private_login_does_not_import_auth_dependencies():
+    # The minimal history lock omits these; the real main import must stay usable.
+    assert not {"app.account_auth", "app.research_ownership", "jwt", "cryptography"} & sys.modules.keys()
+    private = next(route.app for route in main.app.routes if getattr(route, "path", None) == "/private-research")
+    assert private._configuration is None and private._auth is None
+    response = TestClient(main.app).post("/private-research/login/start")
+    assert response.status_code == 403  # Actual SEC read-only admission precedes login.
+    assert response.headers["X-FinLens-Error-Code"] == "RELEASE_MODE_BLOCKED"
 
 
 def facts_for(scenario):
