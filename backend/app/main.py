@@ -359,7 +359,7 @@ def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
 def normalized_financial_summary(ticker: str, period: PeriodKind = "quarter"):
     with read_session(HttpSessionLocal) as session:
         try:
-            return load_financial_metrics(session, ticker).summary(period)
+            return load_financial_metrics(session, ticker).summary(period, include_balance_ratios=True)
         except UnknownCompany:
             raise HTTPException(404, detail={"code": "unknown_company", "ticker": ticker.upper()})
 

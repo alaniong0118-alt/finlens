@@ -8,6 +8,7 @@ import { epsWarning, formatDate, formatMetric, historyChartRows, METRIC_LABELS, 
 
 import { useResearchVersion } from "@/components/research-freshness";
 import { snapshotGaps, snapshotPoint } from "@/lib/snapshot-gaps";
+import { BALANCE_SHEET_RATIOS, balanceSheetRatios } from "@/lib/balance-sheet-ratios";
 
 const CASH_FLOW_METRICS = ["operating_cash_flow", "capital_expenditures", "free_cash_flow"];
 const ALTERNATIVE_PERIODS: PeriodKind[] = ["half_year", "nine_months", "annual"];
@@ -92,6 +93,26 @@ function SnapshotMetric({ metric, point, cik, period, anchor }: { metric: string
     <p className="small muted metric-description">{METRIC_CATALOG.find(item => item.id === metric)?.description}</p>
     <p className="missing-value">Status unavailable</p><p className="small">This metric was not returned or could not be verified for this selection.</p>
   </article>;
+}
+
+export function BalanceSheetRatios({ value, cik }: { value: unknown; cik: string }) {
+  const points = balanceSheetRatios(value, cik);
+  return <details className="secondary-metrics balance-sheet-ratios"><summary>Balance-sheet proportions · latest admitted dates</summary>
+    <p className="small muted">Each proportion uses same-date USD inputs from one selected filing. Its date is independent of the income reporting interval above; missing matching inputs are not backfilled.</p>
+    <p className="small">Total liabilities includes more than debt. Cash / total liabilities uses all liabilities, not current liabilities. These proportions do not establish accounting comparability or a risk score.</p>
+    {!points ? <p className="small">Balance-sheet ratio evidence was not returned or could not be verified.</p>
+      : <div className="metric-grid">{BALANCE_SHEET_RATIOS.map(definition => {
+        const point = points[definition.id];
+        return <article className="metric-card" key={definition.id}>
+          <h3>{definition.label}</h3>
+          <p className={`metric-value wrap-anywhere ${point.status !== "available" ? "missing-value" : ""}`}>{formatMetric(point)}</p>
+          <p className="small metric-period">{periodLabel(point.period)}</p>
+          <p className="small muted">Proportion shown as percent; exact values and operands are in Sources and details.</p>
+          {point.reason && <p className="small metric-reason">{point.reason}</p>}
+          <MetricProvenance point={point} />
+        </article>;
+      })}</div>}
+  </details>;
 }
 
 export function revealHistorySourceFocus(event: FocusEvent<HTMLDivElement>) {
@@ -394,6 +415,7 @@ export default function FinancialResearch({ company }: { company: Company }) {
             { label: "Balance sheet · as of the reporting date", ids: METRIC_CATALOG.filter(item => item.group === "balance").map(item => item.id) },
             { label: "Cash flow · reported intervals", ids: METRIC_CATALOG.filter(item => item.group === "cash_flow").map(item => item.id) },
           ].map(group => <details className="secondary-metrics" key={group.label}><summary>{group.label}</summary><div className="metric-grid">{group.ids.map(key => <SnapshotMetric key={key} metric={key} point={summary.metrics[key]} cik={company.cik} period={period} anchor={summary.period} />)}</div></details>)}
+          <BalanceSheetRatios value={summary.balance_sheet_ratios} cik={company.cik} />
         </>}
       </div>
     </section>

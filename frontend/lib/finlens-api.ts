@@ -736,6 +736,7 @@ export type FinancialSummary = {
   ticker: string; company_name: string; company_cik: string;
   requested_period: PeriodKind; period: FinancialPeriod | null;
   metrics: Record<string, NormalizedMetric>; selection_policy: string;
+  balance_sheet_ratios?: Record<string, NormalizedMetric> | null;
 };
 export type AnnualFinancialComparison = FinancialSummary & {
   requested_period: "annual";

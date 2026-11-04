@@ -1,0 +1,316 @@
+{
+  "AAA": {
+    "total_liabilities_to_total_assets": {
+      "metric": "total_liabilities_to_total_assets",
+      "unit": "ratio",
+      "status": "available",
+      "value": "0.3333333333333333333333333333",
+      "reason": null,
+      "period": {
+        "kind": "instant",
+        "start": null,
+        "end": "2025-12-31",
+        "fiscal_year": null,
+        "fiscal_period": null,
+        "fiscal_label_basis": "unknown"
+      },
+      "formula": "total_liabilities / total_assets",
+      "provenance": [
+        {
+          "fact_id": 1,
+          "canonical_metric": "total_liabilities",
+          "company_cik": "0000900001",
+          "stored_metric": "Liabilities",
+          "original_concept": "Liabilities",
+          "value": "100",
+          "unit": "USD",
+          "period_start": null,
+          "period_end": "2025-12-31",
+          "stored_period_type": "instant",
+          "source_fiscal_year": 2025,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2026-02-01",
+          "form": "10-K",
+          "accession_number": "0000000001-26-000001",
+          "source": "SEC Company Facts API: Liabilities",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000000000126000001/0000000001-26-000001-index.html",
+          "stored_at": "2026-02-01T00:00:00"
+        },
+        {
+          "fact_id": 2,
+          "canonical_metric": "total_assets",
+          "company_cik": "0000900001",
+          "stored_metric": "Assets",
+          "original_concept": "Assets",
+          "value": "300",
+          "unit": "USD",
+          "period_start": null,
+          "period_end": "2025-12-31",
+          "stored_period_type": "instant",
+          "source_fiscal_year": 2025,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2026-02-01",
+          "form": "10-K",
+          "accession_number": "0000000001-26-000001",
+          "source": "SEC Company Facts API: Assets",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000000000126000001/0000000001-26-000001-index.html",
+          "stored_at": "2026-02-01T00:00:00"
+        }
+      ],
+      "alternatives": [],
+      "inputs": [
+        {
+          "role": "total_liabilities",
+          "metric": "total_liabilities",
+          "value": "100",
+          "unit": "USD",
+          "period": {
+            "kind": "instant",
+            "start": null,
+            "end": "2025-12-31",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "fact_ids": [
+            1
+          ]
+        },
+        {
+          "role": "total_assets",
+          "metric": "total_assets",
+          "value": "300",
+          "unit": "USD",
+          "period": {
+            "kind": "instant",
+            "start": null,
+            "end": "2025-12-31",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "fact_ids": [
+            2
+          ]
+        }
+      ]
+    },
+    "cash_and_equivalents_to_total_liabilities": {
+      "metric": "cash_and_equivalents_to_total_liabilities",
+      "unit": "ratio",
+      "status": "available",
+      "value": "0",
+      "reason": null,
+      "period": {
+        "kind": "instant",
+        "start": null,
+        "end": "2025-12-31",
+        "fiscal_year": null,
+        "fiscal_period": null,
+        "fiscal_label_basis": "unknown"
+      },
+      "formula": "cash_and_equivalents / total_liabilities",
+      "provenance": [
+        {
+          "fact_id": 3,
+          "canonical_metric": "cash_and_equivalents",
+          "company_cik": "0000900001",
+          "stored_metric": "CashAndCashEquivalentsAtCarryingValue",
+          "original_concept": "CashAndCashEquivalentsAtCarryingValue",
+          "value": "0",
+          "unit": "USD",
+          "period_start": null,
+          "period_end": "2025-12-31",
+          "stored_period_type": "instant",
+          "source_fiscal_year": 2025,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2026-02-01",
+          "form": "10-K",
+          "accession_number": "0000000001-26-000001",
+          "source": "SEC Company Facts API: CashAndCashEquivalentsAtCarryingValue",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000000000126000001/0000000001-26-000001-index.html",
+          "stored_at": "2026-02-01T00:00:00"
+        },
+        {
+          "fact_id": 1,
+          "canonical_metric": "total_liabilities",
+          "company_cik": "0000900001",
+          "stored_metric": "Liabilities",
+          "original_concept": "Liabilities",
+          "value": "100",
+          "unit": "USD",
+          "period_start": null,
+          "period_end": "2025-12-31",
+          "stored_period_type": "instant",
+          "source_fiscal_year": 2025,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2026-02-01",
+          "form": "10-K",
+          "accession_number": "0000000001-26-000001",
+          "source": "SEC Company Facts API: Liabilities",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900001/000000000126000001/0000000001-26-000001-index.html",
+          "stored_at": "2026-02-01T00:00:00"
+        }
+      ],
+      "alternatives": [],
+      "inputs": [
+        {
+          "role": "cash_and_equivalents",
+          "metric": "cash_and_equivalents",
+          "value": "0",
+          "unit": "USD",
+          "period": {
+            "kind": "instant",
+            "start": null,
+            "end": "2025-12-31",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "fact_ids": [
+            3
+          ]
+        },
+        {
+          "role": "total_liabilities",
+          "metric": "total_liabilities",
+          "value": "100",
+          "unit": "USD",
+          "period": {
+            "kind": "instant",
+            "start": null,
+            "end": "2025-12-31",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "fact_ids": [
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "BBB": {
+    "total_liabilities_to_total_assets": {
+      "metric": "total_liabilities_to_total_assets",
+      "unit": "ratio",
+      "status": "unavailable",
+      "value": null,
+      "reason": "No admitted USD total assets at 2025-12-31. Both inputs must share this date; other dates, currencies and unsupported sources are not substituted.",
+      "period": {
+        "kind": "instant",
+        "start": null,
+        "end": "2025-12-31",
+        "fiscal_year": null,
+        "fiscal_period": null,
+        "fiscal_label_basis": "unknown"
+      },
+      "formula": "total_liabilities / total_assets",
+      "provenance": [],
+      "alternatives": [],
+      "inputs": []
+    },
+    "cash_and_equivalents_to_total_liabilities": {
+      "metric": "cash_and_equivalents_to_total_liabilities",
+      "unit": "ratio",
+      "status": "available",
+      "value": "0",
+      "reason": null,
+      "period": {
+        "kind": "instant",
+        "start": null,
+        "end": "2025-12-31",
+        "fiscal_year": null,
+        "fiscal_period": null,
+        "fiscal_label_basis": "unknown"
+      },
+      "formula": "cash_and_equivalents / total_liabilities",
+      "provenance": [
+        {
+          "fact_id": 3,
+          "canonical_metric": "cash_and_equivalents",
+          "company_cik": "0000900002",
+          "stored_metric": "CashAndCashEquivalentsAtCarryingValue",
+          "original_concept": "CashAndCashEquivalentsAtCarryingValue",
+          "value": "0",
+          "unit": "USD",
+          "period_start": null,
+          "period_end": "2025-12-31",
+          "stored_period_type": "instant",
+          "source_fiscal_year": 2025,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2026-02-01",
+          "form": "10-K",
+          "accession_number": "0000000001-26-000001",
+          "source": "SEC Company Facts API: CashAndCashEquivalentsAtCarryingValue",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900002/000000000126000001/0000000001-26-000001-index.html",
+          "stored_at": "2026-02-01T00:00:00"
+        },
+        {
+          "fact_id": 1,
+          "canonical_metric": "total_liabilities",
+          "company_cik": "0000900002",
+          "stored_metric": "Liabilities",
+          "original_concept": "Liabilities",
+          "value": "100",
+          "unit": "USD",
+          "period_start": null,
+          "period_end": "2025-12-31",
+          "stored_period_type": "instant",
+          "source_fiscal_year": 2025,
+          "source_fiscal_period": "FY",
+          "frame": null,
+          "filed": "2026-02-01",
+          "form": "10-K",
+          "accession_number": "0000000001-26-000001",
+          "source": "SEC Company Facts API: Liabilities",
+          "sec_url": "https://www.sec.gov/Archives/edgar/data/900002/000000000126000001/0000000001-26-000001-index.html",
+          "stored_at": "2026-02-01T00:00:00"
+        }
+      ],
+      "alternatives": [],
+      "inputs": [
+        {
+          "role": "cash_and_equivalents",
+          "metric": "cash_and_equivalents",
+          "value": "0",
+          "unit": "USD",
+          "period": {
+            "kind": "instant",
+            "start": null,
+            "end": "2025-12-31",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "fact_ids": [
+            3
+          ]
+        },
+        {
+          "role": "total_liabilities",
+          "metric": "total_liabilities",
+          "value": "100",
+          "unit": "USD",
+          "period": {
+            "kind": "instant",
+            "start": null,
+            "end": "2025-12-31",
+            "fiscal_year": null,
+            "fiscal_period": null,
+            "fiscal_label_basis": "unknown"
+          },
+          "fact_ids": [
+            1
+          ]
+        }
+      ]
+    }
+  }
+}

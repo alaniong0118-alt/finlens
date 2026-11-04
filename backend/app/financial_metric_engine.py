@@ -18,6 +18,12 @@ ANNUAL_COMPARISON_METRICS = (
     "gross_profit", "operating_income", "net_income", "gross_margin",
 )
 
+# Summary-only additions; do not expand historical/fiscal/annual metric contracts.
+BALANCE_SHEET_RATIOS = {
+    "total_liabilities_to_total_assets": ("total_liabilities", "total_assets"),
+    "cash_and_equivalents_to_total_liabilities": ("cash_and_equivalents", "total_liabilities"),
+}
+
 
 class UnknownMetric(ValueError):
     pass
@@ -88,6 +94,7 @@ class SourcePermissions(Protocol):
     def select_revenue(self, candidates: tuple[Observation, ...]) -> ScopeDecision: ...
     def denominator(self, revenue: Observation, numerator: Observation, period: Period) -> ScopeDecision: ...
     def gross_margin(self, gross_profit: "Metric", revenue: "Metric") -> bool: ...
+    def balance_sheet_scope(self, sources: tuple[Observation, ...], company_cik: str) -> bool: ...
     def inventory(self, names: tuple[str, ...], kind: str, end: date) -> tuple[Observation, ...]: ...
 
 
@@ -400,6 +407,68 @@ class FinancialMetricEngine:
         """Shared normalized anchors; never infer a quarter from annual/YTD."""
         anchor_name = name if name in self.base else ("operating_cash_flow" if name == "free_cash_flow" else "revenue")
         return [p.period for p in self._walk(self.base[anchor_name]) if p.period.kind == kind]
+
+    def balance_sheet_ratios(self, company_cik):
+        """Same-date, same-vintage USD proportions; no revenue/date fallback."""
+        result = {}
+        for name, names in self._walk(BALANCE_SHEET_RATIOS.items()):
+            formula = " / ".join(names)
+            dates = [p.period.end for n in self._walk(names) for p in self._walk(self.base[n])
+                     if p.period.kind == "instant"]
+            period = self.period("instant", None, max(dates)) if dates else None
+
+            def unavailable(reason):
+                return Metric(name, "ratio", "unavailable", reason=reason, period=period, formula=formula)
+
+            if period is None:
+                result[name] = unavailable("No admitted USD instant inputs. Same-company/date/filing inputs are required; no currency conversion or older-date substitution.")
+                continue
+            points = [self.observation(n, period) for n in self._walk(names)]
+            absent = [n for n, p in self._walk(zip(names, points, strict=True)) if p.status != "available"]
+            if absent:
+                result[name] = unavailable(f"No admitted USD {', '.join(n.replace('_', ' ') for n in absent)} at {period.end.isoformat()}. Both inputs must share this date; other dates, currencies and unsupported sources are not substituted.")
+                continue
+            if any(len(p.provenance) != 1 for p in points):
+                result[name] = unavailable("Each balance-sheet operand must have one selected source observation.")
+                continue
+            sources = [p.provenance[0].observation for p in points]
+            if any(p.unit != "USD" or s.unit != "USD" or s.start is not None or s.end != period.end
+                   or s.kind != "instant" or not p.value.is_finite() or p.value != s.value
+                   for p, s in self._walk(zip(points, sources, strict=True))):
+                result[name] = unavailable("Balance-sheet inputs must retain the same company, as-of date, USD unit and admitted source projection.")
+                continue
+            # Source projections remain opaque here. The existing trusted DB
+            # adapter narrows co-calculation; unsupported adapters fail closed.
+            scope = getattr(self.permissions, "balance_sheet_scope", None)
+            if not callable(scope) or not scope(tuple(sources), company_cik):
+                result[name] = unavailable("Balance-sheet inputs must retain the same company and consistent admitted source projections.")
+                continue
+            if (sources[0].reference == sources[1].reference
+                    or not sources[0].accession
+                    or (sources[0].accession, sources[0].form, sources[0].filed)
+                    != (sources[1].accession, sources[1].form, sources[1].filed)):
+                result[name] = unavailable("Selected balance-sheet inputs have incompatible filing scopes or vintages; accession, form and filed date must match.")
+                continue
+            conflict = any(a.observation.accession == selected.accession
+                           and a.observation.form == selected.form and a.observation.filed == selected.filed
+                           and a.observation.value != selected.value
+                           for p, selected in self._walk(zip(points, sources, strict=True))
+                           for a in self._walk(p.alternatives))
+            if conflict:
+                result[name] = unavailable("Conflicting values within a selected balance-sheet filing scope.")
+                continue
+            if points[0].value < 0 or points[1].value <= 0:
+                result[name] = unavailable("Balance-sheet numerator must be nonnegative and denominator must be positive; zero numerator remains valid.")
+                continue
+            with localcontext() as context:
+                context.prec = 28
+                value = points[0].value / points[1].value
+            result[name] = Metric(name, "ratio", "available", value=value, period=period, formula=formula,
+                provenance=tuple(ref for p in self._walk(points) for ref in self._walk(p.provenance)),
+                alternatives=tuple(ref for p in self._walk(points) for ref in self._walk(p.alternatives)),
+                inputs=tuple(Input(role=n, metric=n, value=p.value, unit=p.unit, period=period,
+                                   references=p.provenance) for n, p in self._walk(zip(names, points, strict=True))))
+        return result
 
     def reporting_periods(self, kind):
         anchors = self.metric_periods("revenue", kind)

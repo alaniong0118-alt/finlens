@@ -92,6 +92,14 @@ class NormalizedFinancialSummary(BaseModel):
     requested_period: PeriodKind
     selection_policy: str
     metrics: dict[str, NormalizedMetric]
+    balance_sheet_ratios: dict[str, NormalizedMetric] | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_optional_ratios(self, handler):
+        result = handler(self)
+        if result.get("balance_sheet_ratios") is None:
+            result.pop("balance_sheet_ratios", None)
+        return result
 
 
 class AnnualFinancialComparison(NormalizedFinancialSummary):

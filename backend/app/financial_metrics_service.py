@@ -295,7 +295,7 @@ class FinancialMetrics:
                                        comparability=HistoryComparability() if name == "diluted_eps" else None)
 
     @financial_reader
-    def summary(self, kind="quarter"):
+    def summary(self, kind="quarter", *, include_balance_ratios=False):
         anchors = self.reporting_periods(kind)
         anchor = max(anchors, key=lambda p: (p.end, p.start or date.min)) if anchors else None
         metrics = {}
@@ -308,7 +308,10 @@ class FinancialMetrics:
                 metrics[name] = self.observation(name, anchor)
         return NormalizedFinancialSummary(ticker=self.company.ticker, company_name=self.company.name,
                                           company_cik=self.company.cik, period=anchor, requested_period=kind,
-                                          selection_policy=SELECTION_POLICY, metrics=metrics)
+                                          selection_policy=SELECTION_POLICY, metrics=metrics,
+                                          balance_sheet_ratios={name: self._project(point) for name, point in
+                                              self._walk(self._engine.balance_sheet_ratios(self.company.cik).items())}
+                                              if include_balance_ratios else None)
 
 
 def _approval(ref):
@@ -320,6 +323,21 @@ class _DBPermissions:
 
     def __init__(self, facade):
         self.facade = facade
+
+    def balance_sheet_scope(self, sources, company_cik):
+        # This does not admit sources or reread mutable ORM rows. It verifies
+        # the already captured DB projection used for these new proportions.
+        if company_cik != self.facade.company.cik:
+            return False
+        for source in self.facade._walk(sources):
+            fields = dict(self.facade._walk(source.source_projection))
+            expected = {"company_cik": company_cik, "original_concept": source.concept,
+                "value": source.value, "unit": source.unit, "period_start": source.start,
+                "period_end": source.end, "filed": source.filed, "form": source.form,
+                "accession_number": source.accession, "source": f"SEC Company Facts API: {source.concept}"}
+            if any(fields.get(key) != value for key, value in self.facade._walk(expected.items())):
+                return False
+        return True
 
     def inventory(self, names, kind, end):
         f = self.facade
