@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 from uuid import uuid4
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -55,7 +56,8 @@ def protect_env_files():
 
 def runtime_guard(payload):
     protect_env_files()
-    allowed = {"app", "app.account_auth", "app.research_ownership", "app.models", "app.orm_base", "app.research_contracts"}
+    allowed = {"app", "app.account_auth", "app.research_ownership", "app.models", "app.orm_base", "app.research_contracts",
+               "app.private_workspace_http"}
 
     class Guard(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path=None, target=None):
@@ -97,7 +99,7 @@ def validate_payload(p):
           "worker_migration_directory_invalid")
 
 
-CHAIN = ("e4dda2eedbb0", "36134e0d3560", "77068e51af12", "d7b834408ba8", "f94c6f41e0cb", "a7c730103001")
+CHAIN = ("e4dda2eedbb0", "36134e0d3560", "77068e51af12", "d7b834408ba8", "f94c6f41e0cb", "a7c730103001", "b8d741104001")
 
 
 class PostgreSQLAcceptance:
@@ -124,11 +126,19 @@ class PostgreSQLAcceptance:
         from sqlalchemy.engine import URL
         from sqlalchemy.orm import Session, sessionmaker
         from app import account_auth, research_ownership
-        from app.research_contracts import KeyRef
+        from app.research_contracts import KeyRef, DatabasePublicationRef, TimePoint, encode
+        from app.private_workspace_http import PrivateWorkspace
         from cryptography.hazmat.primitives.asymmetric import rsa
         import jwt
         self.pg, self.sql, self.event, self.text, self.auth, self.own = psycopg, sql, event, text, account_auth, research_ownership
         self.KeyRef, self.jwt = KeyRef, jwt
+        self.workspace_type = PrivateWorkspace
+        self.source = DatabasePublicationRef(entity_key=KeyRef("sec_cik", "0000000001"), origin="sec", owner_key=None,
+            session_key=None, source_descriptor_key=None, source_revision_key=None, rights_policy_key=None,
+            admission_record_key=None, public_available_at=TimePoint.unknown(), retrieved_at=TimePoint.unknown(),
+            accession="0000000001-24-000001", publication_data_version=7, evidence_version=7, data_version=7,
+            manifest_sha256="a" * 64, chunk_id=None)
+        self.source_wire = json.loads(encode(self.source))
         self.original_connect = psycopg.Connection.connect.__func__
 
         def guarded_connect(cls, conninfo="", **kwargs):
@@ -298,11 +308,11 @@ class PostgreSQLAcceptance:
 
     def schema(self, connection):
         from sqlalchemy import inspect
-        from app.models import ResearchAccount, ResearchSession, ResearchArtifact
+        from app.models import ResearchAccount, ResearchSession, ResearchArtifact, ResearchNote
         inspector = inspect(connection)
         expected_names = set(self.launcher.OWNED + self.launcher.LEGACY)
         check(set(inspector.get_table_names(schema="public")) == expected_names, "migration_table_set_wrong")
-        for model in (ResearchAccount, ResearchSession, ResearchArtifact):
+        for model in (ResearchAccount, ResearchSession, ResearchArtifact, ResearchNote):
             table = model.__table__
             columns = inspector.get_columns(table.name, schema="public")
             check({c["name"] for c in columns} == set(table.columns.keys()), "migration_columns_wrong")
@@ -317,7 +327,8 @@ class PostgreSQLAcceptance:
                         "WHERE a.attrelid=CAST(:name AS regclass) AND a.attname=:column"), {"name": "public." + table.name,
                                                                                      "column": actual["name"]}).scalar_one()
                     check(value == "C", "migration_collation_wrong")
-            check(set(inspector.get_pk_constraint(table.name)["constrained_columns"]) == {"id"}, "migration_pk_wrong")
+            expected_pk = [column.name for column in table.primary_key.columns]
+            check(inspector.get_pk_constraint(table.name)["constrained_columns"] == expected_pk, "migration_pk_wrong")
             expected_unique = {c.name: list(c.columns.keys()) for c in table.constraints if c.__class__.__name__ == "UniqueConstraint"}
             check({c["name"]: c["column_names"] for c in inspector.get_unique_constraints(table.name)} == expected_unique,
                   "migration_uniques_wrong")
@@ -336,6 +347,13 @@ class PostgreSQLAcceptance:
         check(any(f["name"] == "fk_research_artifact_owned_session" and f["constrained_columns"] == ["owner_id", "session_id"]
                   and f["referred_table"] == "research_sessions" and f["referred_columns"] == ["owner_id", "id"] for f in fks),
               "migration_composite_fk_wrong")
+        note_fks = inspector.get_foreign_keys("research_notes")
+        check(any(f["name"] == "fk_research_note_owned_session" and f["constrained_columns"] == ["owner_id", "session_id"]
+                  and f["referred_table"] == "research_sessions" and f["referred_columns"] == ["owner_id", "id"]
+                  for f in note_fks), "note_composite_fk_wrong")
+        check(any(f["constrained_columns"] == ["artifact_id"] and f["referred_table"] == "research_artifacts"
+                  for f in note_fks), "note_artifact_fk_wrong")
+        check(inspector.get_pk_constraint("research_notes")["constrained_columns"] == ["artifact_id"], "note_primary_key_wrong")
 
     def denied(self, call, code="OWNERSHIP_DENIED", state="not_issued", cleanup="closed"):
         try:
@@ -400,8 +418,9 @@ class PostgreSQLAcceptance:
                                 ("public." + table,))
             for (column,) in columns:
                 for privilege in ("SELECT", "INSERT", "UPDATE", "REFERENCES"):
-                    expected = table in self.launcher.OWNED and (privilege in {"SELECT", "INSERT"}
+                    expected = (table in self.launcher.OWNED and (privilege in {"SELECT", "INSERT"}
                         or privilege == "UPDATE" and column in self.launcher.UPDATES[table])
+                        or privilege == "SELECT" and column in self.launcher.CATALOG_READS.get(table, ()))
                     check(self.one("SELECT has_column_privilege(%s,%s,%s,%s)", (role, "public." + table, column, privilege)) is expected,
                           "effective_column_privilege_wrong")
         check(self.one("SELECT count(*) FROM pg_class c WHERE c.relowner=(SELECT oid FROM pg_roles WHERE rolname=%s)", (role,)) == 0,
@@ -801,6 +820,163 @@ class PostgreSQLAcceptance:
               "cleanup_fault_persistence_wrong")
         self.service.reserve_artifact(token, parent.key, 1, "cleanup")
 
+    @contextmanager
+    def catalog_fixture(self):
+        """Only the fresh run-owned target; never read/restore real catalog data."""
+        cik, accession = "0000000001", "0000000001-24-000001"
+        for table in ("companies", "company_refresh_state", "filing_publications"):
+            check(self.one("SELECT count(*) FROM " + table) == 0, "catalog_fixture_target_not_empty")
+        with self.observer.transaction():
+            self.observer.execute("INSERT INTO companies(id,ticker,name,cik,exchange) VALUES (1,'SYNTH','Synthetic fixture',%s,'TEST')", (cik,))
+            self.observer.execute("INSERT INTO company_refresh_state(company_cik,data_version,facts_version,evidence_version,facts,evidence) "
+                                  "VALUES (%s,7,0,7,'{}','{}')", (cik,))
+            self.observer.execute("INSERT INTO filing_publications(company_cik,accession_number,form,filed,filename,chunk_count,"
+                                  "content_digest,cleaned_text,configuration,published_at,data_version) "
+                                  "VALUES (%s,%s,'10-K','2025-01-01','synthetic.htm',1,%s,NULL,'synthetic',now(),7)",
+                                  (cik, accession, "a" * 64))
+        try:
+            yield
+        finally:
+            with self.observer.transaction():
+                self.observer.execute("DELETE FROM filing_publications WHERE company_cik=%s AND accession_number=%s", (cik, accession))
+                self.observer.execute("DELETE FROM company_refresh_state WHERE company_cik=%s", (cik,))
+                self.observer.execute("DELETE FROM companies WHERE id=1 AND cik=%s AND ticker='SYNTH'", (cik,))
+
+    def workspace_call(self, client, method, path, body=None):
+        path, _, query = path.partition("?")
+        headers = [(b"host", b"finlens.test"), (b"cookie", client["cookie"].encode()), (b"sec-fetch-site", b"same-origin")]
+        if method == "POST":
+            headers += [(b"origin", b"https://finlens.test"), (b"content-type", b"application/json"),
+                        (b"x-finlens-csrf", client["csrf"].encode())]
+        messages, received = [], False
+        async def receive():
+            nonlocal received
+            check(not received, "workspace_repeated_receive")
+            received = True
+            return {"type": "http.request", "body": json.dumps(body or {}).encode(), "more_body": False}
+        async def send(event):
+            check(len(messages) < 2, "workspace_response_unbounded")
+            messages.append(event)
+        async def invoke():
+            await client["app"]({"type": "http", "scheme": "https", "method": method,
+                "path": "/private-research" + path, "root_path": "/private-research",
+                "query_string": query.encode(), "headers": headers}, receive, send)
+        self.loop.run_until_complete(invoke())
+        check(len(messages) == 2 and messages[0]["type"] == "http.response.start"
+              and messages[1]["type"] == "http.response.body" and len(messages[1]["body"]) <= 65536,
+              "workspace_response_shape_wrong")
+        response_headers = dict(messages[0]["headers"])
+        check(response_headers.get(b"cache-control") == b"private, no-store", "workspace_cache_policy_wrong")
+        return messages[0]["status"], json.loads(messages[1]["body"]), response_headers
+
+    def workspace_client(self):
+        token = self.token(self.subject())  # Real ephemeral signed API token, never a provider identity.
+        app = self.workspace_type(self.service, origin="https://finlens.test")
+        cookie = app.establish(token).split(";", 1)[0]
+        client = dict(app=app, cookie=cookie, csrf="", token=token)
+        status, state, _ = self.workspace_call(client, "GET", "/state")
+        check(status == 200 and state["status"] == "authenticated", "workspace_establishment_failed")
+        client.update(csrf=state["csrf"], owner=state["owner_key"],
+                      root=app._sessions[cookie.split("=", 1)[1]].investigation)
+        return client
+
+    def note_counts(self, owner):
+        return self.rows("SELECT (SELECT count(*) FROM research_artifacts WHERE owner_id=%s),"
+                         "(SELECT count(*) FROM research_notes WHERE owner_id=%s)", (owner, owner))[0]
+
+    def workspace_notes(self):
+        with self.catalog_fixture():
+            alice, bob = self.workspace_client(), self.workspace_client()
+            status, catalog, _ = self.workspace_call(alice, "GET", "/sources?cik=0000000001")
+            check(status == 200 and catalog["sources"] == [self.source_wire]
+                  and catalog["source_verification"] == "unverified_reference"
+                  and catalog["original_availability"] == "not_checked", "workspace_catalog_pin_wrong")
+            payload = dict(request_key="workspace-note", body="Synthetic private investigation", source=catalog["sources"][0])
+            status, note, _ = self.workspace_call(alice, "POST", "/notes", payload)
+            check(status == 200 and note["owner_key"] == {"namespace": "principal", "id": alice["owner"]}
+                  and note["body"] == payload["body"] and note["source"] == self.source_wire
+                  and note["source_verification"] == "unverified_reference"
+                  and note["original_availability"] == "not_checked", "workspace_saved_note_wrong")
+            check(self.workspace_call(alice, "POST", "/notes", payload)[:2] == (200, note), "workspace_replay_changed_note")
+            conflict = self.workspace_call(alice, "POST", "/notes", {**payload, "body": "Conflicting synthetic draft"})
+            check(conflict[0] == 409 and "body" not in conflict[1], "workspace_conflict_disclosed_or_succeeded")
+            for _ in range(2):
+                status, listing, _ = self.workspace_call(alice, "GET", "/notes")
+                check(status == 200 and listing["owner_key"] == alice["owner"] and len(listing["items"]) == 1
+                      and listing["items"][0]["artifact_key"] == note["artifact_key"]["id"], "workspace_reload_wrong")
+            query = urlencode(dict(session=note["session_key"]["id"], session_revision=note["session_revision"],
+                artifact=note["artifact_key"]["id"], artifact_revision=note["artifact_revision"]))
+            for route in ("/note?", "/export?"):
+                status, reopened, headers = self.workspace_call(alice, "GET", route + query)
+                check(status == 200 and reopened == note, "workspace_reopen_export_changed_note")
+                if route == "/export?":
+                    check(b"attachment" in headers.get(b"content-disposition", b""), "workspace_export_not_attachment")
+                denied = self.workspace_call(bob, "GET", route + query)
+                check(denied[0] == 404 and "body" not in denied[1] and "source" not in denied[1], "workspace_foreign_note_disclosed")
+            status, listing, _ = self.workspace_call(bob, "GET", "/notes")
+            check(status == 200 and listing["items"] == [], "workspace_foreign_inventory_disclosed")
+            check(self.note_counts(alice["owner"]) == (1, 1) and self.note_counts(bob["owner"]) == (0, 0),
+                  "workspace_note_pair_not_atomic")
+            self.service.revoke_session(alice["token"], alice["root"].key, alice["root"].revision)
+            self.service.invalidate_account_tokens(bob["token"])
+            for client, route in ((alice, "/note?" + query), (bob, "/notes")):
+                denied = self.workspace_call(client, "GET", route)
+                check(denied[0] == 401 and "body" not in denied[1] and "source" not in denied[1], "workspace_revocation_disclosed")
+            check(self.note_counts(alice["owner"]) == (1, 1), "workspace_revocation_erased_persisted_note")
+
+    def note_atomicity(self):
+        _, token, parent = self.account_session()
+        owner, body = parent.owner_key.id, "Synthetic atomic note"
+        for text, pin in (("", self.source), (body, None)):
+            self.denied(lambda: self.service.save_new_note(token, parent.key, 1, "atomic", text, pin), "OWNERSHIP_NOTE_INVALID")
+            check(self.note_counts(owner) == (0, 0), "invalid_note_consumed_quota")
+        cancellation = self.own.Cancellation()
+        with self.faults():
+            self.flush_hook = lambda session: cancellation.cancel()
+            self.denied(lambda: self.service.save_new_note(token, parent.key, 1, "atomic", body, self.source,
+                        cancellation=cancellation), "OWNERSHIP_CANCELLED")
+        check(self.note_counts(owner) == (0, 0), "cancelled_note_left_orphan")
+        first = self.service.save_new_note(token, parent.key, 1, "atomic", body, self.source)
+        check(self.note_counts(owner) == (1, 1), "atomic_note_pair_missing")
+        results = self.overlap(lambda: self.service.save_new_note(token, parent.key, 1, "race", body, self.source),
+                               lambda: self.service.save_new_note(token, parent.key, 1, "race", body, self.source))
+        check(all(type(note) is self.own.SavedNote for note in results) and results[0] == results[1], "concurrent_note_replay_wrong")
+        self.denied(lambda: self.service.save_new_note(token, parent.key, 1, "atomic", body + " changed", self.source),
+                    "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+        check(self.note_counts(owner) == (2, 2) and self.service.reopen_note(token, parent.key, 1, first.artifact_key, 1) == first,
+              "note_conflict_changed_pair")
+        literal = lambda value: self.sql.Literal(value).as_string()
+        # Both inserts roll back together in sql_denied; these are not service reservations.
+        for revision, text in (("0", "'synthetic'"), ("1", "repeat(chr(8364),6000)")):
+            statement = ("WITH a AS (INSERT INTO research_artifacts(id,owner_id,session_id,request_key,session_revision) VALUES ("
+                "'00000000-0000-0000-0000-000000000123'," + literal(owner) + "," + literal(parent.key.id)
+                + ",'note-constraint-fixture',1) RETURNING id,owner_id,session_id,revision) "
+                "INSERT INTO research_notes(artifact_id,owner_id,session_id,session_revision,artifact_revision,body,source_pin) "
+                "SELECT id,owner_id,session_id," + revision + ",revision," + text + ",'{}' FROM a")
+            self.sql_denied(statement, "23514")
+        check(self.note_counts(owner) == (2, 2), "note_constraint_probe_left_rows")
+
+    def note_indeterminate(self, after):
+        _, token, parent = self.account_session()
+        original = self.engine.dialect.do_commit
+        with self.faults():
+            def fault(driver):
+                if after:
+                    original(driver)
+                raise self.pg.OperationalError("injected_note_commit_boundary")
+            self.engine.dialect.do_commit = fault
+            self.denied(lambda: self.service.save_new_note(token, parent.key, 1, "unknown-note", "Synthetic uncertain note", self.source),
+                        "OWNERSHIP_COMMIT_INDETERMINATE", state="indeterminate")
+        check(self.note_counts(parent.owner_key.id) == (int(after), int(after)), "uncertain_note_pair_ground_truth_wrong")
+        first = self.service.save_new_note(token, parent.key, 1, "unknown-note", "Synthetic uncertain note", self.source)
+        check(self.service.save_new_note(token, parent.key, 1, "unknown-note", "Synthetic uncertain note", self.source) == first
+              and self.note_counts(parent.owner_key.id) == (1, 1), "uncertain_note_reconciliation_duplicated")
+        self.service.revoke_session(token, parent.key, 1)
+        self.denied(lambda: self.service.reopen_note(token, parent.key, 1, first.artifact_key, 1))
+        check(self.note_counts(parent.owner_key.id) == (1, 1), "denied_note_reconciliation_changed_storage")
+        emit("detail", detail={"note_commit_fault": "after_real_commit" if after else "before_real_commit",
+                               "durable_before_replay": int(after), "automatic_retry": False})
+
     def case_cleanup(self):
         check(self.engine.pool.checkedout() == 0, "service_connection_leaked")
         check(all(driver.closed for driver in self.invalidated), "invalidated_driver_not_closed")
@@ -808,7 +984,10 @@ class PostgreSQLAcceptance:
                        "(state LIKE 'idle in transaction%%' OR wait_event_type='Lock')", (self.p["database"], self.p["service"])) == 0,
               "transaction_or_blocker_leaked")
         counts = {table: self.one("SELECT count(*) FROM " + table) for table in self.launcher.OWNED}
-        check(all(counts[t] <= bound for t, bound in zip(self.launcher.OWNED, (64, 256, 512))), "aggregate_row_budget_exceeded")
+        check(all(counts[t] <= bound for t, bound in zip(self.launcher.OWNED, (64, 256, 512, 512))), "aggregate_row_budget_exceeded")
+        check(self.one("SELECT count(*) FROM research_notes n LEFT JOIN research_artifacts a ON a.id=n.artifact_id "
+                       "WHERE a.id IS NULL OR n.owner_id<>a.owner_id OR n.session_id<>a.session_id") == 0,
+              "note_owner_or_artifact_corrupted")
         for table in self.launcher.LEGACY[:-1]:
             check(self.one("SELECT count(*) FROM " + table) == 0, "legacy_table_written")
         emit("detail", detail={"retained_rows": counts, "checked_out": 0})
@@ -845,7 +1024,10 @@ class PostgreSQLAcceptance:
                  ("injected_before_commit", lambda: self.indeterminate(False)),
                  ("injected_after_commit", lambda: self.indeterminate(True)), ("denied_reconciliation", self.denied_reconciliation),
                  ("backend_before_commit", lambda: self.backend_failure(False)), ("backend_at_dispatch", lambda: self.backend_failure(True)),
-                 ("rollback_failure", lambda: self.cleanup_failure(False)), ("close_failure", lambda: self.cleanup_failure(True))]
+                 ("rollback_failure", lambda: self.cleanup_failure(False)), ("close_failure", lambda: self.cleanup_failure(True)),
+                 ("workspace_notes", self.workspace_notes), ("note_atomicity", self.note_atomicity),
+                 ("note_before_commit", lambda: self.note_indeterminate(False)),
+                 ("note_after_commit", lambda: self.note_indeterminate(True))]
         passed = 0
         check(("migration_and_provisioning",) + tuple(name for name, _ in cases) == self.launcher.CASE_NAMES,
               "worker_matrix_changed")
@@ -872,20 +1054,39 @@ class PostgreSQLAcceptance:
 
 def worker_entry():
     """Private launcher-to-child pipe; fixed target fields, never arbitrary DSNs."""
+    loop, status = None, 1
     try:
         data = sys.stdin.buffer.read(16385)
         check(len(data) <= 16384, "worker_input_limit")
         payload = json.loads(data)
         validate_payload(payload)
+        # Own stdlib wake-up machinery before the strict destination audit guard.
+        # No listener remains; application/driver network access stays target-only.
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        loop = asyncio.new_event_loop()
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=2))
         runtime_guard(payload)
         backend = ROOT / "backend"
         # -I -S avoids site initialization/.pth execution; existing packages only.
         sys.path[:0] = [str(backend), str(backend / ".venv/Lib/site-packages")]
-        PostgreSQLAcceptance(payload).run()
-        return 0
+        acceptance = PostgreSQLAcceptance(payload)
+        acceptance.loop = loop
+        acceptance.run()
+        status = 0
     except BaseException as error:
         emit("failure", code=str(error) if isinstance(error, AcceptanceFailure) else type(error).__name__)
-        return 1
+    finally:
+        if loop is not None:
+            try:
+                try:
+                    loop.run_until_complete(loop.shutdown_default_executor(timeout=5))
+                finally:
+                    loop.close()
+            except BaseException:
+                emit("failure", code="workspace_loop_cleanup_failed")
+                status = 1
+    return status
 
 
 def offline_checks():
@@ -937,6 +1138,8 @@ def offline_checks():
     socket.create_connection = socket.getaddrinfo = forbidden_network
     socket.socket.connect = socket.socket.connect_ex = forbidden_network
     module = launcher_module()
+    # Offline adapter checks must never create even unused credential material.
+    module.secrets.token_urlsafe = forbidden_process
     import_guard_counts = dict(attempts)
     valid = ["--execute", "--docker-context", "desktop-linux", "--expected-context-endpoint", "npipe:////./pipe/dockerDesktopLinuxEngine",
              "--image", "pgvector/pgvector@sha256:" + "a" * 64, "--expected-head", module.BACKEND_BASELINE,
@@ -1160,11 +1363,100 @@ def offline_checks():
         harness.service = Service()
         return harness, driver, proxy, events
 
+    def workspace_fixture():
+        """Scripted observations, not a replacement ownership/store implementation."""
+        h = PostgreSQLAcceptance.__new__(PostgreSQLAcceptance)
+        h.source_wire = {"synthetic_pin": 7}
+        note = dict(owner_key={"namespace": "principal", "id": "alice"}, session_key={"id": "session"},
+            artifact_key={"id": "artifact"}, session_revision=1, artifact_revision=1,
+            body="Synthetic private investigation", source=h.source_wire,
+            source_verification="unverified_reference", original_availability="not_checked")
+        clients = [dict(owner=owner, token=owner, root=SimpleNamespace(key=owner, revision=1)) for owner in ("alice", "bob")]
+        h.workspace_client = lambda: clients.pop(0)
+        events = []
+        @contextmanager
+        def catalog():
+            events.append("catalog_enter")
+            try: yield
+            finally: events.append("catalog_exit")
+        h.catalog_fixture = catalog
+        query = urlencode(dict(session="session", session_revision=1, artifact="artifact", artifact_revision=1))
+        listing = dict(owner_key="alice", items=[dict(artifact_key="artifact")])
+        script = [("alice", "GET", "/sources?cik=0000000001", 200, dict(sources=[h.source_wire],
+                source_verification="unverified_reference", original_availability="not_checked")),
+            ("alice", "POST", "/notes", 200, note), ("alice", "POST", "/notes", 200, note),
+            ("alice", "POST", "/notes", 409, {}), ("alice", "GET", "/notes", 200, listing),
+            ("alice", "GET", "/notes", 200, listing), ("alice", "GET", "/note?" + query, 200, note),
+            ("bob", "GET", "/note?" + query, 404, {}), ("alice", "GET", "/export?" + query, 200, note),
+            ("bob", "GET", "/export?" + query, 404, {}), ("bob", "GET", "/notes", 200, {"items": []}),
+            ("alice", "GET", "/note?" + query, 401, {}), ("bob", "GET", "/notes", 401, {})]
+        responses = [(*item[:4], copy.deepcopy(item[4])) for item in script]
+        def call(client, method, path, body=None):
+            owner, expected_method, expected_path, status, data = responses.pop(0)
+            check((client["owner"], method, path) == (owner, expected_method, expected_path), "scripted_workspace_schedule_wrong")
+            if method == "POST":
+                check(body["source"] == h.source_wire and body["request_key"] == "workspace-note", "scripted_submission_wrong")
+            return status, data, {b"content-disposition": b"attachment"}
+        h.workspace_call = call
+        counts = [("alice", (1, 1)), ("bob", (0, 0)), ("alice", (1, 1))]
+        def count(owner):
+            expected, value = counts.pop(0)
+            check(owner == expected, "scripted_note_owner_wrong")
+            return value
+        h.note_counts = count
+        h.service = SimpleNamespace(revoke_session=lambda token, key, revision: events.append(("revoke", token, key, revision)),
+            invalidate_account_tokens=lambda token: events.append(("invalidate", token)))
+        return h, responses, counts, events
+
+    def note_fixture():
+        h = PostgreSQLAcceptance.__new__(PostgreSQLAcceptance)
+        failure = exception_contract("backend/app/research_ownership.py", "OwnershipFailure")
+        h.own = SimpleNamespace(OwnershipFailure=failure, SavedNote=SimpleNamespace)
+        saves, counts, events = [], [], []
+        class Cancel:
+            def cancel(self): events.append("cancel")
+        h.own.Cancellation = Cancel
+        h.source = object()
+        h.hook = h.flush_hook = h.commit_hook = h.session_patch = None
+        parent = SimpleNamespace(owner_key=SimpleNamespace(id="owner"), key=SimpleNamespace(id="session"))
+        h.account_session = lambda: ("subject", "synthetic_token", parent)
+        note = SimpleNamespace(artifact_key="artifact")
+        revoked = [False]
+        def reopen(*args):
+            if revoked[0]: raise failure("OWNERSHIP_DENIED")
+            return note
+        def save(*args, **kwargs):
+            events.append((args, kwargs))
+            if kwargs.get("cancellation") is not None and h.flush_hook:
+                h.flush_hook(None)
+            result = saves.pop(0)
+            if result == "commit":
+                try: h.engine.dialect.do_commit(object())
+                except h.pg.OperationalError:
+                    raise failure("OWNERSHIP_COMMIT_INDETERMINATE", commit_state="indeterminate") from None
+                raise AcceptanceFailure("scripted_commit_did_not_fail")
+            if isinstance(result, BaseException): raise result
+            return result
+        h.service = SimpleNamespace(save_new_note=save, reopen_note=reopen,
+                                    revoke_session=lambda *a: revoked.__setitem__(0, True))
+        h.note_counts = lambda owner: counts.pop(0)
+        def overlap(first, second):
+            events.append("overlap")
+            return first(), second()
+        h.overlap = overlap
+        h.engine = SimpleNamespace(dialect=SimpleNamespace(do_commit=lambda driver: events.append("real_commit"),
+                                    do_rollback=None, do_execute=None))
+        h.pg = SimpleNamespace(OperationalError=type("SyntheticDriverError", (Exception,), {}))
+        h.sql = SimpleNamespace(Literal=lambda value: SimpleNamespace(as_string=lambda: "'" + value + "'"))
+        h.sql_denied = lambda statement, state: events.append(("constraint_probe", statement, state))
+        return h, note, saves, counts, events
+
     class OfflineChecks(unittest.TestCase):
         def test_01_positive_guards(self):
             for name in ("app.database", "psycopg", "sqlalchemy", "alembic", "dotenv", "jwt", "sqlite3"):
                 with self.subTest(import_name=name), self.assertRaises(AcceptanceFailure):
                     __import__(name)
+            with self.assertRaises(AcceptanceFailure): module.secrets.token_urlsafe(32)
             for effect in (lambda: sys.audit("subprocess.Popen", "docker", [], None, None),
                            lambda: sys.audit("socket.connect", None, ("127.0.0.1", 5432)),
                            lambda: sys.audit("sqlite3.connect", "ignored"),
@@ -1481,7 +1773,7 @@ def offline_checks():
             self.assertIn("pg_terminate_backend", segment)
             self.assertIn("self.original_connect(cls, **kwargs)", segment)
             self.assertTrue("research_ownership.OwnershipService(self.verifier, factory)" in segment)
-            self.assertEqual(CHAIN[-3:], ("d7b834408ba8", "f94c6f41e0cb", "a7c730103001"))
+            self.assertEqual(CHAIN[-3:], ("f94c6f41e0cb", "a7c730103001", "b8d741104001"))
             self.assertNotIn("app.database", module.MIGRATION_ENV)
             self.assertIn('context.config.attributes["connection"]', module.MIGRATION_ENV)
 
@@ -1513,8 +1805,8 @@ def offline_checks():
                     module.validate_cgroup(value)
 
         def test_42_worker_matrix_is_exact_and_migration_is_prewrite_bound(self):
-            self.assertEqual(len(module.CASE_NAMES), 28)
-            self.assertEqual(len(set(module.CASE_NAMES)), 28)
+            self.assertEqual(len(module.CASE_NAMES), 32)
+            self.assertEqual(len(set(module.CASE_NAMES)), 32)
             source = Path(__file__).read_text(encoding="utf-8")
             tree = ast.parse(source)
             cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "PostgreSQLAcceptance")
@@ -1772,6 +2064,211 @@ def offline_checks():
                 with self.assertRaises(module.CommandFailure):
                     scope["BoundedProcess"](lambda *a, **k: child).run(["fake"], seconds=1)
 
+        def test_59_workspace_scenario_requires_exact_schedule_and_revocation(self):
+            h, replies, counts, events = workspace_fixture()
+            h.workspace_notes()
+            self.assertEqual((replies, counts), ([], []))
+            self.assertEqual(events, ["catalog_enter", ("revoke", "alice", "alice", 1), ("invalidate", "bob"), "catalog_exit"])
+
+        def test_60_workspace_scenario_rejects_wrong_pins_labels_and_disclosure(self):
+            for index, key, value in [(0,"source_verification","verified"), (0,"sources",[]),
+                    (1,"source",{"different_pin":8}), (1,"body","wrong draft"), (2,"body","wrong replay"),
+                    (5,"items",[]), (8,"body","wrong export"), (7,"body","foreign note"),
+                    (9,"source",{"private":True}), (10,"items",[{}]), (11,"body","revoked note"), (12,"source",{})]:
+                with self.subTest(index=index, key=key):
+                    h, replies, _, events = workspace_fixture()
+                    replies[index][4][key] = value
+                    with self.assertRaises(AcceptanceFailure): h.workspace_notes()
+                    self.assertEqual(events[-1], "catalog_exit")
+            h, _, counts, events = workspace_fixture(); counts[0] = ("alice", (1,0))
+            with self.assertRaises(AcceptanceFailure): h.workspace_notes()
+            self.assertEqual(events[-1], "catalog_exit")
+
+        def test_61_note_atomicity_adapter_checks_validation_cancel_race_and_conflict(self):
+            h, note, saves, counts, events = note_fixture(); error = h.own.OwnershipFailure
+            race = SimpleNamespace(artifact_key="race")
+            saves.extend([error("OWNERSHIP_NOTE_INVALID"), error("OWNERSHIP_NOTE_INVALID"),
+                error("OWNERSHIP_CANCELLED"), note, race, race, error("OWNERSHIP_IDEMPOTENCY_CONFLICT")])
+            counts.extend([(0,0),(0,0),(0,0),(1,1),(2,2),(2,2)])
+            h.note_atomicity()
+            self.assertEqual((saves, counts), ([], [])); self.assertIn("cancel", events); self.assertIn("overlap", events)
+            self.assertIsNone(h.flush_hook)
+            probes = [event for event in events if isinstance(event,tuple) and event[0] == "constraint_probe"]
+            self.assertEqual(len(probes),2); self.assertTrue(all(event[2] == "23514" for event in probes))
+            self.assertIn("repeat(chr(8364),6000)",probes[1][1])
+            h, _, saves, counts, _ = note_fixture()
+            saves.append(h.own.OwnershipFailure("OWNERSHIP_NOTE_INVALID")); counts.append((1,0))
+            with self.assertRaisesRegex(AcceptanceFailure, "invalid_note_consumed_quota"): h.note_atomicity()
+
+        def test_62_note_commit_adapters_require_paired_ground_truth_and_explicit_replay(self):
+            for after in (False, True):
+                with self.subTest(after=after):
+                    h, note, saves, counts, events = note_fixture()
+                    saves.extend(["commit",note,note]); counts.extend([(int(after),int(after)),(1,1),(1,1)])
+                    with patch("sys.stdout", new=io.StringIO()): h.note_indeterminate(after)
+                    self.assertEqual((saves,counts),([],[])); self.assertEqual(events.count("real_commit"),int(after))
+                    h, _, saves, counts, _ = note_fixture(); saves.append("commit"); counts.append((1,0))
+                    with self.assertRaisesRegex(AcceptanceFailure, "uncertain_note_pair_ground_truth_wrong"):
+                        h.note_indeterminate(after)
+
+        def test_63_asgi_message_driver_binds_client_and_bounds_response(self):
+            class Loop:
+                def run_until_complete(self, coroutine):
+                    try: coroutine.send(None)
+                    except StopIteration as result: return result.value
+                    finally: coroutine.close()
+                    raise AcceptanceFailure("scripted_coroutine_suspended")
+            seen = []
+            async def app(scope, receive, send):
+                seen.append((scope, await receive()))
+                await send({"type":"http.response.start", "status":200, "headers":[(b"cache-control",b"private, no-store")]})
+                await send({"type":"http.response.body", "body":b'{"synthetic":true}'})
+            h = PostgreSQLAcceptance.__new__(PostgreSQLAcceptance); h.loop = Loop()
+            client = dict(app=app,cookie="synthetic-cookie",csrf="synthetic-csrf")
+            self.assertEqual(h.workspace_call(client,"POST","/notes?after=marker",{"body":"synthetic"})[:2],(200,{"synthetic":True}))
+            scope, request = seen[0]
+            self.assertEqual(scope["query_string"],b"after=marker")
+            self.assertEqual(dict(scope["headers"])[b"x-finlens-csrf"],b"synthetic-csrf")
+            self.assertEqual(dict(scope["headers"])[b"origin"],b"https://finlens.test")
+            self.assertEqual(json.loads(request["body"]),{"body":"synthetic"})
+            for body, cache in ((b"x"*65537,b"private, no-store"),(b"{}",b"public")):
+                async def invalid(scope, receive, send):
+                    await send({"type":"http.response.start","status":200,"headers":[(b"cache-control",cache)]})
+                    await send({"type":"http.response.body","body":body})
+                with self.assertRaises(AcceptanceFailure): h.workspace_call({**client,"app":invalid},"GET","/notes")
+
+        def test_64_catalog_fixture_cleans_exact_synthetic_selectors_on_failure(self):
+            for fail in (False,True):
+                events = []
+                @contextmanager
+                def transaction():
+                    events.append("begin")
+                    try: yield
+                    finally: events.append("end")
+                h = PostgreSQLAcceptance.__new__(PostgreSQLAcceptance); h.one = lambda query: 0
+                h.observer = SimpleNamespace(transaction=transaction,execute=lambda statement,params:events.append((statement,params)))
+                try:
+                    with h.catalog_fixture():
+                        if fail: raise RuntimeError("synthetic body failure")
+                except RuntimeError: self.assertTrue(fail)
+                statements = [event for event in events if isinstance(event,tuple)]
+                self.assertEqual(len(statements),6)
+                self.assertTrue(all(sql.startswith("INSERT INTO ") for sql,_ in statements[:3]))
+                self.assertEqual([params for _,params in statements[3:]],[('0000000001','0000000001-24-000001'),('0000000001',),('0000000001',)])
+                self.assertTrue(all(sql.startswith("DELETE FROM ") and " WHERE " in sql for sql,_ in statements[3:]))
+                self.assertEqual(events.count("begin"),2); self.assertEqual(events.count("end"),2)
+
+        def test_65_note_grants_guard_destinations_and_worker_loop_are_explicit(self):
+            grants = module.grants("ucr_db_test","ucr_svc_test")
+            self.assertEqual(module.UPDATES["research_notes"],("artifact_revision",))
+            self.assertEqual([s for s in grants if s.startswith("GRANT SELECT (")],[
+                'GRANT SELECT (company_cik, accession_number, data_version, content_digest) ON TABLE public.filing_publications TO "ucr_svc_test"',
+                'GRANT SELECT (company_cik, evidence_version, data_version) ON TABLE public.company_refresh_state TO "ucr_svc_test"'])
+            probes = dict(module.privilege_probes("ucr_svc_test","ucr_admin_test","a"*32))
+            self.assertEqual(probes["facts_read"],"SELECT value FROM public.financial_facts WHERE false")
+            self.assertIn("cleaned_text",probes["filing_text_read"]); self.assertIn("body=",probes["note_body"])
+            self.assertEqual(len(module.PROTECTED),5)
+            self.assertEqual(module.BACKEND_BASELINE,"1706418959e0b5909ab7b1f86f1311714db1a8e6")
+            source = Path(__file__).read_text(encoding="utf-8"); tree = ast.parse(source)
+            entry = ast.get_source_segment(source,next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="worker_entry"))
+            self.assertLess(entry.index("validate_payload(payload)"),entry.index("asyncio.new_event_loop()"))
+            self.assertLess(entry.index("asyncio.new_event_loop()"),entry.index("runtime_guard(payload)"))
+            self.assertIn("shutdown_default_executor(timeout=5)",entry); self.assertIn("loop.close()",entry)
+            self.assertIn("ThreadPoolExecutor(max_workers=2)",entry)
+            audits = []
+            with patch.object(sys,"meta_path",list(sys.meta_path)), patch.object(sys,"addaudithook",side_effect=audits.append), \
+                    patch.dict(runtime_guard.__globals__,{"protect_env_files":lambda:None}):
+                runtime_guard({"port":65432})
+                self.assertIsNone(sys.meta_path[0].find_spec("app.private_workspace_http"))
+                with self.assertRaises(AcceptanceFailure): sys.meta_path[0].find_spec("app.main")
+            audits[0]("socket.connect",(None,("127.0.0.1",65432)))
+            with self.assertRaises(AcceptanceFailure): audits[0]("socket.connect",(None,("127.0.0.1",5432)))
+            with self.assertRaises(AcceptanceFailure): audits[0]("subprocess.Popen",())
+
+        def test_66_worker_loop_cleanup_failure_cannot_return_success(self):
+            import concurrent.futures
+            nonce = "1" * 32
+            payload = dict(nonce=nonce,port=65432,database="ucr_db_"+nonce,admin="ucr_admin_"+nonce,
+                service="ucr_svc_"+nonce,admin_password="A"*43,service_password="B"*43,
+                system_identifier="123",container_id="2"*64,
+                migration_directory=str(Path(os.environ["LOCALAPPDATA"])/"FinLens/ownership-acceptance"/nonce/"migration"))
+            for failure in (None,"run","shutdown","payload"):
+                with self.subTest(failure=failure):
+                    events = []
+                    class Loop:
+                        def set_default_executor(self, executor): events.append("executor")
+                        def shutdown_default_executor(self, *, timeout):
+                            self.timeout = timeout
+                            if failure == "shutdown": raise RuntimeError("synthetic shutdown failure")
+                            return "shutdown"
+                        def run_until_complete(self, value): events.append(value)
+                        def close(self): events.append("close")
+                    loop = Loop()
+                    class Acceptance:
+                        def run(self):
+                            events.append("run")
+                            if failure == "run": raise AcceptanceFailure("synthetic_run_failure")
+                    data = {} if failure == "payload" else payload
+                    with patch.dict(sys.modules,{"asyncio":SimpleNamespace(new_event_loop=lambda:loop)}), \
+                            patch.object(concurrent.futures,"ThreadPoolExecutor",side_effect=lambda **kw:events.append(kw)), \
+                            patch.object(sys,"stdin",SimpleNamespace(buffer=io.BytesIO(json.dumps(data).encode()))), \
+                            patch.object(sys,"path",list(sys.path)), patch("sys.stdout",new=io.StringIO()) as output, \
+                            patch.dict(worker_entry.__globals__,{"PostgreSQLAcceptance":lambda p:Acceptance(),
+                                                                 "runtime_guard":lambda p:events.append("guard")}):
+                        self.assertEqual(worker_entry(),0 if failure is None else 1)
+                        if failure is not None: self.assertIn('"event":"failure"',output.getvalue())
+                    if failure == "payload": self.assertEqual(events,[])
+                    else:
+                        self.assertIn({"max_workers":2},events)
+                        self.assertEqual(events[-1],"close")
+                        self.assertEqual(loop.timeout,5)
+
+        def test_67_schema_inspector_accepts_note_artifact_pk_and_rejects_malformed_keys(self):
+            from types import ModuleType
+            class Kind:
+                def __str__(self): return "TEXT"
+            metadata = {}
+            models = ModuleType("app.models")
+            for class_name, table_name, names, primary in (
+                    ("ResearchAccount","research_accounts",["id"],["id"]),
+                    ("ResearchSession","research_sessions",["id","owner_id"],["id"]),
+                    ("ResearchArtifact","research_artifacts",["id","owner_id","session_id"],["id"]),
+                    ("ResearchNote","research_notes",["artifact_id","owner_id","session_id"],["artifact_id"])):
+                columns = {name:SimpleNamespace(name=name,nullable=False,type=Kind(),server_default=None) for name in names}
+                table = SimpleNamespace(name=table_name,columns=columns,constraints=[],
+                    primary_key=SimpleNamespace(columns=[columns[name] for name in primary]))
+                metadata[table_name] = table
+                setattr(models,class_name,SimpleNamespace(__table__=table))
+            class Inspector:
+                def get_table_names(self, **kwargs): return list(module.OWNED+module.LEGACY)
+                def get_columns(self, name, **kwargs):
+                    return [dict(name=c.name,nullable=c.nullable,type=c.type,default=None) for c in metadata[name].columns.values()]
+                def get_pk_constraint(self, name):
+                    return {"constrained_columns":bad_keys if name==bad_table else [c.name for c in metadata[name].primary_key.columns]}
+                def get_unique_constraints(self, name): return []
+                def get_check_constraints(self, name): return []
+                def get_foreign_keys(self, name):
+                    owned = dict(name="fk_research_artifact_owned_session" if name=="research_artifacts" else "fk_research_note_owned_session",
+                        constrained_columns=["owner_id","session_id"],referred_table="research_sessions",referred_columns=["owner_id","id"])
+                    return [owned] if name=="research_artifacts" else [owned,dict(constrained_columns=["artifact_id"],referred_table="research_artifacts")]
+            h = PostgreSQLAcceptance.__new__(PostgreSQLAcceptance); h.launcher = module
+            connection = object()
+            sqlalchemy = ModuleType("sqlalchemy")
+            def inspect(supplied):
+                self.assertIs(supplied,connection)
+                return Inspector()
+            sqlalchemy.inspect = inspect
+            app = ModuleType("app"); app.models = models
+            cases = [(None,None),("research_notes",["id"]),("research_notes",[]),
+                     ("research_notes",["artifact_id","owner_id"]),("research_notes",["artifact_id","artifact_id"]),
+                     ("research_accounts",["subject"]),("research_sessions",["id","id"])]
+            with patch.dict(sys.modules,{"app":app,"app.models":models,"sqlalchemy":sqlalchemy}):
+                for bad_table,bad_keys in cases:
+                    with self.subTest(table=bad_table, keys=bad_keys):
+                        if bad_table is None: h.schema(connection)
+                        else:
+                            with self.assertRaisesRegex(AcceptanceFailure,"migration_pk_wrong"): h.schema(connection)
+
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(OfflineChecks)
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     print(json.dumps({"offline_only": True, "tests": result.testsRun, "failures": len(result.failures),
@@ -1958,7 +2455,7 @@ def offline_admission_checks():
         def test_02_postcommit_positive_and_receipt(self):
             fixture = Fixture()
             self.assertEqual(module.FILES, files)
-            self.assertEqual(module.BACKEND_BASELINE, "c83449d4e87512c173680369916121a58227ac4d")
+            self.assertEqual(module.BACKEND_BASELINE, "1706418959e0b5909ab7b1f86f1311714db1a8e6")
             self.assertNotEqual(execution, module.BACKEND_BASELINE)
             self.assertEqual(fixture.invoke(), 0)
             self.assertEqual(fixture.effects, ["run_constructed", "synthetic_mkdir", "synthetic_execute"])
@@ -2112,7 +2609,7 @@ def offline_admission_checks():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--offline", action="store_true", help="Run the historical guarded offline suite")
+    selection.add_argument("--offline", action="store_true", help="Run guarded launcher and scenario-adapter checks")
     selection.add_argument("--offline-admission", action="store_true", help="Run only new guarded admission checks")
     args = parser.parse_args(argv)
     if args.offline_admission:

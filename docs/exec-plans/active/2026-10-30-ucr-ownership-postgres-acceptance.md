@@ -499,3 +499,156 @@ E/D operational authorization remain unresolved. No operational launcher,
 Docker, worker, connection, SQL, migration, provider, installation or Git write
 ran; backend/.env was not read/hashed. All 28 PostgreSQL cases remain NOT RUN.
 Stop here with operational NO-GO; no next phase begins automatically.
+
+## Current owned-note/private-workspace refresh (2026-11-04)
+
+This section supersedes the earlier backend binding only after its own review.
+Entry main is `1706418959e0b5909ab7b1f86f1311714db1a8e6`, empty index, with five
+protected exceptions whose recorded raw hashes match. Prior ownership migration
+and qualified logical backup/restore evidence are accepted and must not be repeated
+against the original database. The current assessment receipt is outside Git.
+
+Authorized authoring scope remains exactly the existing launcher, worker/offline
+tests and this plan. Reuse the run-owned PG16 target, fixed interpreter, framed
+raw harness digest, strict repository admission, deadlines, row/connection/output
+bounds and identity-bound cleanup. No new framework or product change.
+
+Planned changes: bind the current backend and five exceptions; include the additive
+note revision/table and narrow test-role privileges; add synthetic in-process ASGI
+save/list/reopen/export, two-owner denial, exact unverified pins, replay/conflict,
+atomicity, revocation and uncertain-note-commit scenarios. Catalog fixtures are
+synthetic and removed by exact identity before legacy preservation checks. Financial
+facts and filing text remain unreadable/unwritable to the service role.
+
+Only guarded offline tests/fakes may run. No Docker invocation, service start,
+database connection/creation, actual credential/key generation, SQL/migration
+execution, live role/data changes, providers, installation, deployment or Git
+delivery. Operational commissioning remains separately authorized: one fresh
+disposable target, scoped fixture roles, temporary credentials and an assigned
+localhost port/private bridge. No prior backup approval authorizes that run.
+
+- [x] Inspect current implementation and preserve baseline/protected files.
+- [x] Refresh existing launcher and worker, retaining prior scenarios/guards.
+- [x] Run bounded offline admission and scenario-adapter regression checks.
+- [x] Record exact raw hashes/digest and limitations; leave unstaged for review.
+
+### Refreshed candidate behavior
+
+Backend baseline is now the exact entry commit above; the protected whitelist adds
+the annual-export and personal-site plans with their original raw hashes. Branch,
+index, backend-tree, exact committed/working harness bytes and framed digest checks
+remain required. No production/authentication implementation is modified.
+
+The explicit Alembic chain now ends at `b8d741104001`. Four ownership tables are
+checked against actual models; note PK, artifact FK and owned-session composite FK
+are inspected. Service grants add SELECT/INSERT on notes and UPDATE only on
+artifact_revision (required by FOR UPDATE). Catalog SELECT is column-only:
+filing_publications(company_cik, accession_number, data_version, content_digest)
+and company_refresh_state(company_cik, evidence_version, data_version). Table-wide
+legacy grants remain absent. New 42501 probes deny financial-fact values, filing
+text, refresh payloads and note-body UPDATE. Existing DDL/DML/role/sequence denials
+are retained. All grants/probes are future fresh-fixture behavior, not executed.
+
+The exact worker protocol retains 28 prior cases and adds four, for 32 total:
+
+1. Real private ASGI adapter with injected real OwnershipService/repository and
+   signed synthetic tokens: catalog pin, save, exact replay, conflict, repeated
+   discovery, reopen/export, two-owner denial, revoked session and invalidated token.
+   Compare exact body/pin and unverified_reference/not_checked labels. No web server,
+   provider login, main/settings import or financial facts are needed.
+2. Atomic notes: invalid payloads leave no quota rows; cancellation after artifact
+   flush rolls back both rows; explicit retry succeeds; simultaneous same-key saves
+   reuse the existing real blocking-PID witness; conflicting replay cannot mutate
+   the note. Rollback-contained modifying CTE probes require 23514 for zero revision
+   and 18,000 UTF-8 bytes (6,000 euro characters), with no surviving probe rows.
+3. Injected failure before real note COMMIT: independent observer must see (0,0)
+   artifact/note rows before explicit same-key reconciliation.
+4. Injected failure after real note COMMIT: observer must see (1,1); reconciliation
+   must preserve exactly one pair, and later revocation denies reopening. Neither
+   injection proves genuine committed-but-lost transport acknowledgement.
+
+Catalog fixture rows are synthetic, inserted transactionally into the fresh target
+only and removed by exact CIK/accession/company selectors in finally. Explicit
+company ID avoids altering legacy sequences. Legacy tables must again be empty and
+their schema/sequence snapshot must match. Note row counts have a 512 bound; note
+owner/session IDs must match their artifact. Existing pool/activity/invalidation
+and identity-bound container/network/temp-file cleanup remain mandatory for PASS.
+
+The worker owns the stdlib asyncio wakeup loop before installing its unchanged
+target-only socket audit rule; no application listener remains. It limits the ASGI
+executor to two workers and shuts it down with a five-second timeout, always closes
+the loop, and returns failure for scenario or cleanup errors. Parent acceptance
+still requires zero worker exit and complete events plus confirmed owned cleanup.
+
+### Actual offline evidence and limits
+
+The desktop environment disconnected during a patch attempt. On reconnection the
+three existing edits and protected files were preserved; the proposed
+workspace_fixture helper was confirmed absent before retrying it. No uncertain
+edit was blindly repeated. All receipts remain outside the repository.
+
+From `D:/Projects/finlens-foundation`, existing fixed Python, no site/.pth/bytecode:
+
+    backend/.venv/Scripts/python.exe -I -S -B backend/tests/acceptance_research_ownership_postgres.py --offline
+    backend/.venv/Scripts/python.exe -I -S -B backend/tests/acceptance_research_ownership_postgres.py --offline-admission
+
+Final results: **66 guarded launcher/scenario checks + 18 admission checks = 84
+passed**, zero skips/errors/failures. Admission exercised 98 synthetic invocation
+fixtures: one success and 97 refusals before effects. Positive sentinel checks
+block operational imports, process/network access, private env reads, filesystem
+writes and credential-material generation. No app/DB/crypto packages are imported
+by these suites. New queue adapters are scripted observations, not a second store
+implementation and not PostgreSQL evidence. They exercise the actual scenario
+functions, malformed pins/labels, foreign/revoked content, orphan rows, pre/post
+COMMIT outcomes, ASGI frames, exact cleanup selectors and worker-loop failures.
+
+An initial 58-check run passed before new regressions were added. Intermediate
+65-check runs also passed. The first admission run failed only its stale positive
+assertion of the October baseline; updating that assertion to the newly pinned
+baseline produced the final 18-pass result without weakening admission.
+Preserved private logs: private-pg-refresh-first-offline.txt,
+private-pg-refresh-scenarios-first.txt, private-pg-refresh-final-offline.txt,
+private-pg-refresh-final-offline-v2.txt, private-pg-refresh-final-offline-v3.txt,
+private-pg-refresh-final-admission.txt and
+private-pg-refresh-final-admission-corrected.txt. The v3 and corrected logs are the
+final selections. Exact source hashes and the new framed aggregate are recorded
+outside the hashed three-file set to avoid self-reference.
+
+Independent review, committed raw-byte binding, exact execution revision and
+operational authorization remain pending. This task ran no Docker commands,
+database connections, migrations, SQL, services, providers, actual key/password
+generation, package installation, role changes or Git writes. All 32 real-PG cases
+remain NOT_RUN. Image/runtime/pg_hba/cgroup/Windows supervision and actual schema,
+privilege, concurrency, ASGI-to-PG and cleanup behavior require the separately
+authorized disposable-fixture run. Prior backup/migration acceptance is unchanged;
+there is no authority to restore or alter the original database. No staging/push.
+
+### Focused primary-key review correction
+
+Independent review found that schema() still assumed every ownership model used
+the primary key id. ResearchNote instead uses artifact_id, so the real worker
+would have refused the correct note schema before its scenarios. The generic
+check now derives the expected ordered column names from each intended model's
+primary_key.columns and compares the inspector's exact list. The separate explicit
+note artifact_id check remains. No migration, grant, product or launcher changes
+are part of this correction; only this plan and the existing worker/tests changed.
+
+A new synthetic-inspector regression invokes the actual schema() method with
+stand-in model metadata and inspector modules, never real SQLAlchemy/application
+imports or a database. It accepts all four correct keys, including notes, and
+rejects wrong/missing/extra/duplicate note keys plus malformed account/session
+keys. Before the fix, the correct note schema reproduced migration_pk_wrong;
+the wrong id key also exposed the inconsistent later note-specific failure.
+The red receipt is preserved as private-pg-pk-before.txt.
+
+Both maintained offline selections were rerun after the correction: **67 launcher/
+scenario/schema checks + 18 admission checks = 85 passed**, zero failures, errors
+or skips. Admission still has one positive invocation and 97 refusals before
+effects. Final receipts are private-pg-pk-final-offline.txt and
+private-pg-pk-final-admission.txt; all original review evidence is retained.
+
+The candidate remains exactly three unstaged files on the same baseline, with an
+empty index and five unchanged protected hashes. Fresh raw hashes/framed digest
+are recorded outside this plan for focused re-review. All 32 actual PostgreSQL
+cases remain NOT_RUN; no Docker, DB, actual credentials/keys, migration, staging,
+deployment or provider actions occurred. Operational authorization is unchanged.

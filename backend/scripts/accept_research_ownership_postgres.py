@@ -18,7 +18,7 @@ import threading
 import time
 from uuid import uuid4
 
-BACKEND_BASELINE = "c83449d4e87512c173680369916121a58227ac4d"
+BACKEND_BASELINE = "1706418959e0b5909ab7b1f86f1311714db1a8e6"
 BACKEND_INPUTS = ("backend/app", "backend/migrations", "backend/requirements.txt")
 FILES = (
     "backend/scripts/accept_research_ownership_postgres.py",
@@ -29,14 +29,19 @@ PROTECTED = {
     "frontend/next-env.d.ts": "f4e8976c19fc926644d72610bf1058bd6bf52add97e46a02bc0b912a751625c0",
     "backend/reports/canary-aapl_guarded_live_20261010_111844_3580610-publication.json": "a783517d2875e39df4c831c410265d0126fbf6a9d3ddba1103f7bd61b057844c",
     "backend/reports/refresh-discovery-aapl_sec_discovery_20261010_002323_0671678.json": "f8df96c8890c0ece1e1701b25bc5c43b879c359eceb96acb451a2a0daa58bf7c",
+    "docs/exec-plans/active/2026-10-31-annual-comparison-markdown-export.md": "018323260c0fd778346dd397cd419e0f2376018dc2fbe3570bfad37781b16051",
+    "docs/exec-plans/completed/2026-11-01-finlens-personal-site.md": "2b416a00962794ff97cfdbdcab1acdeab5aff3623733ac8095359cbc3c84a704",
 }
 MIB = 1024 * 1024
 CLI_CAP, CHILD_CAP, EVIDENCE_CAP = 128 * 1024, 512 * 1024, 2 * MIB
 LEGACY = ("companies", "financial_facts", "filing_chunks", "company_refresh_state",
           "filing_publications", "refresh_attempts", "alembic_version")
-OWNED = ("research_accounts", "research_sessions", "research_artifacts")
+OWNED = ("research_accounts", "research_sessions", "research_artifacts", "research_notes")
 UPDATES = {"research_accounts": ("token_cutoff", "revision"),
-           "research_sessions": ("state", "revision"), "research_artifacts": ("revision",)}
+           "research_sessions": ("state", "revision"), "research_artifacts": ("revision",),
+           "research_notes": ("artifact_revision",)}  # One-column UPDATE permission is required for row locking.
+CATALOG_READS = {"filing_publications": ("company_cik", "accession_number", "data_version", "content_digest"),
+                 "company_refresh_state": ("company_cik", "evidence_version", "data_version")}
 MOUNTS = {"/var/lib/postgresql/data": 256 * MIB, "/tmp": 16 * MIB,
           "/var/run/postgresql": 16 * MIB, "/dev/shm": 64 * MIB, "/dev": 64 * MIB}
 CASE_NAMES = ("migration_and_provisioning", "privileges", "authentication_boundary", "first_distinct", "first_replay",
@@ -45,7 +50,8 @@ CASE_NAMES = ("migration_and_provisioning", "privileges", "authentication_bounda
               "revocation_before_read", "reservation_before_invalidation", "invalidation_before_reservation", "token_cutoff",
               "precommit_rollback", "confirmed_cancellation", "confirmed_rotation", "injected_before_commit",
               "injected_after_commit", "denied_reconciliation", "backend_before_commit", "backend_at_dispatch",
-              "rollback_failure", "close_failure")
+              "rollback_failure", "close_failure", "workspace_notes", "note_atomicity",
+              "note_before_commit", "note_after_commit")
 MIGRATION_ENV = '''from alembic import context
 connection = context.config.attributes["connection"]
 context.configure(connection=connection, target_metadata=None, transaction_per_migration=True)
@@ -294,6 +300,8 @@ def grants(database, service):
     for table in OWNED:
         statements.extend((f"GRANT SELECT, INSERT ON TABLE public.{table} TO {role}",
                            f"GRANT UPDATE ({', '.join(UPDATES[table])}) ON TABLE public.{table} TO {role}"))
+    for table, columns in CATALOG_READS.items():
+        statements.append(f"GRANT SELECT ({', '.join(columns)}) ON TABLE public.{table} TO {role}")
     return tuple(statements)
 
 
@@ -317,7 +325,11 @@ def privilege_probes(service, admin, nonce):
                        ("update_" + table, f"UPDATE public.{table} SET {column}=NULL::{kind} WHERE false")))
     probes.extend((("account_column", "UPDATE public.research_accounts SET enabled=false WHERE false"),
                    ("session_column", "UPDATE public.research_sessions SET request_key='denied' WHERE false"),
-                   ("artifact_column", "UPDATE public.research_artifacts SET state='revoked' WHERE false")))
+                   ("artifact_column", "UPDATE public.research_artifacts SET state='revoked' WHERE false"),
+                   ("note_body", "UPDATE public.research_notes SET body='denied' WHERE false"),
+                   ("facts_read", "SELECT value FROM public.financial_facts WHERE false"),
+                   ("filing_text_read", "SELECT cleaned_text FROM public.filing_publications WHERE false"),
+                   ("refresh_payload_read", "SELECT evidence FROM public.company_refresh_state WHERE false")))
     return tuple(probes)
 
 
