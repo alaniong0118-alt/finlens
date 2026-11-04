@@ -6,6 +6,7 @@ No caller DSN, existing container, volume, environment-file or cleanup target in
 """
 import argparse
 from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -425,7 +426,8 @@ def validate_cgroup(raw):
 CONTAINER_FORMAT = ('{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Image}},'
                     '"labels":{{json .Config.Labels}},"host":{{json .HostConfig}},'
                     '"mounts":{{json .Mounts}},"networks":{{json .NetworkSettings.Networks}},'
-                    '"ports":{{json .NetworkSettings.Ports}},"running":{{json .State.Running}}}')
+                    '"ports":{{json .NetworkSettings.Ports}},"running":{{json .State.Running}},'
+                    '"status":{{json .State.Status}},"started_at":{{json .State.StartedAt}}}')
 NETWORK_FORMAT = ('{"id":{{json .Id}},"name":{{json .Name}},"labels":{{json .Labels}},'
                   '"containers":{{json .Containers}},"driver":{{json .Driver}}}')
 
@@ -484,40 +486,96 @@ class Run:
         return json.loads(self.command([kind, "inspect", "--format", fmt, target]).stdout)
 
     def owned(self, kind, record, *, bounds=True):
+        require(type(record) is dict and type(record.get("name")) is str
+                and type(record.get("labels")) is dict and type(record.get("id")) is str,
+                "resource_ownership_unverified")
         require(record.get("name", "").lstrip("/") == getattr(self, kind + "_name")
                 and record.get("labels", {}).get("finlens.ucr.run") == self.nonce
                 and re.fullmatch(r"[0-9a-f]{64}", record.get("id", "")), "resource_ownership_unverified")
         require(kind in self.intents, "creation_intent_missing")
         if kind == "container":
             require(record.get("image") == self.image_id, "container_image_mismatch")
-            nets = record.get("networks", {})
-            require(set(nets) == {self.network_name} and nets[self.network_name]["NetworkID"] == self.ids.get("network"),
-                    "unexpected_container_network")
+            attachment = self._network_attachment(record, "unexpected_container_network")
+            require(attachment["NetworkID"] == self.ids.get("network"), "unexpected_container_network")
             if not bounds:
                 if kind in self.ids:
                     require(record["id"] == self.ids[kind], "resource_id_changed")
                 return record["id"]
-            host = record["host"]
-            require(host.get("ReadonlyRootfs") is True and host.get("LogConfig", {}).get("Type") == "none"
-                    and host.get("Memory") == 768 * MIB and host.get("MemorySwap") == 768 * MIB
-                    and host.get("NanoCpus") == 2_000_000_000 and host.get("PidsLimit") == 128
-                    and host.get("ShmSize") == 64 * MIB and not host.get("Privileged")
-                    and host.get("IpcMode") == "private" and host.get("CgroupnsMode") == "private"
-                    and not host.get("Binds"), "container_bounds_mismatch")
-            require(set(host.get("Tmpfs", {})) == set(MOUNTS) - {"/dev", "/dev/shm"}, "unexpected_tmpfs")
-            for path in set(MOUNTS) - {"/dev", "/dev/shm"}:
-                require("size=" + str(MOUNTS[path]) in host["Tmpfs"][path].split(","), "tmpfs_config_mismatch")
-            require(all(m.get("Type") == "tmpfs" and m.get("Destination") in MOUNTS
-                        for m in record.get("mounts", [])), "unexpected_container_mount")
-            bindings = host.get("PortBindings", {})
-            require(set(bindings) == {"5432/tcp"} and len(bindings["5432/tcp"]) == 1
-                    and bindings["5432/tcp"][0]["HostIp"] == "127.0.0.1", "unsafe_port_binding")
+            self._container_bounds(record)
         else:
             require(record.get("driver") == "bridge" and set(record.get("containers") or {}) <= {self.ids.get("container")},
                     "network_has_unowned_members")
         if kind in self.ids:
             require(record["id"] == self.ids[kind], "resource_id_changed")
         return record["id"]
+
+    def _network_attachment(self, record, code):
+        nets = record.get("networks")
+        require(type(nets) is dict and set(nets) == {self.network_name}, code)
+        attachment = nets[self.network_name]
+        require(type(attachment) is dict and type(attachment.get("NetworkID")) is str
+                and type(attachment.get("EndpointID")) is str, code)
+        return attachment
+
+    def _container_bounds(self, record):
+        host = record["host"]
+        require(host.get("ReadonlyRootfs") is True and host.get("LogConfig", {}).get("Type") == "none"
+                and host.get("Memory") == 768 * MIB and host.get("MemorySwap") == 768 * MIB
+                and host.get("NanoCpus") == 2_000_000_000 and host.get("PidsLimit") == 128
+                and host.get("ShmSize") == 64 * MIB and not host.get("Privileged")
+                and host.get("IpcMode") == "private" and host.get("CgroupnsMode") == "private"
+                and not host.get("Binds"), "container_bounds_mismatch")
+        require(set(host.get("Tmpfs", {})) == set(MOUNTS) - {"/dev", "/dev/shm"}, "unexpected_tmpfs")
+        for path in set(MOUNTS) - {"/dev", "/dev/shm"}:
+            require("size=" + str(MOUNTS[path]) in host["Tmpfs"][path].split(","), "tmpfs_config_mismatch")
+        require(all(m.get("Type") == "tmpfs" and m.get("Destination") in MOUNTS
+                    for m in record.get("mounts", [])), "unexpected_container_mount")
+        bindings = host.get("PortBindings", {})
+        require(set(bindings) == {"5432/tcp"} and len(bindings["5432/tcp"]) == 1
+                and bindings["5432/tcp"][0]["HostIp"] == "127.0.0.1", "unsafe_port_binding")
+
+    def _created_container(self, record):
+        # Only a freshly acknowledged create may use configured, not active,
+        # network identity. Never use this path for cleanup or reconciliation.
+        require(self.cleanup_deadline is None and "container" in self.pending
+                and self.intents.get("container") == self.container_name
+                and self.intents.get("network") == self.network_name and "network" not in self.pending,
+                "container_creation_not_pending")
+        require(type(record) is dict and type(record.get("labels")) is dict
+                and type(record.get("id")) is str, "resource_ownership_unverified")
+        network = self.ids.get("network", "")
+        require(re.fullmatch(r"[0-9a-f]{64}", network) is not None
+                and record.get("id") == self.ids.get("container")
+                and re.fullmatch(r"[0-9a-f]{64}", record.get("id", "")) is not None
+                and record.get("name") == "/" + self.container_name
+                and record.get("labels", {}).get("finlens.ucr.run") == self.nonce
+                and record.get("image") == self.image_id, "resource_ownership_unverified")
+        attachment = self._network_attachment(record, "unexpected_created_container_network")
+        host = record.get("host")
+        require(type(host) is dict and host.get("NetworkMode") == network
+                and attachment["NetworkID"] == "" and attachment["EndpointID"] == "",
+                "unexpected_created_container_network")
+        require(record.get("status") == "created" and record.get("running") is False
+                and record.get("started_at") == "0001-01-01T00:00:00Z"
+                and record.get("ports") == {} and record.get("mounts") == [], "created_container_state_unverified")
+        self._container_bounds(record)
+
+    def _started_container(self, record):
+        self.owned("container", record)
+        started = record.get("started_at")
+        match = re.fullmatch(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:[.]([0-9]{1,9}))?Z", started) if type(started) is str else None
+        require(match is not None, "container_start_unverified")
+        try:
+            # Validate real calendar/time values without truncating nanoseconds.
+            instant = datetime(*(int(part) for part in re.split("[-T:]", match[1])))
+        except ValueError:
+            raise Refusal("container_start_unverified") from None
+        require(instant != datetime.min or any(digit != "0" for digit in (match[2] or "")),
+                "container_start_unverified")
+        require(record.get("running") is True and record.get("status") == "running"
+                and record.get("host", {}).get("NetworkMode") == self.ids.get("network")
+                and re.fullmatch(r"[0-9a-f]{64}", record["networks"][self.network_name].get("EndpointID", "")) is not None,
+                "container_start_unverified")
 
     def lookup(self, kind):
         name = getattr(self, kind + "_name")
@@ -538,7 +596,11 @@ class Run:
             value = output.stdout.decode("ascii").strip()
             require(re.fullmatch(r"[0-9a-f]{64}", value), "creation_id_unverified")
             self.ids[kind] = value
-            self.owned(kind, self.inspect(kind, value))
+            record = self.inspect(kind, value)
+            if kind == "container":
+                self._created_container(record)
+            else:
+                self.owned(kind, record)
             self.pending.remove(kind)
             self.receipt(event="created", kind=kind, id=value)
         except BaseException:
@@ -607,6 +669,7 @@ class Run:
                         extra_env={"POSTGRES_PASSWORD": password})
             startup_end = min(self.deadline - 30, self.clock() + 60)
             self.command(["container", "start", self.ids["container"]], seconds=10)
+            self._started_container(self.inspect("container", self.ids["container"]))
             while True:
                 require(self.clock() < startup_end, "postgres_startup_deadline")
                 ready = self.command(["container", "exec", self.ids["container"], "pg_isready", "-U", self.admin,
@@ -615,7 +678,7 @@ class Run:
                     break
                 time.sleep(0.1)
             record = self.inspect("container", self.ids["container"])
-            self.owned("container", record)
+            self._started_container(record)
             ports = record["ports"]["5432/tcp"]
             require(len(ports) == 1 and ports[0]["HostIp"] == "127.0.0.1", "published_endpoint_unverified")
             port = int(ports[0]["HostPort"])

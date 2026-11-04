@@ -1151,17 +1151,21 @@ def offline_checks():
             setattr(value, key, item)
         return value
 
-    def record(run, kind):
+    def record(run, kind, *, created=False):
         if kind == "network":
             return dict(id="a" * 64, name=run.network_name, labels={"finlens.ucr.run": run.nonce}, containers={}, driver="bridge")
         host = dict(ReadonlyRootfs=True, LogConfig={"Type": "none"}, Memory=768 * module.MIB, MemorySwap=768 * module.MIB,
                     NanoCpus=2_000_000_000, PidsLimit=128, ShmSize=64 * module.MIB, Privileged=False,
-                    IpcMode="private", CgroupnsMode="private", Binds=None,
+                    IpcMode="private", CgroupnsMode="private", Binds=None, NetworkMode=run.ids.get("network", "a" * 64),
                     Tmpfs={p: "rw,nosuid,nodev,size=" + str(n) for p, n in module.MOUNTS.items() if p not in {"/dev", "/dev/shm"}},
                     PortBindings={"5432/tcp": [{"HostIp": "127.0.0.1", "HostPort": ""}]})
         return dict(id="b" * 64, name="/" + run.container_name, labels={"finlens.ucr.run": run.nonce},
-                    image=run.image_id, host=host, mounts=[], networks={run.network_name: {"NetworkID": "a" * 64}},
-                    ports={"5432/tcp": [{"HostIp": "127.0.0.1", "HostPort": "55499"}]}, running=False)
+                    image=run.image_id, host=host, mounts=[],
+                    networks={run.network_name: {"NetworkID": "" if created else "a" * 64,
+                                                   "EndpointID": "" if created else "e" * 64}},
+                    ports={} if created else {"5432/tcp": [{"HostIp": "127.0.0.1", "HostPort": "55499"}]},
+                    status="created" if created else "exited", running=False,
+                    started_at="0001-01-01T00:00:00Z" if created else "2000-01-01T00:00:00Z")
 
     class FakeDocker:
         def __init__(self):
@@ -1180,7 +1184,7 @@ def offline_checks():
                 return module.Output((value["id"] + "\n").encode() if value else b"", b"", 0)
             if operation == "create":
                 if self.creation != "timeout_before":
-                    self.resources[kind] = record(run, kind)
+                    self.resources[kind] = record(run, kind, created=kind == "container")
                 if self.creation.startswith("timeout"):
                     raise module.CommandFailure("command_timeout", uncertain=True)
                 return module.Output((self.resources[kind]["id"] + "\n").encode(), b"", 0)
@@ -1188,6 +1192,11 @@ def offline_checks():
                 if kind not in self.resources or args[-1] != self.resources[kind]["id"]:
                     return module.Output(b"", b"fake_missing_id", 1)
                 return module.Output(json.dumps(self.resources[kind]).encode(), b"", 0)
+            if operation == "start":
+                check(kind == "container" and args[-1] == run.ids["container"], "fake_start_wrong_target")
+                self.resources[kind] = record(run, kind)
+                self.resources[kind].update(running=True, status="running")
+                return module.Output(b"", b"", 0)
             if operation == "stop":
                 if self.fail_stop:
                     raise module.CommandFailure("command_timeout", uncertain=True)
@@ -1213,7 +1222,11 @@ def offline_checks():
         run, adapter = new_run()
         run.create("network", ["network", "create", run.network_name])
         run.create("container", module.container_command(run, config().image, run.ids["network"]))
+        run.command(["container", "start", run.ids["container"]])
+        run._started_container(run.inspect("container", run.ids["container"]))
         return run, adapter
+
+    captured_unstarted = {'id': 'ad289201001f9be8e968c292bbec1cd7edd9965de260678719c380174efda080', 'name': '/ucr_pg_73e9675f5ba3425babb010c845bc233f', 'labels': {'finlens.ucr.run': '73e9675f5ba3425babb010c845bc233f'}, 'image': 'sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a', 'status': 'created', 'running': False, 'started_at': '0001-01-01T00:00:00Z', 'networks': {'ucr_net_73e9675f5ba3425babb010c845bc233f': {'Aliases': None, 'DNSNames': None, 'DriverOpts': None, 'EndpointID': '', 'Gateway': '', 'GlobalIPv6Address': '', 'GlobalIPv6PrefixLen': 0, 'GwPriority': 0, 'IPAMConfig': None, 'IPAddress': '', 'IPPrefixLen': 0, 'IPv6Gateway': '', 'Links': None, 'MacAddress': '', 'NetworkID': ''}}, 'mounts': [], 'ports': {}, 'host': {'NetworkMode': '4ace9ff1a092fc7860e19151f73a3a9465578182306f37eefe5e412dd6f8c0ac'}}
 
     def mountinfo():
         lines = [f"1 0 0:0 / {p} ro - overlay overlay ro" for p in ("/", "/etc/hosts", "/etc/hostname", "/etc/resolv.conf")]
@@ -2406,6 +2419,174 @@ def offline_checks():
                         if bad_table is None: h.schema(connection)
                         else:
                             with self.assertRaisesRegex(AcceptanceFailure,"migration_pk_wrong"): h.schema(connection)
+
+        def test_68_replay_preserved_unstarted_inspection_without_fabricating_attachment(self):
+            value = copy.deepcopy(captured_unstarted)
+            run = module.Run(config(), ROOT, object(), nonce=value["labels"]["finlens.ucr.run"], clock=lambda:0)
+            run.image_id = value["image"]
+            run.ids = {"network":value["host"]["NetworkMode"],"container":value["id"]}
+            run.intents = {"network":run.network_name,"container":run.container_name}
+            run.pending = {"container"}
+            host = record(run,"container",created=True)["host"]
+            value["host"] = host  # Bounds are synthetic; captured identity/state/network fields are unchanged.
+            before = copy.deepcopy(value)
+            run._created_container(value)
+            self.assertEqual(value,before)
+            with self.assertRaisesRegex(module.Refusal,"unexpected_container_network"):
+                run.owned("container",value)
+
+        def test_69_created_check_requires_ack_intent_exact_identity_and_empty_attachment(self):
+            variants = ("intent","pending","ack","id","name","label","image","network_mode","extra_network",
+                        "active_network","active_endpoint","status","running","started_at","missing_started_at",
+                        "mount","port","bounds","network_pending","cleanup")
+            for variant in variants:
+                run,fake = new_run()
+                run.create("network",["network","create",run.network_name])
+                run.ids["container"] = "b"*64; run.intents["container"] = run.container_name; run.pending.add("container")
+                value = record(run,"container",created=True)
+                if variant == "intent": del run.intents["container"]
+                elif variant == "pending": run.pending.remove("container")
+                elif variant == "ack": del run.ids["container"]
+                elif variant == "id": value["id"] = "f"*64
+                elif variant == "name": value["name"] = "/existing"
+                elif variant == "label": value["labels"] = {}
+                elif variant == "image": value["image"] = "sha256:"+"f"*64
+                elif variant == "network_mode": value["host"]["NetworkMode"] = run.network_name
+                elif variant == "extra_network": value["networks"]["bridge"] = {"NetworkID":"", "EndpointID":""}
+                elif variant == "active_network": value["networks"][run.network_name]["NetworkID"] = run.ids["network"]
+                elif variant == "active_endpoint": value["networks"][run.network_name]["EndpointID"] = "f"*64
+                elif variant == "status": value["status"] = "running"
+                elif variant == "running": value["running"] = True
+                elif variant == "started_at": value["started_at"] = "2000-01-01T00:00:00Z"
+                elif variant == "missing_started_at": del value["started_at"]
+                elif variant == "mount": value["mounts"] = [{"Type":"volume","Destination":"/var/lib/postgresql/data"}]
+                elif variant == "port": value["ports"] = {"5432/tcp":[]}
+                elif variant == "bounds": value["host"]["ReadonlyRootfs"] = False
+                elif variant == "network_pending": run.pending.add("network")
+                elif variant == "cleanup": run.cleanup_deadline = 30
+                with self.subTest(variant=variant), self.assertRaises(module.Refusal): run._created_container(value)
+                self.assertFalse(any(args[1] == "rm" for args,_ in fake.calls))
+
+        def test_70_started_check_and_cleanup_keep_strict_active_network_identity(self):
+            for variant in ("network_empty","network_foreign","endpoint_empty","mode","not_running","zero_start","empty_start","malformed_start"):
+                run,fake = created_pair()
+                value = fake.resources["container"]
+                if variant == "network_empty": value["networks"][run.network_name]["NetworkID"] = ""
+                elif variant == "network_foreign": value["networks"][run.network_name]["NetworkID"] = "f"*64
+                elif variant == "endpoint_empty": value["networks"][run.network_name]["EndpointID"] = ""
+                elif variant == "mode": value["host"]["NetworkMode"] = "bridge"
+                elif variant == "not_running": value["running"] = False
+                elif variant == "zero_start": value["started_at"] = "0001-01-01T00:00:00Z"
+                elif variant == "empty_start": value["started_at"] = ""
+                elif variant == "malformed_start": value["started_at"] = "unverified"
+                with self.subTest(variant=variant), self.assertRaises(module.Refusal): run._started_container(value)
+                if variant.startswith("network_"):
+                    self.assertFalse(run.cleanup())
+                    self.assertFalse(any(args[1] == "rm" for args,_ in fake.calls))
+
+        def test_71_prestart_or_unknown_create_never_uses_creation_check_for_cleanup(self):
+            for acknowledged in (False,True):
+                run,fake = new_run(); run.create("network",["network","create",run.network_name])
+                if not acknowledged: fake.creation = "timeout_after"
+                if acknowledged: run.create("container",module.container_command(run,config().image,run.ids["network"]))
+                else:
+                    with self.assertRaises(module.CommandFailure): run.create("container",module.container_command(run,config().image,run.ids["network"]))
+                with self.subTest(acknowledged=acknowledged):
+                    self.assertFalse(run.cleanup())
+                    self.assertFalse(any(args[1] == "rm" for args,_ in fake.calls))
+                    self.assertEqual(sum(args[:2] == ["container","create"] for args,_ in fake.calls),1)
+
+        def test_72_preexisting_container_name_is_not_adopted_or_deleted(self):
+            run,fake = new_run()
+            fake.resources["container"] = record(run,"container",created=True)
+            with self.assertRaises(module.Refusal): run.create("container",module.container_command(run,config().image,"a"*64))
+            self.assertFalse(run.intents)
+            self.assertTrue(run.cleanup())
+            self.assertIn("container",fake.resources)
+            self.assertFalse(any(args[1] in {"create","rm"} for args,_ in fake.calls))
+
+        def test_73_start_attachment_must_verify_before_readiness_or_any_exec(self):
+            for attached in (False,True):
+                run,fake = new_run(); ordinary = fake.run
+                def adapter(argv,**kwargs):
+                    args = argv[3:]
+                    if args[:2] == ["context","inspect"]: return module.Output((run.args.expected_context_endpoint+"\n").encode(),b"",0)
+                    if args[:2] == ["image","inspect"]: return module.Output((run.image_id+"\n").encode(),b"",0)
+                    if args[:2] == ["container","exec"]:
+                        fake.calls.append((args,kwargs))
+                        raise module.Refusal("synthetic_readiness_boundary")
+                    result = ordinary(argv,**kwargs)
+                    if args[:2] == ["container","start"] and not attached:
+                        fake.resources["container"]["networks"][run.network_name]["NetworkID"] = ""
+                    return result
+                fake.run = adapter
+                run.directory = Path("synthetic-offline-receipt")
+                run.receipt = lambda **values: run.receipts.append(values)  # In-memory sink; audit forbids writes.
+                with self.subTest(attached=attached), patch.object(module.secrets,"token_urlsafe",lambda n:"synthetic-only-not-a-credential"), patch("sys.stdout",new=io.StringIO()):
+                    self.assertEqual(run.execute(),1)
+                execs = [args for args,_ in fake.calls if args[:2] == ["container","exec"]]
+                self.assertEqual(len(execs),1 if attached else 0)
+                if attached: self.assertEqual(execs[0][3],"pg_isready")
+                else: self.assertFalse(any(args[1] == "rm" for args,_ in fake.calls))
+
+        def malformed_attachments(self, name):
+            return (None, [], "invalid", 7, {"foreign":{}}, {name:None}, {name:[]}, {name:"invalid"},
+                    {name:False}, {name:{}}, {name:{"NetworkID":None,"EndpointID":""}},
+                    {name:{"NetworkID":[],"EndpointID":""}}, {name:{"NetworkID":{},"EndpointID":""}},
+                    {name:{"NetworkID":"a"*64,"EndpointID":None}},
+                    {name:{"NetworkID":"a"*64,"EndpointID":[]}},
+                    {name:{"NetworkID":"a"*64,"EndpointID":{}}})
+
+        def test_74_malformed_attachment_is_refusal_in_created_and_started_checks(self):
+            for index in range(16):
+                run,fake = new_run(); run.create("network",["network","create",run.network_name])
+                run.ids["container"]="b"*64; run.intents["container"]=run.container_name; run.pending.add("container")
+                value=record(run,"container",created=True)
+                value["networks"]=copy.deepcopy(self.malformed_attachments(run.network_name)[index])
+                with self.subTest(index=index,phase="created"), self.assertRaisesRegex(module.Refusal,"unexpected_created_container_network"):
+                    run._created_container(value)
+                run,fake = created_pair()
+                value=fake.resources["container"]
+                value["networks"]=copy.deepcopy(self.malformed_attachments(run.network_name)[index])
+                with self.subTest(index=index,phase="started"), self.assertRaisesRegex(module.Refusal,"unexpected_container_network"):
+                    run._started_container(value)
+
+        def test_75_malformed_attachment_cleanup_records_unverified_and_preserves_resources(self):
+            for pending in (False,True):
+                for index in range(16):
+                    run,fake=created_pair()
+                    fake.resources["container"]["networks"]=copy.deepcopy(self.malformed_attachments(run.network_name)[index])
+                    if pending:
+                        run.pending.add("container")
+                        del run.ids["container"]
+                    before=copy.deepcopy(fake.resources)
+                    with self.subTest(index=index,pending=pending):
+                        self.assertFalse(run.cleanup())
+                        self.assertEqual(fake.resources,before)
+                        self.assertFalse(any(args[1] in {"stop","rm"} for args,_ in fake.calls))
+                        self.assertTrue(any(r.get("event")=="cleanup_unverified" and r.get("kind")=="container" for r in run.receipts))
+                        self.assertTrue(any(r.get("event")=="cleanup_unverified" and r.get("kind")=="network" for r in run.receipts))
+                        if pending: self.assertIn("container",run.pending)
+
+        def test_76_started_timestamp_requires_real_calendar_and_nonzero_nanosecond_value(self):
+            valid=("2000-02-29T23:59:59Z","2024-02-29T12:34:56.123456789Z",
+                   "2026-11-04T18:00:00.000000001Z","0001-01-01T00:00:00.000000001Z",
+                   "0001-01-01T00:00:01.000Z")
+            invalid=(None,False,0,"","2023-02-29T00:00:00Z","2024-02-30T00:00:00Z",
+                     "1900-02-29T00:00:00Z","0000-01-01T00:00:00Z","2024-00-01T00:00:00Z",
+                     "2024-13-01T00:00:00Z","2024-01-00T00:00:00Z","2024-01-32T00:00:00Z",
+                     "2024-01-01T24:00:00Z","2024-01-01T00:60:00Z","2024-01-01T00:00:60Z",
+                     "2024-01-01T00:00:00+00:00","2024-01-01T00:00:00.1234567890Z",
+                     "0001-01-01T00:00:00Z","0001-01-01T00:00:00.0Z",
+                     "0001-01-01T00:00:00.000000Z","0001-01-01T00:00:00.000000000Z")
+            for timestamp in valid+invalid:
+                run,fake=created_pair();value=fake.resources["container"];value["started_at"]=timestamp
+                before=copy.deepcopy(value)
+                with self.subTest(timestamp=timestamp):
+                    if timestamp in valid: run._started_container(value)
+                    else:
+                        with self.assertRaisesRegex(module.Refusal,"container_start_unverified"): run._started_container(value)
+                    self.assertEqual(value,before)
 
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(OfflineChecks)
     result = unittest.TextTestRunner(verbosity=2).run(suite)
