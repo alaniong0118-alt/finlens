@@ -3,11 +3,14 @@ from dataclasses import replace
 from decimal import Decimal
 
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import event
 
+from app import main
 from app import research_answer_service as answers
 from app.financial_metric_schemas import FiscalPeriodRequest
 from app.models import Company
-from test_financial_metrics import db
+from test_financial_metrics import db, add
 from test_historical_research_answers import annual
 from test_research_answers import ask
 
@@ -171,3 +174,94 @@ def test_handoff_unsupported_eps_percentage_is_not_absolute_difference(operation
     assert ordinary["status"] == "available"
     assert ordinary["formatted_value"] == "+$1.00 per share"
     assert ordinary["comparison"]["percentage_status"] == "not_applicable"
+
+
+@pytest.mark.parametrize("question", [
+    "請解釋 revenue 的定義，不要給我數字。", "不是 FY2024 的 revenue。",
+    "不是 revenue", "لا FY2024 revenue", "Δ revenue", "FY2024 revenue\u0301",
+    "ｎｏ revenue", "revenue。", "revenue\u200b", "\u202eFY2024 revenue",
+    "revenue\u00ad", "revenue\x00", "revenue\t", "\nFY2024 revenue",
+    "FY2024 revenue\u2028", "\u2029revenue", "revenue+", "FY2024 revenue*",
+])
+@pytest.mark.parametrize("precomputed", [False, True])
+def test_question_text_rejects_before_current_or_historical_recognition(question, precomputed):
+    company = Company(ticker="TEST", name="Fixture company", cik="0000000001")
+    kwargs = {"math_intent": answers.MathematicalIntent("value")} if precomputed else {}
+    assert answers.recognize(question, company, [company], **kwargs) == (None, None, "not_matched")
+    assert answers.recognize_historical(question, company, [company], **kwargs) is None
+    assert not answers.classify_math_intent(question).supported
+    operation, rejection = answers.recognize_operation(question, company, [company])
+    assert rejection == "not_matched" and not answers.operation_agrees(operation)
+
+
+@pytest.mark.parametrize("question,http_status", [
+    ("請解釋 revenue 的定義，不要給我數字。", 200), ("不是 FY2024 的 revenue。", 200),
+    ("Δ revenue", 200), ("FY2024 revenue\u0301", 200), ("revenue。", 200),
+    ("not revenue", 200), ("not FY2024 revenue", 200),
+    ("revenue\u200b", 422), ("\u202eFY2024 revenue", 422), ("revenue\u00ad", 422),
+    ("revenue\x00", 422), ("revenue\t", 422), ("\nFY2024 revenue", 422),
+    ("FY2024 revenue\u2028", 422), ("\u2029revenue", 422), ("revenue+", 200),
+])
+def test_question_text_rejection_never_loads_facts(db, question, http_status):
+    # Store both current and historical observations: a false match would read them.
+    annual(db, 2024)
+    add(db)
+    fact_selects = []
+    def record(conn, cursor, statement, parameters, context, many):
+        if statement.lstrip().upper().startswith("SELECT") and "financial_facts" in statement.lower():
+            fact_selects.append(statement)
+    engine = db[0].get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        response = TestClient(main.app).post("/companies/TEST/research-answer", json={"question": question})
+        assert response.status_code == http_status
+        if http_status == 200:
+            result = response.json()
+            assert result["status"] == "not_matched" and not result["matched"]
+            assert result["observation"] is None and result["comparison"] is None
+            assert result["answer_text"] is None and result["formatted_value"] is None
+        assert fact_selects == []
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+
+@pytest.mark.parametrize("question,kind", [
+    ("What was TEST's latest quarterly (revenue)?", "latest_metric"),
+    ("What was TEST’s latest quarterly “revenue”…?", "latest_metric"),
+    ("latest\u00a0quarterly revenue", "latest_metric"),
+    ("What was TEST's FY2024 revenue?", "historical_metric"),
+    ("«TEST’s FY2024 revenue»?", "historical_metric"),
+    ("2024–2025 revenue growth", "period_comparison"),
+    ("What was the ％ change in revenue from 2024 to 2025?", "period_comparison"),
+])
+def test_question_text_english_punctuation_compatibility(operations, question, kind):
+    add(operations)
+    result = ask(question)
+    assert result["status"] == "available" and result["answer_kind"] == kind
+    assert result["formatted_value"] is not None
+
+
+@pytest.mark.parametrize("slash", ["/", "／", "∕", "⁄"])
+def test_question_text_keeps_known_slash_normalization(slash):
+    assert answers.classify_math_intent(f"2022-2025 revenue growth (% {slash} year)").operation == "annualized"
+
+
+@pytest.mark.parametrize("percent", ["%", "％"])
+def test_question_text_keeps_known_percent_normalization(percent):
+    assert answers.classify_math_intent(f"2024-2025 operating margin change ({percent})").operation == "relative_change"
+
+
+def test_question_text_does_not_exempt_non_ascii_company_names():
+    company = Company(ticker="CAFE", name="Café Holdings", cik="0000000001")
+    assert answers.recognize("Café revenue", company, [company])[2] == "not_matched"
+    assert answers.recognize_historical("Café FY2024 revenue", company, [company]) is None
+    assert answers.recognize("CAFE revenue", company, [company]) == ("revenue", "latest_available", None)
+    assert answers.recognize_historical("CAFE FY2024 revenue", company, [company]).status == "supported"
+
+
+def test_question_text_production_rejection_precedes_company_alias_normalization():
+    # Unsupported text must abstain even if catalog names have no ASCII alias.
+    company = Company(ticker="TEST", name="某公司", cik="0000000001")
+    operation, rejection = answers.recognize_operation("不是 FY2024 的 revenue。", company, [company])
+    assert rejection == "not_matched" and operation.status == "unsupported"
+    assert operation.metric is None and operation.periods == ()

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.financial_metric_registry import METRICS, SELECTION_POLICY
@@ -48,9 +48,30 @@ QUESTION_TERMS = {
 assert set(QUESTION_TERMS) == set(METRICS)
 
 
+def supported_question_text(question):
+    """Keep unsupported semantics out of the lossy, English-only word grammar.
+
+    Admit ordinary ASCII and spacing, known typographic punctuation, and only
+    the Unicode operators already canonicalized by mathematical_text().
+    Company names do not exempt other scripts, accents or combining marks.
+    """
+    typography = "‘’‚‛“”„‟«»‹›‐‑‒–—―…"
+    return all((" " <= char <= "~" or char in typography or unicodedata.category(char) == "Zs")
+               and not (unicodedata.category(char).startswith("S") or char in "*\\^")
+               for char in mathematical_text(question))
+
+
 class ResearchAnswerRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     question: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def reject_controls_before_stripping(cls, value):
+        # Boundary controls/line separators must not disappear before recognition.
+        if isinstance(value, str) and any(unicodedata.category(char) in {"Cc", "Cf", "Zl", "Zp"} for char in value):
+            raise ValueError("Control, format and line-separator characters are unsupported.")
+        return value
 
 
 class ResearchAnswer(BaseModel):
@@ -132,12 +153,9 @@ def classify_math_intent(question):
     as word boundaries. Unknown wording still faces the closed grammar below.
     This classifies requests only; it never selects facts or calculates values.
     """
+    if not supported_question_text(question):
+        return MathematicalIntent("unsupported", operands="unknown", reason="Unsupported question characters.")
     question = mathematical_text(question)
-    # Unknown symbols cannot disappear into the word-only grammar. Hyphens,
-    # apostrophes and normal sentence punctuation remain ordinary boundaries.
-    if any(unicodedata.category(char).startswith("S") or char in "*\\^‰‱٪"
-           or char.isnumeric() and not char.isascii() for char in question):
-        return MathematicalIntent("unsupported", operands="unknown", reason="Unknown mathematical notation.")
     tokens = re.findall(r"[a-z0-9]+|[%/]", question.lower())
     vocabulary = set(tokens)
     phrases = " ".join(tokens)
@@ -256,6 +274,8 @@ def requested_periods(text):
 
 def recognize(question, selected, companies, *, math_intent=None):
     """Legacy latest-value grammar; historical recognition is additive."""
+    if not supported_question_text(question):
+        return None, None, "not_matched"
     math_intent = math_intent or classify_math_intent(question)
     text, rejection = company_question(question, selected, companies)
     if rejection:
@@ -302,6 +322,8 @@ def recognize_historical(question, selected, companies, *, math_intent=None):
     Unknown qualifiers are rejected; this is not general language reasoning.
     Company mismatch is checked before calling this from the production path.
     """
+    if not supported_question_text(question):
+        return None
     math_intent = math_intent or classify_math_intent(question)
     text, rejection = company_question(question, selected, companies)
     if rejection or re.search(r"\bhow\b(?!\s+much\b)", text):
@@ -484,6 +506,9 @@ def answer_research_question(session, ticker, question):
 def recognize_operation(question, selected, companies):
     """Keep the typed operation intact across both closed question grammars."""
     math = classify_math_intent(question)
+    if not supported_question_text(question):
+        return FinancialOperation("ambiguous", None, (), "unknown", "unsupported", math,
+                                  reason=math.reason), "not_matched"
     metric, period_intent, rejection = recognize(question, selected, companies, math_intent=math)
     if rejection == "company_mismatch":
         return None, rejection
