@@ -34,6 +34,8 @@ PROTECTED = {
 }
 MIB = 1024 * 1024
 CLI_CAP, CHILD_CAP, EVIDENCE_CAP = 128 * 1024, 512 * 1024, 2 * MIB
+# Only validated committed harness blobs need more than ordinary CLI output.
+GIT_BLOB_CAP = 256 * 1024
 LEGACY = ("companies", "financial_facts", "filing_chunks", "company_refresh_state",
           "filing_publications", "refresh_attempts", "alembic_version")
 OWNED = ("research_accounts", "research_sessions", "research_artifacts", "research_notes")
@@ -124,11 +126,11 @@ def candidate_digest(root):
 
 def admit_repository(args, root, process):
     """Identity consistency only; coordinator review and operator approval are external."""
-    def git(arguments):
-        result = process.run(["git", *arguments], seconds=5, cwd=str(root), env=clean_environment())
+    def git(arguments, *, cap=CLI_CAP):
+        result = process.run(["git", *arguments], seconds=5, cap=cap, cwd=str(root), env=clean_environment())
         require(isinstance(result, Output) and type(result.returncode) is int
                 and type(result.stdout) is bytes and type(result.stderr) is bytes, "git_result_invalid")
-        require(len(result.stdout) + len(result.stderr) <= CLI_CAP, "git_output_limit")
+        require(len(result.stdout) + len(result.stderr) <= cap, "git_output_limit")
         require(result.returncode == 0 and not result.stderr, "git_admission_failed")
         return result.stdout
 
@@ -155,7 +157,7 @@ def admit_repository(args, root, process):
         entry = git(["ls-tree", "-z", args.expected_head, "--", relative])
         match = re.fullmatch(rb"100(?:644|755) blob ([0-9a-f]{40})\t" + re.escape(relative.encode()) + b"\0", entry)
         require(match is not None, "committed_harness_entry_invalid")
-        return git(["cat-file", "blob", match[1].decode("ascii")])
+        return git(["cat-file", "blob", match[1].decode("ascii")], cap=GIT_BLOB_CAP)
 
     require(harness_digest(committed_bytes) == args.candidate_sha256, "committed_candidate_digest_mismatch")
 
@@ -185,8 +187,50 @@ class BoundedProcess:
 
     def run(self, argv, *, seconds, cap=CLI_CAP, data=b"", env=None, cwd=None, progress=None):
         require(0 < seconds <= 900 and 0 < cap <= CHILD_CAP and len(data) <= 65536, "invalid_process_bounds")
-        process = self.popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                             env=env, cwd=cwd, shell=False)
+        process, threads = None, []
+        try:
+            process = self.popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 env=env, cwd=cwd, shell=False)
+            return self._capture(process, seconds=seconds, cap=cap, data=data, progress=progress, threads=threads)
+        except KeyboardInterrupt:
+            if process is None:
+                # No returned handle: do not invent a PID or assume no creation.
+                raise CommandFailure("process_creation_interrupted", uncertain=True) from None
+            self._interrupted(process, threads)
+
+    def _interrupted(self, process, threads):
+        # Only the returned Popen handle is owned. Killing it does not roll back
+        # a request already submitted to Docker; Run must reconcile its intents.
+        terminated, capture_closed = False, True
+        try:
+            process.kill()
+        except (OSError, KeyboardInterrupt):
+            pass  # An already-exited process is acceptable only if wait verifies it.
+        try:
+            process.wait(timeout=2)
+            terminated = type(process.returncode) is int
+        except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt):
+            pass
+        for thread in threads:
+            try:
+                if thread.ident is None:
+                    # Thread.start may itself have been interrupted.
+                    capture_closed = False
+                    continue
+                thread.join(timeout=0.1)
+                capture_closed = capture_closed and not thread.is_alive()
+            except (RuntimeError, KeyboardInterrupt):
+                capture_closed = False
+        if capture_closed:
+            for pipe in (process.stdin, process.stdout, process.stderr):
+                try:
+                    pipe.close()
+                except (OSError, ValueError, KeyboardInterrupt):
+                    capture_closed = False
+        code = "command_interrupted" if terminated and capture_closed else "interrupted_cleanup_unverified"
+        raise CommandFailure(code, uncertain=True) from None
+
+    def _capture(self, process, *, seconds, cap, data, progress, threads):
         deadline = self.clock() + seconds
         case_deadline = [deadline]
         buffers, count, lock = [bytearray(), bytearray()], [0], threading.Lock()
@@ -237,8 +281,8 @@ class BoundedProcess:
             except (OSError, ValueError):
                 input_failed.set()
 
-        threads = [threading.Thread(target=read, args=(i, pipe), daemon=True)
-                   for i, pipe in enumerate((process.stdout, process.stderr))]
+        threads.extend(threading.Thread(target=read, args=(i, pipe), daemon=True)
+                       for i, pipe in enumerate((process.stdout, process.stderr)))
         threads.append(threading.Thread(target=write, daemon=True))
         for thread in threads:
             thread.start()

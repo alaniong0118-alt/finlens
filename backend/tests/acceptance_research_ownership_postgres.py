@@ -1724,6 +1724,27 @@ def offline_checks():
                     module.BoundedProcess(lambda *a, **k: FakeChild(out, err)).run(["fake"], seconds=1, cap=8192)
                 self.assertEqual(raised.exception.code, "output_limit")
 
+        def test_31a_blob_capture_preserves_current_worker_and_binary_bytes(self):
+            worker = (ROOT / module.FILES[1]).read_bytes()
+            self.assertGreater(len(worker), module.CLI_CAP)
+            self.assertLessEqual(len(worker), module.GIT_BLOB_CAP)
+            binary = (bytes(range(256)) * (module.GIT_BLOB_CAP // 256))
+            for payload in (worker, binary):
+                with self.subTest(size=len(payload)):
+                    result = module.BoundedProcess(lambda *a, **k: FakeChild(payload)).run(
+                        ["fake"], seconds=1, cap=module.GIT_BLOB_CAP)
+                    self.assertEqual(result.stdout, payload)
+                    self.assertEqual(result.stderr, b"")
+
+        def test_31b_blob_combined_limit_and_ordinary_cli_limit_remain(self):
+            for out, err, cap in ((b"a" * (module.GIT_BLOB_CAP + 1), b"", module.GIT_BLOB_CAP),
+                                  (b"a" * module.GIT_BLOB_CAP, b"x", module.GIT_BLOB_CAP),
+                                  (b"a" * (module.CLI_CAP + 1), b"", module.CLI_CAP)):
+                with self.subTest(size=len(out) + len(err), cap=cap), self.assertRaises(module.CommandFailure) as raised:
+                    module.BoundedProcess(lambda *a, **k: FakeChild(out, err)).run(["fake"], seconds=1, cap=cap)
+                self.assertEqual(raised.exception.code, "output_limit")
+                self.assertTrue(raised.exception.uncertain)
+
         def test_32_process_timeout_and_uncertain_termination(self):
             for unkillable in (False, True):
                 process = FakeChild(hang=True, unkillable=unkillable)
@@ -1735,6 +1756,123 @@ def offline_checks():
         def test_33_input_failure(self):
             with self.assertRaises(module.CommandFailure):
                 module.BoundedProcess(lambda *a, **k: FakeChild(bad_input=True)).run(["fake"], seconds=1, data=b"x")
+
+        def test_33a_interrupt_kills_and_waits_for_returned_child(self):
+            for phase in ("clock", "poll", "wait"):
+                class Child(FakeChild):
+                    def __init__(self):
+                        super().__init__(hang=phase != "wait")
+                        self.kills, self.waits, self.interrupted = 0, [], False
+                    def kill(self):
+                        self.kills += 1
+                        if self.returncode is not None:
+                            raise ProcessLookupError("already_exited")
+                        super().kill()
+                    def poll(self):
+                        if phase == "poll" and not self.interrupted:
+                            self.interrupted = True
+                            raise KeyboardInterrupt
+                        return super().poll()
+                    def wait(self, timeout):
+                        self.waits.append(timeout)
+                        if phase == "wait" and not self.interrupted:
+                            self.interrupted = True
+                            raise KeyboardInterrupt
+                        return super().wait(timeout)
+                child = Child()
+                def clock():
+                    if phase == "clock": raise KeyboardInterrupt
+                    return 0
+                with self.subTest(phase=phase), self.assertRaises(module.CommandFailure) as raised:
+                    module.BoundedProcess(lambda *a, **k: child, clock).run(["fake"], seconds=1)
+                self.assertEqual(raised.exception.code, "command_interrupted")
+                self.assertTrue(raised.exception.uncertain)
+                self.assertEqual(child.kills, 1)
+                self.assertEqual(child.waits[-1], 2)
+                self.assertIsNotNone(child.returncode)
+                self.assertTrue(all(p.closed for p in (child.stdin, child.stdout, child.stderr)))
+
+        def test_33b_interrupted_creation_or_cleanup_is_not_confirmed(self):
+            def interrupted_spawn(*args, **kwargs): raise KeyboardInterrupt
+            with self.assertRaises(module.CommandFailure) as raised:
+                module.BoundedProcess(interrupted_spawn).run(["fake"], seconds=1)
+            self.assertEqual(raised.exception.code, "process_creation_interrupted")
+            self.assertTrue(raised.exception.uncertain)
+            for fault in ("unkillable", "kill_interrupt", "wait_interrupt"):
+                events = []
+                class Child(FakeChild):
+                    def poll(self): raise KeyboardInterrupt
+                    def kill(self):
+                        events.append("kill")
+                        if fault == "kill_interrupt": raise KeyboardInterrupt
+                        super().kill()
+                    def wait(self, timeout):
+                        events.append(("wait", timeout))
+                        if fault == "wait_interrupt": raise KeyboardInterrupt
+                        return super().wait(timeout)
+                child = Child(hang=True, unkillable=fault == "unkillable")
+                with self.subTest(fault=fault), self.assertRaises(module.CommandFailure) as raised:
+                    module.BoundedProcess(lambda *a, **k: child).run(["fake"], seconds=1)
+                self.assertEqual(raised.exception.code, "interrupted_cleanup_unverified")
+                self.assertTrue(raised.exception.uncertain)
+                self.assertEqual(events, ["kill", ("wait", 2)])
+
+        def test_33c_interrupted_thread_start_or_lingering_reader_is_unverified(self):
+            for phase in ("start", "join"):
+                joins = []
+                class Thread:
+                    ident = None
+                    def __init__(self, **kwargs): pass
+                    def start(self):
+                        if phase == "start": raise KeyboardInterrupt
+                        self.ident = 1
+                    def join(self, timeout): joins.append(timeout)
+                    def is_alive(self): return True
+                class Child(FakeChild):
+                    def poll(self): raise KeyboardInterrupt
+                child = Child(hang=True)
+                with self.subTest(phase=phase), patch.object(module.threading,"Thread",Thread), self.assertRaises(module.CommandFailure) as raised:
+                    module.BoundedProcess(lambda *a, **k: child).run(["fake"], seconds=1)
+                self.assertEqual(raised.exception.code, "interrupted_cleanup_unverified")
+                self.assertTrue(child.killed)
+                self.assertIsNotNone(child.returncode)
+                self.assertEqual(joins, [] if phase == "start" else [0.1] * 3)
+                self.assertFalse(child.stdout.closed)
+
+        def test_33d_interrupted_daemon_request_reconciles_only_exact_identity(self):
+            for state in ("created", "absent", "foreign"):
+                run, fake = new_run()
+                ordinary = fake.run
+                class Child(FakeChild):
+                    def poll(self): raise KeyboardInterrupt
+                def adapter(argv, **kwargs):
+                    if argv[3:5] == ["network", "create"]:
+                        if state != "absent":
+                            ordinary(argv, **kwargs)
+                            if state == "foreign": fake.resources["network"]["labels"] = {"finlens.ucr.run":"other"}
+                        return module.BoundedProcess(lambda *a, **k: Child(hang=True)).run(argv, seconds=1)
+                    return ordinary(argv, **kwargs)
+                fake.run = adapter
+                with self.subTest(state=state), self.assertRaises(module.CommandFailure) as raised:
+                    run.create("network", ["network", "create", run.network_name])
+                self.assertTrue(raised.exception.uncertain)
+                self.assertIn("network",run.pending)
+                self.assertEqual(run.cleanup(),state == "created")
+                if state != "created": self.assertFalse(any(args[1] == "rm" for args,_ in fake.calls))
+
+        def test_33e_interrupted_remove_ack_is_not_confirmed_cleanup(self):
+            run, fake = created_pair()
+            ordinary = fake.run
+            class Child(FakeChild):
+                def poll(self): raise KeyboardInterrupt
+            def adapter(argv, **kwargs):
+                if argv[3:5] == ["container", "rm"]:
+                    ordinary(argv, **kwargs)
+                    return module.BoundedProcess(lambda *a, **k: Child(hang=True)).run(argv, seconds=1)
+                return ordinary(argv, **kwargs)
+            fake.run = adapter
+            self.assertFalse(run.cleanup())
+            self.assertTrue(any(r.get("event") == "cleanup_unverified" and r.get("kind") == "container" for r in run.receipts))
 
         def test_34_invalid_process_limits_refuse(self):
             for arguments in (dict(seconds=0), dict(seconds=901), dict(seconds=1, cap=module.CHILD_CAP + 1),
@@ -2362,7 +2500,8 @@ def offline_admission_checks():
             raise FileNotFoundError("synthetic_missing_file")
 
         def run(self, argv, **kwargs):
-            check(argv[0] == "git" and kwargs == {"seconds": 5, "cwd": str(ROOT), "env": module.clean_environment()},
+            cap = module.GIT_BLOB_CAP if argv[1:3] == ["cat-file", "blob"] else module.CLI_CAP
+            check(argv[0] == "git" and kwargs == {"seconds": 5, "cap": cap, "cwd": str(ROOT), "env": module.clean_environment()},
                   "non_git_or_unbounded_admission_command")
             args = argv[1:]
             self.git_calls.append(args)
@@ -2598,6 +2737,38 @@ def offline_admission_checks():
                     with self.assertRaises(SystemExit) as raised: main(args)
                     self.assertEqual(raised.exception.code, 2)
                 self.assertEqual(attempts, before)
+
+        def test_19_reviewed_worker_size_uses_only_blob_limit(self):
+            payload = (ROOT / files[1]).read_bytes()
+            self.assertGreater(len(payload), module.CLI_CAP)
+            self.assertLessEqual(len(payload), module.GIT_BLOB_CAP)
+            fixture = Fixture()
+            fixture.working[files[1]] = fixture.committed[files[1]] = payload
+            fixture.digest = digest(fixture.working)
+            self.assertEqual(fixture.invoke(), 0)
+            self.assertEqual(fixture.effects, ["run_constructed", "synthetic_mkdir", "synthetic_execute"])
+
+        def test_20_blob_overflow_or_diagnostic_refuses_before_effects(self):
+            for result in (module.Output(b"x" * (module.GIT_BLOB_CAP + 1), b"", 0),
+                           module.Output(b"x" * module.GIT_BLOB_CAP, b"x", 0),
+                           module.Output(b"valid-sized", b"diagnostic", 0)):
+                fixture = Fixture()
+                fixture.faults["cat-file"] = result
+                with self.subTest(size=len(result.stdout) + len(result.stderr)):
+                    self.refused(fixture)
+
+        def test_21_binary_blob_requires_exact_committed_identity(self):
+            payload = bytes(range(256)) * 640
+            for committed in (payload, payload[:-1], payload[:-1] + b"x"):
+                fixture = Fixture()
+                fixture.working[files[1]] = payload
+                fixture.committed[files[1]] = committed
+                fixture.digest = digest(fixture.working)
+                with self.subTest(exact=committed == payload):
+                    if committed == payload:
+                        self.assertEqual(fixture.invoke(), 0)
+                    else:
+                        self.refused(fixture)
 
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(AdmissionChecks))
     print(json.dumps({"offline_admission_only": True, "tests": result.testsRun, "failures": len(result.failures),
