@@ -10,13 +10,18 @@ from test_account_auth import CryptoFixtures, auth, forbidden
 
 import ast
 import copy
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 import importlib.util
 import io
 import json
+import platform
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+
+# SQLAlchemy only needs architecture metadata. Python's Windows fallback may
+# launch cmd.exe; keep the existing subprocess guard and supply inert metadata.
+platform.machine = lambda: "AMD64"
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -24,15 +29,15 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable, ForeignKeyConstraint, UniqueConstraint
 
 from app import research_ownership as own
-from app.models import Base, ResearchAccount, ResearchArtifact, ResearchSession
-from app.research_contracts import KeyRef
+from app.models import Base, ResearchAccount, ResearchArtifact, ResearchNote, ResearchSession
+from app.research_contracts import DatabasePublicationRef, KeyRef, TimePoint, decode, encode
 
 
 class FakeDatabase:
     """Unit simulation only: does not implement PostgreSQL locks or constraints."""
     def __init__(self, clock):
         self.clock = clock
-        self.rows = {ResearchAccount: {}, ResearchSession: {}, ResearchArtifact: {}}
+        self.rows = {ResearchAccount: {}, ResearchSession: {}, ResearchArtifact: {}, ResearchNote: {}}
         self.events, self.hooks = [], {}
         self.offset = 0
         self.commit_error = None
@@ -121,7 +126,12 @@ class FakeRepository:
 
     def add(self, row):
         self.db.fire("add")
-        self.session.rows[type(row)][row.id] = row
+        self.session.rows[type(row)][row.artifact_id if type(row) is ResearchNote else row.id] = row
+
+    def note(self, owner, session, artifact):
+        self.db.fire("note_lock")
+        return next((r for r in self.session.rows[ResearchNote].values()
+            if r.owner_id == owner and r.session_id == session and r.artifact_id == artifact), None)
 
 
 class OwnershipTests(CryptoFixtures):
@@ -387,6 +397,33 @@ class OwnershipTests(CryptoFixtures):
 
 
 class SchemaAndSQLTests(unittest.TestCase):
+    def test_note_migration_compiles_only_new_table_and_matches_model(self):
+        path = Path(__file__).resolve().parents[1] / "migrations/versions/b8d741104001_add_owned_research_notes.py"
+        spec = importlib.util.spec_from_file_location("note_migration", path)
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        output, tables = io.StringIO(), []
+        context = MigrationContext.configure(dialect_name="postgresql", opts={"as_sql": True, "output_buffer": output})
+        class RecordingOperations(Operations):
+            def create_table(self, *args, **kwargs):
+                table = super().create_table(*args, **kwargs)
+                tables.append(table)
+                return table
+        with patch.object(migration, "op", RecordingOperations(context)):
+            migration.upgrade()
+            with self.assertRaises(RuntimeError):
+                migration.downgrade()
+        self.assertEqual(migration.down_revision, "a7c730103001")
+        self.assertEqual([t.name for t in tables], ["research_notes"])
+        actual = " ".join(str(CreateTable(tables[0]).compile(dialect=postgresql.dialect())).split())
+        expected = " ".join(str(CreateTable(ResearchNote.__table__).compile(dialect=postgresql.dialect())).split())
+        self.assertEqual(actual, expected)
+        self.assertNotIn("DROP", output.getvalue())
+        self.assertNotIn("ALTER", output.getvalue())
+        self.assertIn("FOREIGN KEY(artifact_id) REFERENCES research_artifacts", actual)
+        self.assertIn("FOREIGN KEY(owner_id, session_id)", actual)
+        self.assertNotIn("app.database", sys.modules)
+
     def test_new_migration_compiles_without_environment_or_database(self):
         path = Path(__file__).resolve().parents[1] / "migrations/versions/a7c730103001_add_research_ownership.py"
         spec = importlib.util.spec_from_file_location("ownership_migration", path)
@@ -442,8 +479,8 @@ class SchemaAndSQLTests(unittest.TestCase):
                         if isinstance(target, ast.Name):
                             assignments[target.id] = node.value
             graph[ast.literal_eval(assignments["revision"])] = ast.literal_eval(assignments["down_revision"])
-        self.assertEqual(set(graph) - {v for v in graph.values() if v is not None}, {"a7c730103001"})
-        seen, cursor = set(), "a7c730103001"
+        self.assertEqual(set(graph) - {v for v in graph.values() if v is not None}, {"b8d741104001"})
+        seen, cursor = set(), "b8d741104001"
         while cursor is not None:
             self.assertNotIn(cursor, seen)
             seen.add(cursor)
@@ -476,6 +513,214 @@ class SchemaAndSQLTests(unittest.TestCase):
         self.assertIn("research_artifacts.owner_id =", sql[7])
         self.assertIn("research_artifacts.session_id =", sql[7])
         self.assertIn("clock_timestamp()", sql[9])
+
+    def test_note_query_binds_every_ownership_selector_before_lock(self):
+        statements = []
+        class Session:
+            def execute(self, statement):
+                statements.append(statement)
+                return SimpleNamespace(scalar_one_or_none=lambda: None)
+        repo = own._Repository(Session(), own._Operation(None, __import__("time").monotonic))
+        repo.note("owner", "session", "artifact")
+        compiled = statements[0].compile(dialect=postgresql.dialect())
+        self.assertEqual(set(compiled.params.values()), {"owner", "session", "artifact"})
+        for field in ("owner_id", "session_id", "artifact_id"):
+            self.assertIn("research_notes." + field + " =", str(compiled))
+        self.assertIn("FOR UPDATE", str(compiled))
+
+
+class NoteTests(CryptoFixtures):
+    """Same offline transaction harness; no SQLite or second persistence engine."""
+    def setUp(self):
+        super().setUp()
+        self.db = FakeDatabase(self.clock)
+        self.repository_patch = patch.object(own, "_Repository", FakeRepository)
+        self.repository_patch.start()
+        self.addCleanup(self.repository_patch.stop)
+        self.service = own.OwnershipService(self.verifier, self.db.factory, monotonic=lambda: self.clock.mono)
+        self.alice, self.bob = self.token(), self.token(sub="offline-bob")
+        self.session = self.service.create_session(self.alice, "investigation")
+        self.artifact = self.service.reserve_artifact(self.alice, self.session.key, 1, "note")
+        self.source = DatabasePublicationRef(entity_key=KeyRef("sec_cik", "0000000001"), origin="sec",
+            owner_key=None, session_key=None, source_descriptor_key=None, source_revision_key=None,
+            rights_policy_key=None, admission_record_key=None, public_available_at=TimePoint.unknown(),
+            retrieved_at=TimePoint.unknown(), accession="0000000001-25-000001", publication_data_version=0,
+            evidence_version=0, data_version=0, manifest_sha256="a" * 64, chunk_id="chunk-1")
+        self.body = "My investigation\nCheck the reporting period before comparing."
+        self.db.events.clear()
+
+    def args(self, token=None):
+        return (token or self.alice, self.session.key, 1, self.artifact.key, 1)
+
+    def save(self, **changes):
+        return self.service.save_note(*self.args(), changes.get("body", self.body),
+                                      changes.get("source", self.source), cancellation=changes.get("cancellation"))
+
+    def fails(self, call, code, state="not_issued"):
+        with self.assertRaises((own.OwnershipFailure, auth.AuthFailure)) as caught:
+            call()
+        self.assertEqual(caught.exception.code, code)
+        if isinstance(caught.exception, own.OwnershipFailure):
+            self.assertEqual(caught.exception.commit_state, state)
+
+    def test_authenticated_investigation_note_reopen_export_from_fresh_service(self):
+        saved = self.save()
+        fresh = own.OwnershipService(self.verifier, self.db.factory, monotonic=lambda: self.clock.mono)
+        self.assertEqual(fresh.reopen_note(*self.args()), saved)
+        exported = json.loads(fresh.export_note(*self.args()))
+        self.assertEqual(exported["body"], self.body)
+        self.assertEqual(decode(json.dumps(exported["source"]).encode()), self.source)
+        self.assertEqual(exported["original_availability"], "not_checked")
+        self.assertEqual(exported["source_verification"], "unverified_reference")
+        self.assertEqual(exported["source"]["record"]["publication_data_version"], 0)
+        with self.assertRaises(FrozenInstanceError):
+            saved.body = "changed"
+        for secret in (self.alice, self.bob, self.policy.issuer, "offline-alice"):
+            self.assertNotIn(secret, saved.encode().decode())
+        locks = [e for e in self.db.events if e.endswith("_lock")]
+        self.assertEqual(locks, ["account_lock", "session_lock", "artifact_lock", "note_lock"] * 3)
+
+    def test_same_request_replay_is_immutable_and_changed_pins_conflict(self):
+        saved = self.save()
+        self.assertEqual(self.save(), saved)
+        self.fails(lambda: self.save(body="different"), "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+        for field, value in (("manifest_sha256", "b" * 64), ("data_version", 1), ("chunk_id", "chunk-2")):
+            self.fails(lambda: self.save(source=replace(self.source, **{field: value})),
+                       "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+        self.assertEqual(len(self.db.rows[ResearchNote]), 1)
+        self.assertEqual(self.service.reopen_note(*self.args()), saved)
+
+    def test_two_users_cannot_save_reopen_or_export_guessed_note(self):
+        self.save()
+        bob_session = self.service.create_session(self.bob, "investigation")
+        for operation in (self.service.reopen_note, self.service.export_note):
+            self.fails(lambda: operation(*self.args(self.bob)), "OWNERSHIP_DENIED")
+            self.fails(lambda: operation(self.bob, bob_session.key, 1, self.artifact.key, 1), "OWNERSHIP_DENIED")
+            self.fails(lambda: operation(self.bob, bob_session.key, 1, KeyRef("artifact", "missing"), 1),
+                       "OWNERSHIP_DENIED")
+        self.fails(lambda: self.service.save_note(*self.args(self.bob), "overwrite", self.source), "OWNERSHIP_DENIED")
+        self.assertEqual(self.service.reopen_note(*self.args()).body, self.body)
+
+    def test_two_users_same_request_names_keep_distinct_payloads(self):
+        alice_note = self.save()
+        bob_session = self.service.create_session(self.bob, "investigation")
+        bob_artifact = self.service.reserve_artifact(self.bob, bob_session.key, 1, "note")
+        bob_args = self.bob, bob_session.key, 1, bob_artifact.key, 1
+        bob_source = replace(self.source, manifest_sha256="b" * 64)
+        bob_note = self.service.save_note(*bob_args, "Bob's private note", bob_source)
+        self.assertNotEqual(alice_note.owner_key, bob_note.owner_key)
+        self.assertNotEqual(alice_note.artifact_key, bob_note.artifact_key)
+        self.assertEqual(self.service.reopen_note(*self.args()), alice_note)
+        self.assertEqual(self.service.reopen_note(*bob_args), bob_note)
+        self.fails(lambda: self.service.export_note(self.alice, self.session.key, 1, bob_artifact.key, 1),
+                   "OWNERSHIP_DENIED")
+        self.assertEqual(len(self.db.rows[ResearchNote]), 2)
+
+    def test_default_off_and_invalid_tokens_touch_no_store(self):
+        self.db.events.clear()
+        dormant = own.OwnershipService(session_factory=forbidden)
+        self.fails(lambda: dormant.save_note(*self.args(), self.body, self.source), "AUTH_UNAVAILABLE")
+        self.fails(lambda: self.service.reopen_note(*self.args("forged")), "AUTH_INVALID")
+        self.assertEqual(self.db.events, [])
+
+    def test_missing_note_is_denied_and_never_created_by_read(self):
+        self.fails(lambda: self.service.reopen_note(*self.args()), "OWNERSHIP_DENIED")
+        self.assertEqual(self.db.rows[ResearchNote], {})
+
+    def test_revoke_session_blocks_saved_note_and_replay(self):
+        self.save()
+        self.service.revoke_session(self.alice, self.session.key, 1)
+        for call in (self.save, lambda: self.service.reopen_note(*self.args()),
+                     lambda: self.service.export_note(*self.args())):
+            self.fails(call, "OWNERSHIP_DENIED")
+
+    def test_revoked_artifact_and_changed_revision_reject_export(self):
+        self.save()
+        row = self.db.rows[ResearchArtifact][self.artifact.key.id]
+        row.revision = 2
+        self.fails(lambda: self.service.export_note(*self.args()), "OWNERSHIP_REVISION_CHANGED")
+        row.revision, row.state = 1, "revoked"
+        self.fails(lambda: self.service.export_note(*self.args()), "OWNERSHIP_DENIED")
+
+    def test_same_owner_wrong_session_and_stale_parent_revision_reject(self):
+        self.save()
+        other = self.service.create_session(self.alice, "other-investigation")
+        self.fails(lambda: self.service.reopen_note(self.alice, other.key, 1, self.artifact.key, 1), "OWNERSHIP_DENIED")
+        self.fails(lambda: self.service.reopen_note(self.alice, self.session.key, 2, self.artifact.key, 1),
+                   "OWNERSHIP_REVISION_CHANGED")
+        self.db.rows[ResearchArtifact][self.artifact.key.id].session_revision = 2
+        self.fails(lambda: self.service.export_note(*self.args()), "OWNERSHIP_REVISION_CHANGED")
+
+    def test_account_cutoff_and_disabled_account_block_reopen(self):
+        self.save()
+        self.service.invalidate_account_tokens(self.alice)
+        self.fails(lambda: self.service.reopen_note(*self.args()), "OWNERSHIP_DENIED")
+        self.clock.advance(31)
+        self.alice = self.token()
+        self.assertEqual(self.service.reopen_note(*self.args()).body, self.body)
+        self.db.rows[ResearchAccount][self.session.owner_key.id].enabled = False
+        self.fails(lambda: self.service.export_note(*self.args()), "OWNERSHIP_DENIED")
+
+    def test_utf8_bounds_controls_and_reference_shapes_fail_before_store(self):
+        for body in ("", " \n\t", "x" * 16385, "é" * 8193, "\ud800", "hidden\x00", "hidden\x1b", None):
+            self.fails(lambda: self.save(body=body), "OWNERSHIP_NOTE_INVALID")
+        for source in (None, {}, KeyRef("artifact", "forged"), encode(self.source)):
+            self.fails(lambda: self.save(source=source), "OWNERSHIP_NOTE_INVALID")
+        self.assertEqual(self.db.events, [])
+        self.assertEqual(self.save(body="é" * 8192).body, "é" * 8192)
+
+    def test_corrupt_stored_pin_body_and_revision_withhold_output(self):
+        self.save()
+        pristine = copy.deepcopy(self.db.rows[ResearchNote])
+        for field, value, code in (("source_pin", "{}", "OWNERSHIP_NOTE_INVALID"),
+                                   ("body", "x" * 16385, "OWNERSHIP_NOTE_INVALID"),
+                                   ("artifact_revision", 2, "OWNERSHIP_REVISION_CHANGED")):
+            self.db.rows[ResearchNote] = copy.deepcopy(pristine)
+            setattr(self.db.rows[ResearchNote][self.artifact.key.id], field, value)
+            self.fails(lambda: self.service.export_note(*self.args()), code)
+
+    def test_cancel_before_commit_leaves_no_note(self):
+        cancel = own.Cancellation()
+        self.db.hooks["flush"] = cancel.cancel
+        self.fails(lambda: self.save(cancellation=cancel), "OWNERSHIP_CANCELLED")
+        self.assertEqual(self.db.rows[ResearchNote], {})
+        self.assertNotIn("commit_before", self.db.events)
+
+    def test_cancel_after_commit_withholds_note_but_preserves_explicit_reconciliation(self):
+        cancel = own.Cancellation()
+        self.db.hooks["commit_after"] = cancel.cancel
+        self.fails(lambda: self.save(cancellation=cancel), "OWNERSHIP_CANCELLED", "confirmed")
+        self.assertEqual(len(self.db.rows[ResearchNote]), 1)
+        self.db.hooks.clear()
+        self.assertEqual(self.service.reopen_note(*self.args()).body, self.body)
+
+    def test_commit_without_persistence_and_output_bound_fail_closed(self):
+        self.db.commit_error = "before"
+        self.fails(self.save, "OWNERSHIP_COMMIT_INDETERMINATE", "indeterminate")
+        self.assertEqual(self.db.rows[ResearchNote], {})
+        self.db.commit_error = None
+        with patch.object(own, "MAX_OUTPUT", 1):
+            self.fails(self.save, "OWNERSHIP_RESOURCE_LIMIT")
+        self.assertEqual(self.db.rows[ResearchNote], {})
+
+    def test_indeterminate_save_is_reconciled_by_authenticated_explicit_reopen(self):
+        self.db.commit_error = "after"
+        self.fails(self.save, "OWNERSHIP_COMMIT_INDETERMINATE", "indeterminate")
+        self.assertEqual(len(self.db.rows[ResearchNote]), 1)
+        self.assertNotIn("rollback", self.db.events)
+        self.db.commit_error = None
+        self.assertEqual(self.service.reopen_note(*self.args()).body, self.body)
+        self.assertEqual(self.save().source, self.source)
+
+    def test_final_authorization_expiry_and_cleanup_failure_withhold_export(self):
+        self.save()
+        self.alice = self.token(iat=int(self.clock.wall) - 300, exp=int(self.clock.wall) - 29)
+        self.db.hooks["flush"] = lambda: self.clock.advance(1)
+        self.fails(lambda: self.service.export_note(*self.args()), "AUTH_INVALID")
+        self.db.hooks.clear()
+        self.alice = self.token()
+        self.db.close_error = True
+        self.fails(lambda: self.service.export_note(*self.args()), "OWNERSHIP_CLEANUP_UNVERIFIED", "confirmed")
 
 
 if __name__ == "__main__":

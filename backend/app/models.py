@@ -317,3 +317,22 @@ class ResearchArtifact(Base):
         CheckConstraint("state IN ('reserved', 'revoked') AND revision > 0 AND session_revision > 0",
                         name="ck_research_artifact_lifecycle"),
     )
+
+
+class ResearchNote(Base):
+    """Immutable user text and an unverified reference, never admitted evidence."""
+    __tablename__ = "research_notes"
+    artifact_id: Mapped[str] = mapped_column(String(36, collation="C"), ForeignKey("research_artifacts.id"), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36, collation="C"), ForeignKey("research_accounts.id"), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(36, collation="C"), nullable=False)
+    session_revision: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    artifact_revision: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    source_pin: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["owner_id", "session_id"], ["research_sessions.owner_id", "research_sessions.id"],
+                             name="fk_research_note_owned_session"),
+        CheckConstraint("session_revision > 0 AND artifact_revision > 0", name="ck_research_note_revisions"),
+        CheckConstraint("octet_length(body) BETWEEN 1 AND 16384 AND octet_length(source_pin) BETWEEN 1 AND 16384",
+                        name="ck_research_note_size"),
+    )

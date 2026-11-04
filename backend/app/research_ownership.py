@@ -16,8 +16,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from app.account_auth import AuthFailure, SKEW, SingleIssuerVerifier
-from app.models import ResearchAccount, ResearchArtifact, ResearchSession
-from app.research_contracts import KeyRef
+from app.models import ResearchAccount, ResearchArtifact, ResearchNote, ResearchSession
+from app.research_contracts import DatabasePublicationRef, KeyRef, decode, encode
 
 
 MAX_SESSIONS = 20
@@ -25,6 +25,7 @@ MAX_ARTIFACTS = 100
 MAX_OUTPUT = 64 * 1024
 MAX_REVISION = 2**63 - 1
 OPERATION_SECONDS = 5
+MAX_NOTE_BYTES = 16 * 1024
 
 
 class OwnershipFailure(ValueError):
@@ -113,7 +114,63 @@ class OwnedMetadata:
         return data
 
 
+def _note_body(value):
+    _require(type(value) is str and 0 < len(value) <= MAX_NOTE_BYTES, "OWNERSHIP_NOTE_INVALID")
+    try:
+        valid = (0 < len(value.encode("utf-8")) <= MAX_NOTE_BYTES and bool(value.strip())
+                 and not any((ord(c) < 32 and c not in "\n\t") or ord(c) == 127 for c in value))
+    except UnicodeError:
+        valid = False
+    _require(valid, "OWNERSHIP_NOTE_INVALID")
+    return value
+
+
+def _note_pin(value):
+    _require(type(value) is DatabasePublicationRef, "OWNERSHIP_NOTE_INVALID")
+    try:
+        data = encode(value)
+        _require(len(data) <= MAX_NOTE_BYTES and decode(data) == value, "OWNERSHIP_NOTE_INVALID")
+        return data.decode("utf-8")
+    except (ValueError, UnicodeError, TypeError):
+        raise OwnershipFailure("OWNERSHIP_NOTE_INVALID") from None
+
+
+@dataclass(frozen=True, slots=True)
+class SavedNote:
+    """Detached user text. Pins record intent; they establish no source authority."""
+    owner_key: KeyRef
+    session_key: KeyRef
+    artifact_key: KeyRef
+    session_revision: int
+    artifact_revision: int
+    body: str
+    source: DatabasePublicationRef
+
+    def encode(self):
+        owner, session, artifact = (_key(self.owner_key, "principal"), _key(self.session_key, "session"),
+                                    _key(self.artifact_key, "artifact"))
+        data = json.dumps(dict(schema_version=1, owner_key=dict(namespace="principal", id=owner),
+            session_key=dict(namespace="session", id=session), artifact_key=dict(namespace="artifact", id=artifact),
+            session_revision=_revision(self.session_revision), artifact_revision=_revision(self.artifact_revision),
+            body=_note_body(self.body), source=json.loads(_note_pin(self.source)),
+            source_verification="unverified_reference", original_availability="not_checked"),
+            ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        _require(len(data) <= MAX_OUTPUT, "OWNERSHIP_RESOURCE_LIMIT")
+        return data
+
+
 def _metadata(row):
+    if type(row) is ResearchNote:
+        _require(type(row.source_pin) is str and 0 < len(row.source_pin) <= MAX_NOTE_BYTES,
+                 "OWNERSHIP_NOTE_INVALID")
+        try:
+            data = row.source_pin.encode("utf-8")
+            _require(len(data) <= MAX_NOTE_BYTES, "OWNERSHIP_NOTE_INVALID")
+            source = decode(data)
+        except (ValueError, UnicodeError, AttributeError):
+            raise OwnershipFailure("OWNERSHIP_NOTE_INVALID") from None
+        return SavedNote(KeyRef("principal", row.owner_id), KeyRef("session", row.session_id),
+            KeyRef("artifact", row.artifact_id), row.session_revision, row.artifact_revision, row.body, source)
     if type(row) is ResearchAccount:
         key = KeyRef("principal", row.id)
         return OwnedMetadata(key, key, None, row.revision, "active" if row.enabled else "disabled", row.token_cutoff)
@@ -167,6 +224,11 @@ class _Repository:
 
     def count(self, model, owner):
         return self.execute(select(func.count()).select_from(model).where(model.owner_id == owner)).scalar_one()
+
+    def note(self, owner, session, artifact):
+        return self.execute(select(ResearchNote).where(ResearchNote.owner_id == owner,
+            ResearchNote.session_id == session, ResearchNote.artifact_id == artifact)
+            .with_for_update()).scalar_one_or_none()
 
     def add(self, row):
         self.operation.checkpoint()
@@ -327,6 +389,44 @@ class OwnershipService:
             row.state, row.revision = "revoked", row.revision + 1
             return row
         return self._run(token, revoke, cancellation=cancellation)
+
+    def _note_operation(self, token, session_key, session_revision, artifact_key, artifact_revision,
+                        *, payload=None, cancellation=None):
+        parent_id, parent_revision = _key(session_key, "session"), _revision(session_revision)
+        identifier, revision = _key(artifact_key, "artifact"), _revision(artifact_revision)
+        def access(repo, account, now):
+            self._live(repo.session_row(account.id, parent_id), parent_revision)
+            artifact = self._live(repo.artifact(account.id, session=parent_id, identifier=identifier), revision)
+            _require(artifact.session_revision == parent_revision, "OWNERSHIP_REVISION_CHANGED")
+            row = repo.note(account.id, parent_id, identifier)
+            if row is None:
+                _require(payload is not None)
+                row = ResearchNote(artifact_id=identifier, owner_id=account.id, session_id=parent_id,
+                    session_revision=parent_revision, artifact_revision=revision, body=payload[0], source_pin=payload[1])
+                repo.add(row)
+            else:
+                _require(row.session_revision == parent_revision and row.artifact_revision == revision,
+                         "OWNERSHIP_REVISION_CHANGED")
+                if payload is not None:
+                    _require((row.body, row.source_pin) == payload, "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+            return row
+        return self._run(token, access, cancellation=cancellation)
+
+    def save_note(self, token, session_key, session_revision, artifact_key, artifact_revision,
+                  body, source, *, cancellation=None):
+        """Save user-authored text, not a verified financial result or source excerpt."""
+        payload = _note_body(body), _note_pin(source)
+        return self._note_operation(token, session_key, session_revision, artifact_key, artifact_revision,
+                                    payload=payload, cancellation=cancellation)
+
+    def reopen_note(self, token, session_key, session_revision, artifact_key, artifact_revision, *, cancellation=None):
+        return self._note_operation(token, session_key, session_revision, artifact_key, artifact_revision,
+                                    cancellation=cancellation)
+
+    def export_note(self, token, session_key, session_revision, artifact_key, artifact_revision, *, cancellation=None):
+        """Bounded JSON only; no file I/O, source resolution or automatic retry."""
+        return self.reopen_note(token, session_key, session_revision, artifact_key, artifact_revision,
+                                cancellation=cancellation).encode()
 
     def invalidate_account_tokens(self, token, *, cancellation=None):
         def invalidate(repo, account, now):
