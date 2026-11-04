@@ -48,6 +48,33 @@ QUESTION_TERMS = {
 assert set(QUESTION_TERMS) == set(METRICS)
 
 
+# Presentation aliases for one complete Chinese amount question, never a
+# translation/token filter or a broader exception to the English Unicode guard.
+CHINESE_VALUE_METRICS = {
+    "營收": "revenue", "营收": "revenue", "營業收入": "revenue", "营业收入": "revenue",
+    "淨利": "net_income", "净利": "net_income", "淨利潤": "net_income", "净利润": "net_income",
+    "總資產": "total_assets", "总资产": "total_assets",
+    "自由現金流": "free_cash_flow", "自由现金流": "free_cash_flow",
+}
+CHINESE_LATEST_PERIODS = {
+    "最新": "latest_available", "最新季度": "quarter", "最新一季": "quarter",
+    "最新財年": "annual", "最新财年": "annual",
+}
+CHINESE_QUARTERS = {"1": 1, "2": 2, "3": 3, "4": 4, "一": 1, "二": 2, "三": 3, "四": 4}
+assert set(CHINESE_VALUE_METRICS.values()) <= set(METRICS)
+_ZH_SPACE = r"[ \u3000]*"
+_ZH_METRIC = "|".join(re.escape(term) for term in sorted(CHINESE_VALUE_METRICS, key=len, reverse=True))
+_ZH_LATEST = "|".join(re.escape(term) for term in sorted(CHINESE_LATEST_PERIODS, key=len, reverse=True))
+_ZH_FISCAL = (rf"(?P<year>(?:19|20)[0-9]{{2}}){_ZH_SPACE}(?:財年|财年)"
+              rf"(?:{_ZH_SPACE}第{_ZH_SPACE}(?P<quarter>[1-4一二三四]){_ZH_SPACE}(?:季度|季))?")
+CHINESE_VALUE_QUESTION = re.compile(
+    rf"{_ZH_SPACE}(?:(?:請問|请问){_ZH_SPACE})?"
+    rf"(?:(?:股票代號|股票代碼|股票代码){_ZH_SPACE}(?P<ticker>[A-Za-z][A-Za-z0-9.-]{{0,9}}){_ZH_SPACE}的{_ZH_SPACE})?"
+    rf"(?P<period>{_ZH_LATEST}|{_ZH_FISCAL}){_ZH_SPACE}(?:的{_ZH_SPACE})?"
+    rf"(?P<metric>{_ZH_METRIC}){_ZH_SPACE}(?:是多少|為多少|为多少){_ZH_SPACE}(?:[?？]{_ZH_SPACE})?"
+)
+
+
 def supported_question_text(question):
     """Keep unsupported semantics out of the lossy, English-only word grammar.
 
@@ -503,8 +530,34 @@ def answer_research_question(session, ticker, question):
             if operation.operation == "latest_value" else resolve_historical_answer(service, question, operation))
 
 
+def recognize_chinese_value(question, selected, companies):
+    """Only a whole original utterance may authorize this finite value grammar."""
+    match = CHINESE_VALUE_QUESTION.fullmatch(question)
+    if match is None:
+        return None, None
+    ticker = match["ticker"]
+    if ticker:
+        named = next((company for company in companies if company.ticker.upper() == ticker.upper()), None)
+        if named is None:
+            return None, "not_matched"
+        if named.ticker.upper() != selected.ticker.upper():
+            return None, "company_mismatch"
+    if match["year"]:
+        periods = (FiscalPeriodRequest(fiscal_year=int(match["year"]),
+                                      quarter=CHINESE_QUARTERS.get(match["quarter"])),)
+        period_intent = "latest_available"  # historical dispatch uses the explicit period
+    else:
+        periods = ()
+        period_intent = CHINESE_LATEST_PERIODS[match["period"]]
+    return bind_operation(CHINESE_VALUE_METRICS[match["metric"]], periods,
+                          MathematicalIntent("value"), period_intent), None
+
+
 def recognize_operation(question, selected, companies):
-    """Keep the typed operation intact across both closed question grammars."""
+    """Keep the typed operation intact across the closed question grammars."""
+    chinese, rejection = recognize_chinese_value(question, selected, companies)
+    if chinese is not None or rejection is not None:
+        return chinese, rejection
     math = classify_math_intent(question)
     if not supported_question_text(question):
         return FinancialOperation("ambiguous", None, (), "unknown", "unsupported", math,
