@@ -4,7 +4,7 @@ export type RiskInputs = {
   portfolio_value: string | null; exposures: {asset_id: string; amount: string}[];
   sessions: {session_id: string; start: string; end: string; factors: Record<string, string>}[];
 };
-type Exact = {numerator: string; denominator: string; display: string};
+export type Exact = {numerator: string; denominator: string; display: string};
 type Measure = {exact: Exact | null; reason: string | null};
 type Scenario = {scenario_id: string[]; start_index: number; stop_index: number; loss: Exact; tail_mass: Exact | null};
 export type RiskReceipt = {schema_id: string; inputs: RiskInputs; result: {
@@ -17,17 +17,17 @@ export type RiskReceipt = {schema_id: string; inputs: RiskInputs; result: {
   scenarios: Scenario[]; notices: string[];
 }};
 const bad = (): never => { throw new Error("The calculation response could not be verified. No result is shown."); };
-function check(value: unknown): asserts value { if (!value) bad(); }
-function object(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
+export function check(value: unknown): asserts value { if (!value) bad(); }
+export function object(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
   check(value !== null && typeof value === "object" && !Array.isArray(value));
   check(Object.keys(value).sort().join("|") === [...keys].sort().join("|"));
 }
-function stable(value: unknown): string {
+export function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${JSON.stringify(k)}:${stable(v)}`).join(",")}}`;
   return JSON.stringify(value);
 }
-function exact(value: unknown): asserts value is Exact {
+export function exact(value: unknown): asserts value is Exact {
   object(value, ["numerator", "denominator", "display"]);
   check(typeof value.numerator === "string" && /^-?(0|[1-9][0-9]{0,2499})$/.test(value.numerator));
   check(typeof value.denominator === "string" && /^[1-9][0-9]{0,2499}$/.test(value.denominator));
@@ -40,7 +40,7 @@ function exact(value: unknown): asserts value is Exact {
   const digits = units.toString().padStart(19, "0");
   check(value.display === `${n < BigInt(0) ? "-" : ""}${digits.slice(0, -18)}.${digits.slice(-18)}`);
 }
-function equalsDecimal(value: Exact, input: string) {
+export function equalsDecimal(value: Exact, input: string) {
   const negative = input.startsWith("-"), unsigned = negative ? input.slice(1) : input;
   const [whole, part = ""] = unsigned.split(".");
   return BigInt(value.numerator) * BigInt(10) ** BigInt(part.length) === BigInt(`${negative ? "-" : ""}${whole}${part}`) * BigInt(value.denominator);
@@ -126,10 +126,16 @@ export function formInputs(form: HTMLFormElement): RiskInputs {
   return {reporting_currency: field("currency"), exposure_date: field("date"), confidence: field("confidence"), horizon: Number(field("horizon")), portfolio_value: field("value") === "" ? null : field("value"), exposures, sessions};
 }
 export async function requestRisk(inputs: RiskInputs, signal: AbortSignal): Promise<RiskReceipt> {
+  return requestHypothetical("hypothetical-risk", inputs, signal, validateReceipt);
+}
+export async function requestHypothetical<I, R>(endpoint: "hypothetical-risk" | "hypothetical-stress", inputs: I, signal: AbortSignal,
+  validate: (value: unknown, inputs: I) => R,
+  rejectedMessage = "Calculation rejected. Check exact decimal strings, dates, complete factors and the stated limits, then retry."): Promise<R> {
+  check(endpoint === "hypothetical-risk" || endpoint === "hypothetical-stress");
   const body = JSON.stringify(inputs);
   if (new TextEncoder().encode(body).length > 131072) throw new Error("Inputs exceed the request limit.");
-  const response = await fetch("/api/finlens/hypothetical-risk", {method: "POST", headers: {"Content-Type": "application/json"}, body, signal, cache: "no-store"});
-  if (!response.ok) throw new Error(response.status === 404 ? "This development candidate is disabled on the server." : response.status === 429 ? "A calculation is already running. Retry explicitly." : "Calculation rejected. Check exact decimal strings, dates, complete factors and the stated limits, then retry.");
+  const response = await fetch(`/api/finlens/${endpoint}`, {method: "POST", headers: {"Content-Type": "application/json"}, body, signal, cache: "no-store"});
+  if (!response.ok) throw new Error(response.status === 404 ? "This development candidate is disabled on the server." : response.status === 429 ? "A calculation is already running. Retry explicitly." : rejectedMessage);
   if (!response.headers.get("content-type")?.toLowerCase().startsWith("application/json")) bad();
   const reader = response.body?.getReader(); check(reader);
   const decoder = new TextDecoder("utf-8", {fatal: true}); let text = "", size = 0;
@@ -140,6 +146,6 @@ export async function requestRisk(inputs: RiskInputs, signal: AbortSignal): Prom
       text += decoder.decode(value, {stream: true});
     }
     text += decoder.decode();
-    return validateReceipt(JSON.parse(text), inputs);
+    return validate(JSON.parse(text), inputs);
   } finally { reader.releaseLock(); }
 }

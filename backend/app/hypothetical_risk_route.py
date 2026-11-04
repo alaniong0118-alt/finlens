@@ -26,9 +26,10 @@ class _SlotOwner:
     callback skips work. If entry wins, only that worker may release the slot.
     Cleanup is synchronous/idempotent, including under repeated cancellation.
     """
-    def __init__(self, slot):
+    def __init__(self, slot, calculator=None):
         self._lock = Lock()
         self._slot = slot
+        self._calculator = calculator
         self._state = "queued" if slot.acquire(blocking=False) else "busy"
 
     @property
@@ -47,15 +48,15 @@ class _SlotOwner:
                 return None  # Request cleanup revoked this late callback.
             self._state = "running"
         try:
-            return response_bytes(value)
+            calculator = response_bytes if self._calculator is None else self._calculator
+            return calculator(value)
         finally:
             with self._lock:
                 self._state = "released"
                 self._slot.release()
 
 
-@router.post("/hypothetical-risk", include_in_schema=False)
-async def hypothetical_risk(request: Request):
+async def _hypothetical_response(request: Request, calculator=None):
     if server_profile().name != "development":
         return failure(403, "development_only")
     if os.environ.get("FINLENS_HYPOTHETICAL_RISK") != "1":
@@ -73,7 +74,7 @@ async def hypothetical_risk(request: Request):
         value = parse_body(bytes(body))
         if await request.is_disconnected():
             return failure(409, "request_cancelled")
-        owner = _SlotOwner(_slot)
+        owner = _SlotOwner(_slot, calculator)
         if not owner.acquired:
             return failure(429, "candidate_busy_retry_explicitly")
         try:
@@ -87,3 +88,14 @@ async def hypothetical_risk(request: Request):
         return Response(payload, media_type="application/json", headers={"Cache-Control": "no-store"})
     except PortfolioRiskError as exc:
         return failure(422, str(exc))
+
+
+@router.post("/hypothetical-risk", include_in_schema=False)
+async def hypothetical_risk(request: Request):
+    return await _hypothetical_response(request)
+
+
+@router.post("/hypothetical-stress", include_in_schema=False)
+async def hypothetical_stress(request: Request):
+    from app.hypothetical_stress import response_bytes as stress_response_bytes
+    return await _hypothetical_response(request, stress_response_bytes)
