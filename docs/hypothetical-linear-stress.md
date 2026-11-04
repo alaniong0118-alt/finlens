@@ -126,7 +126,9 @@ backend values. It does not generate client estimates. Every edit clears stale
 results immediately. Restart, cancellation, timeout at ten seconds and unmount
 abort transport and invalidate request identity, even when transport ignores an
 abort. Cancellation does not forcibly terminate already running bounded Python
-work. There is no automatic retry, file upload/download or product persistence.
+work. There is no automatic retry or product-managed persistence. Explicit local receipt
+download/import is described in [local hypothetical replay](hypothetical-receipt-replay.md);
+imports restore assumptions only, never supplied results, and make no upload or calculation request.
 Tables have captions and column/row headers, focusable horizontal scroll regions,
 keyboard disclosure controls, explicit status/error states and narrow layouts.
 

@@ -174,8 +174,8 @@ try {
       pending(); pending=undefined;
       await expect.poll(()=>page.evaluate(()=>window.riskDeliveries.length)).toBe(before+1);
       const delivery=await page.evaluate(()=>window.riskDeliveries.at(-1)); assert.equal(delivery.aborted,true);
-      await expect(results).toHaveCount(0); await expect(page.getByRole("status")).toContainText(kind==="cancel" ? "cancelled" : "Inputs changed");
-      return {delivery,resultCount:await results.count(),status:await page.getByRole("status").textContent()};
+      await expect(results).toHaveCount(0); await expect(page.locator('main > p[role="status"]')).toContainText(kind==="cancel" ? "cancelled" : "Inputs changed");
+      return {delivery,resultCount:await results.count(),status:await page.locator('main > p[role="status"]').textContent()};
     });
     await verify(width,"explicit-retry",async()=>{
       mode="normal"; await calculate(); await expect(results.locator("dd").nth(1)).toHaveText("8.000000000000000000"); return {display:await displays()};

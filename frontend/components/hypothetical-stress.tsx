@@ -1,5 +1,6 @@
 "use client";
 import {useEffect, useRef, useState} from "react";
+import {HypotheticalReplay} from "./hypothetical-replay";
 import {requestStress, stressFormInputs, type StressReceipt, type StressOutcome} from "../lib/hypothetical-stress";
 
 const inputStyle={width:"100%",minWidth:0,font:"inherit",padding:10,border:"1px solid var(--border)",borderRadius:8,background:"var(--card)",color:"var(--text)",minHeight:44};
@@ -12,9 +13,11 @@ function Contributions({outcome, label}: {outcome: StressOutcome; label: string}
   </table></div>;
 }
 export function HypotheticalStress() {
+  const form = useRef<HTMLFormElement | null>(null);
+  const [revision, setRevision] = useState(0);
   const [receipt,setReceipt]=useState<StressReceipt|null>(null),[status,setStatus]=useState("Enter explicit hypothetical exposures and shocks."),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false);
   const generation=useRef(0),controller=useRef<AbortController|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
-  function invalidate() {generation.current++;controller.current?.abort();controller.current=null;if(timer.current)clearTimeout(timer.current);timer.current=null;}
+  function invalidate() {generation.current++;setRevision(generation.current);controller.current?.abort();controller.current=null;if(timer.current)clearTimeout(timer.current);timer.current=null;}
   useEffect(()=>()=>{generation.current++;controller.current?.abort();if(timer.current)clearTimeout(timer.current);},[]);
   function edit() {invalidate();setReceipt(null);setError(null);setBusy(false);setStatus("Inputs changed. Calculate again for a current result.");}
   function cancel() {invalidate();setReceipt(null);setError(null);setBusy(false);setStatus("Calculation cancelled. Submit explicitly to retry.");}
@@ -35,9 +38,9 @@ export function HypotheticalStress() {
       <p>Only fixed, signed linear price notionals in one explicitly declared currency. Positive amounts are long; negative amounts are short. P&amp;L = signed notional × shock percentage ÷ 100; loss = −P&amp;L. A shock of −10 means a 10% price decline. Enter 0 explicitly for no change.</p>
       <p>No options, derivatives, bond duration, FX, share counts, causal mappings, fees, financing or rebalancing. Currency codes and exposure dates are user assertions. Asset labels do not verify a real instrument. Offsetting common shocks do not prove absence of risk.</p>
       <p>1–8 assets, 1–12 named scenarios and 1–21 distinct common shocks. Every asset needs a shock in every named scenario, including zero exposures. Shocks: −100% to +1000% inclusive; the upper limit is an application bound, not a suggested scenario. Exact ordinary decimal strings, at most 24 digits and 12 decimal places; no exponent notation. Request 128 KiB, response 1 MiB.</p>
-      <p>One worker slot is shared with historical Risk Lab. Cancel stops display and transport; already running bounded work may finish. No automatic retry or saved inputs.</p>
+      <p>One worker slot is shared with historical Risk Lab. Cancel stops display and transport; already running bounded work may finish. No automatic retry or browser-stored inputs. Local receipt files remain under your control.</p>
     </section>
-    <form className="panel" style={{marginTop:20}} onSubmit={submit} onInput={edit} onChange={edit}>
+    <form ref={form} className="panel" style={{marginTop:20}} onSubmit={submit} onInput={edit} onChange={edit}>
       <h2>Explicit hypothetical inputs</h2><div className="comparison-values">
         <label>Reporting currency<input name="currency" required defaultValue="USD" maxLength={3} pattern="[A-Z]{3}" style={inputStyle}/></label>
         <label>Exposure date<input name="date" type="date" required style={inputStyle}/></label>
@@ -51,6 +54,7 @@ export function HypotheticalStress() {
       <textarea id="stress-common" name="common" required rows={3} maxLength={800} spellCheck={false} aria-describedby="stress-common-help"/>
       <div className="risk-comparison-actions"><button className="primary-button" type="submit">{busy?"Restart stress calculation":"Calculate hypothetical stress"}</button><button className="secondary-button" style={{marginTop:0}} type="button" disabled={!busy} onClick={cancel}>Cancel calculation</button></div>
     </form>
+    <HypotheticalReplay method="stress" receipt={receipt} busy={busy} form={form} generation={generation} revision={revision} restored={()=>{edit();setStatus("Imported hypothetical assumptions. Review inputs and calculate explicitly for a fresh result.");}}/>
     <p role="status" aria-live="polite" style={{margin:"16px 0"}}>{status}</p>{error&&<p role="alert">{error}</p>}
     {r&&<section className="panel" aria-labelledby="stress-results"><h2 id="stress-results">Conditional stress results</h2>
       <p className="wrap-anywhere">{r.reporting_currency} · exposure date {r.exposure_date} · net {r.net_exposure.display} · gross {r.gross_exposure.display}.</p>

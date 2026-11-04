@@ -1,12 +1,15 @@
 "use client";
 
 import {useEffect, useRef, useState} from "react";
+import {HypotheticalReplay} from "./hypothetical-replay";
 import {formInputs, requestRisk, type RiskReceipt} from "../lib/hypothetical-risk";
 
 const unavailable: Record<string, string> = {insufficient_scenarios: "fewer than two complete scenarios", insufficient_tail_mass: "less than one observation of tail mass", portfolio_value_not_declared: "no declared portfolio value", nonpositive_portfolio_value: "declared portfolio value is not positive"};
 const inputStyle = {width: "100%", minWidth: 0, font: "inherit", padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--text)", minHeight: 44};
 
 export function HypotheticalRisk() {
+  const form = useRef<HTMLFormElement | null>(null);
+  const [revision, setRevision] = useState(0);
   const [receipt, setReceipt] = useState<RiskReceipt | null>(null);
   const [status, setStatus] = useState("Enter your hypothetical inputs to calculate.");
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +17,7 @@ export function HypotheticalRisk() {
   const generation = useRef(0), controller = useRef<AbortController | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function invalidate() {
-    generation.current++; controller.current?.abort(); controller.current = null;
+    generation.current++; setRevision(generation.current); controller.current?.abort(); controller.current = null;
     if (timer.current) clearTimeout(timer.current); timer.current = null;
   }
   useEffect(() => () => { generation.current++; controller.current?.abort(); if (timer.current) clearTimeout(timer.current); }, []);
@@ -50,7 +53,7 @@ export function HypotheticalRisk() {
       <p>Enter chronological intervals with each end equal to the next start and exactly one positive gross factor per asset. A factor of 1 means unchanged. Calendar completeness and economic inputs are unverified. No missing observation is dropped, filled or bridged. Dates describe supplied intervals, not verified trading sessions.</p>
       <p>Maximum 8 assets, 120 intervals, horizon 1–20 supplied intervals. Exact ordinary decimal strings: at most 24 digits, 12 fractional places; no exponent notation. Request 128 KiB; response 1 MiB. One calculation per backend process. No fees, financing or rebalancing. Cancellation stops display and transport; bounded server work may finish.</p>
     </section>
-    <form className="panel" style={{marginTop: 20}} onSubmit={submit} onInput={edit} onChange={edit}>
+    <form ref={form} className="panel" style={{marginTop: 20}} onSubmit={submit} onInput={edit} onChange={edit}>
       <h2>Hypothetical inputs</h2>
       <div className="comparison-values">
         <label>Reporting currency<input style={inputStyle} className="block" name="currency" required defaultValue="USD" maxLength={3} pattern="[A-Z]{3}" /></label>
@@ -65,6 +68,7 @@ export function HypotheticalRisk() {
       <textarea id="risk-sessions" name="sessions" rows={8} maxLength={50000} aria-describedby="session-help" spellCheck={false} />
       <div className="risk-comparison-actions"><button className="primary-button" type="submit">{busy ? "Restart calculation" : "Calculate hypothetical risk"}</button><button className="secondary-button" style={{marginTop: 0}} type="button" onClick={cancel} disabled={!busy}>Cancel calculation</button></div>
     </form>
+    <HypotheticalReplay method="risk" receipt={receipt} busy={busy} form={form} generation={generation} revision={revision} restored={()=>{edit();setStatus("Imported hypothetical assumptions. Review inputs and calculate explicitly for a fresh result.");}}/>
     <p role="status" aria-live="polite" style={{margin: "16px 0"}}>{status}</p>{error && <p role="alert">{error}</p>}
     {r && <section className="panel" aria-labelledby="risk-result"><h2 id="risk-result">Hypothetical sample results</h2>
       <p>{r.scenario_count} scenarios · horizon {r.horizon} supplied intervals · confidence {receipt.inputs.confidence} · {r.reporting_currency}</p>

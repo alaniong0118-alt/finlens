@@ -165,7 +165,7 @@ try {
       if(kind==="cancel")await page.getByRole("button",{name:"Cancel calculation",exact:true}).click();else await field("Signed exposures").fill("long -100\nshort -50\nzero 0");
       pending();pending=undefined;await expect.poll(()=>page.evaluate(()=>window.stressDeliveries.length)).toBe(before+1);
       const delivery=await page.evaluate(()=>window.stressDeliveries.at(-1));assert.equal(delivery.aborted,true);await expect(results).toHaveCount(0);
-      await expect(page.getByRole("status")).toContainText(kind==="cancel"?"cancelled":"Inputs changed");return {delivery,resultCount:await results.count(),status:await page.getByRole("status").textContent()};
+      await expect(page.locator('main > p[role="status"]')).toContainText(kind==="cancel"?"cancelled":"Inputs changed");return {delivery,resultCount:await results.count(),status:await page.locator('main > p[role="status"]').textContent()};
     });
     await verify(width,"explicit-retry-new-signed-result",async()=>{
       mode="normal";await calculate();await expect(audit().locator("tfoot td").nth(0)).toHaveText(receipts[1].result.scenarios[0].total_pnl.display);

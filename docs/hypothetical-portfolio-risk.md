@@ -3,7 +3,9 @@
 This opt-in educational workflow uses **user-entered synthetic factors**, not
 market history, forecasts or recommendations. It does not complete requirement
 10a live-data acceptance. It reuses `backend/app/portfolio_risk.py` without changing
-its financial arithmetic. No data is stored, uploaded, fetched or sent to providers.
+its financial arithmetic. The application does not persist receipts or send them
+to providers. Users may explicitly save a hypothetical receipt locally and later
+read a selected file on-device. No external source data is fetched.
 
 ## Enable locally
 
@@ -77,6 +79,8 @@ and tied threshold counts, four measures, all sorted losses, exact per-observati
 tail masses and notices. Each scenario has panel/first/last IDs and inclusive
 start/exclusive stop interval indices. Tail mass is observation mass, not a
 normalized probability. Full replay data is available in the UI disclosure.
+Explicit local JSON download and assumption-only import are described in
+[local hypothetical replay](hypothetical-receipt-replay.md).
 
 Positive loss means loss; negative VaR/ES remain negative. VaR uses nearest rank;
 ES uses the existing exact fractional-tail/tie convention. All overlapping
