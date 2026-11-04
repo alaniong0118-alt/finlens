@@ -114,6 +114,27 @@ def test_restriction_never_opens_write_or_near_routes(method, path):
     assert TestClient(main.app).request(method, path).status_code == 403
 
 
+@pytest.mark.parametrize("financial_only", [False, True])
+@pytest.mark.parametrize("method,path", [("GET", "/private-research/state"), ("POST", "/private-research/notes")])
+def test_private_workspace_is_denied_before_adapter_in_readonly_profiles(monkeypatch, financial_only, method, path):
+    monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile("sec_readonly", financial_only))
+    private = next(route.app for route in main.app.routes if getattr(route, "path", None) == "/private-research")
+    async def denied_handler(*args, **kwargs):
+        raise AssertionError("Private adapter must not run under read-only admission")
+    monkeypatch.setattr(type(private), "__call__", denied_handler)
+    response = TestClient(main.app).request(method, path)
+    assert response.status_code == 403
+    assert response.headers["X-FinLens-Error-Code"] == "RELEASE_MODE_BLOCKED"
+
+
+def test_private_workspace_mount_is_unavailable_in_development_without_configuration(monkeypatch):
+    monkeypatch.setattr(config, "_SERVER_PROFILE", config.ServerProfile("development"))
+    response = TestClient(main.app).get("/private-research/state")
+    assert response.status_code == 503
+    assert response.json() == {"code": "PRIVATE_WORKSPACE_UNAVAILABLE", "commit_state": "not_issued"}
+    assert response.headers["Cache-Control"] == "private, no-store"
+
+
 def test_all_financial_pairs_keep_exact_route_identity_and_reader_denial(monkeypatch):
     for method, template in sorted(FINANCIAL_ONLY_ROUTES):
         app = FastAPI()

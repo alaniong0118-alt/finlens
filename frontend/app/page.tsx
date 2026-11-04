@@ -84,6 +84,7 @@ export default function Home() {
         <ul className="hero-badges" aria-label="Research capabilities">{["SEC-sourced", "Deterministic metrics", ...(filingEnabled ? ["Hybrid evidence search"] : []), "Traceable sources"].map((label) => <li key={label}>{label}</li>)}</ul>
       </div>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={setTicker} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
+      <p><Link href="/investigations">Saved investigations</Link></p>
       {!filingEnabled && <p role="status">{capabilities?.filing_research_enabled === false ? "Financial-only capability restriction is active." : "Filing research capabilities are not verified."} Stored financial research remains available. This does not verify runtime readiness or data completeness.</p>}
       <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#quarter-window-title">Reported windows</a><a href="#balance-date-title">Balance dates</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>

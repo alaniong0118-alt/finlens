@@ -16,8 +16,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from app.account_auth import AuthFailure, SKEW, SingleIssuerVerifier
-from app.models import ResearchAccount, ResearchArtifact, ResearchNote, ResearchSession
-from app.research_contracts import DatabasePublicationRef, KeyRef, decode, encode
+from app.models import CompanyRefreshState, FilingPublication, ResearchAccount, ResearchArtifact, ResearchNote, ResearchSession
+from app.research_contracts import DatabasePublicationRef, KeyRef, TimePoint, decode, encode
 
 
 MAX_SESSIONS = 20
@@ -26,6 +26,20 @@ MAX_OUTPUT = 64 * 1024
 MAX_REVISION = 2**63 - 1
 OPERATION_SECONDS = 5
 MAX_NOTE_BYTES = 16 * 1024
+NOTE_PAGE = 20
+
+
+@dataclass(frozen=True, slots=True)
+class _Inventory:
+    data: bytes
+
+    def encode(self):
+        _require(type(self.data) is bytes and len(self.data) <= MAX_OUTPUT, "OWNERSHIP_RESOURCE_LIMIT")
+        return self.data
+
+
+def _inventory(**data):
+    return _Inventory(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
 
 
 class OwnershipFailure(ValueError):
@@ -160,6 +174,8 @@ class SavedNote:
 
 
 def _metadata(row):
+    if type(row) is _Inventory:
+        return row
     if type(row) is ResearchNote:
         _require(type(row.source_pin) is str and 0 < len(row.source_pin) <= MAX_NOTE_BYTES,
                  "OWNERSHIP_NOTE_INVALID")
@@ -230,9 +246,33 @@ class _Repository:
             ResearchNote.session_id == session, ResearchNote.artifact_id == artifact)
             .with_for_update()).scalar_one_or_none()
 
+    def note_rows(self, owner, after):
+        statement = (select(ResearchNote).join(ResearchArtifact, ResearchArtifact.id == ResearchNote.artifact_id)
+            .join(ResearchSession, ResearchSession.id == ResearchNote.session_id).where(
+                ResearchNote.owner_id == owner, ResearchArtifact.owner_id == owner, ResearchSession.owner_id == owner,
+                ResearchArtifact.session_id == ResearchNote.session_id, ResearchSession.state == "active",
+                ResearchArtifact.state == "reserved", ResearchSession.revision == ResearchNote.session_revision,
+                ResearchArtifact.session_revision == ResearchNote.session_revision,
+                ResearchArtifact.revision == ResearchNote.artifact_revision))
+        if after is not None:
+            statement = statement.where(ResearchNote.artifact_id > after)
+        return self.execute(statement.order_by(ResearchNote.artifact_id).limit(NOTE_PAGE + 1)).scalars().all()
+
+    def source_rows(self, cik):
+        # Scalar metadata only: never materialize cleaned filing text or stream JSON.
+        return self.execute(select(FilingPublication.accession_number, FilingPublication.data_version,
+            FilingPublication.content_digest, CompanyRefreshState.evidence_version, CompanyRefreshState.data_version).join(CompanyRefreshState,
+            CompanyRefreshState.company_cik == FilingPublication.company_cik).where(FilingPublication.company_cik == cik)
+            .order_by(FilingPublication.accession_number).limit(51)).all()
+
     def add(self, row):
         self.operation.checkpoint()
         self.session.add(row)
+
+    def flush(self):
+        self.operation.checkpoint()
+        self.session.flush()
+        self.operation.checkpoint()
 
 
 class OwnershipService:
@@ -419,6 +459,41 @@ class OwnershipService:
         return self._note_operation(token, session_key, session_revision, artifact_key, artifact_revision,
                                     payload=payload, cancellation=cancellation)
 
+    def save_new_note(self, token, session_key, session_revision, request_key, body, source, *, cancellation=None):
+        """Validate first; reserve and save atomically under the existing owner lock.
+
+        No reservation COMMIT precedes note validation. Flushing a new artifact
+        only establishes FK insert order inside the same rollback-able transaction.
+        A lost COMMIT acknowledgement concerns both rows; explicit identical replay
+        authenticates, locks and reconciles the same owner/request identity.
+        """
+        parent_id, revision = _key(session_key, "session"), _revision(session_revision)
+        request_key, payload = _request(request_key), (_note_body(body), _note_pin(source))
+        def save(repo, account, now):
+            parent = self._live(repo.session_row(account.id, parent_id), revision)
+            artifact = repo.artifact(account.id, request=request_key)
+            if artifact is None:
+                _require(repo.count(ResearchArtifact, account.id) < MAX_ARTIFACTS, "OWNERSHIP_QUOTA_EXCEEDED")
+                artifact = ResearchArtifact(id=str(uuid4()), owner_id=account.id, session_id=parent.id,
+                    session_revision=revision, request_key=request_key, state="reserved", revision=1)
+                repo.add(artifact)
+                repo.flush()
+            else:
+                self._live(artifact)
+                _require(artifact.session_id == parent.id and artifact.session_revision == revision,
+                         "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+            row = repo.note(account.id, parent.id, artifact.id)
+            if row is None:
+                row = ResearchNote(artifact_id=artifact.id, owner_id=account.id, session_id=parent.id,
+                    session_revision=revision, artifact_revision=artifact.revision, body=payload[0], source_pin=payload[1])
+                repo.add(row)
+            else:
+                _require(row.session_revision == revision and row.artifact_revision == artifact.revision,
+                         "OWNERSHIP_REVISION_CHANGED")
+                _require((row.body, row.source_pin) == payload, "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+            return row
+        return self._run(token, save, cancellation=cancellation)
+
     def reopen_note(self, token, session_key, session_revision, artifact_key, artifact_revision, *, cancellation=None):
         return self._note_operation(token, session_key, session_revision, artifact_key, artifact_revision,
                                     cancellation=cancellation)
@@ -427,6 +502,39 @@ class OwnershipService:
         """Bounded JSON only; no file I/O, source resolution or automatic retry."""
         return self.reopen_note(token, session_key, session_revision, artifact_key, artifact_revision,
                                 cancellation=cancellation).encode()
+
+    def list_notes(self, token, after=None, *, cancellation=None):
+        after = None if after is None else _key(KeyRef("artifact", after), "artifact")
+        def discover(repo, account, now):
+            rows = repo.note_rows(account.id, after)
+            items = []
+            for row in rows[:NOTE_PAGE]:
+                note = _metadata(row)
+                note.encode()
+                items.append(dict(session_key=row.session_id, session_revision=row.session_revision,
+                    artifact_key=row.artifact_id, artifact_revision=row.artifact_revision, preview=row.body[:160],
+                    source_cik=note.source.entity_key.id, source_accession=note.source.accession))
+            return _inventory(schema_version=1, owner_key=account.id, items=items,
+                              next_cursor=rows[NOTE_PAGE - 1].artifact_id if len(rows) > NOTE_PAGE else None)
+        return self._run(token, discover, cancellation=cancellation)
+
+    def list_note_sources(self, token, cik, *, cancellation=None):
+        cik = _key(KeyRef("sec_cik", cik), "sec_cik")
+        def discover(repo, account, now):
+            rows = repo.source_rows(cik)
+            _require(len(rows) <= 50, "OWNERSHIP_RESOURCE_LIMIT")
+            sources = []
+            for accession, publication_version, digest, evidence_version, data_version in rows:
+                ref = DatabasePublicationRef(entity_key=KeyRef("sec_cik", cik), origin="sec", owner_key=None,
+                    session_key=None, source_descriptor_key=None, source_revision_key=None, rights_policy_key=None,
+                    admission_record_key=None, public_available_at=TimePoint.unknown(), retrieved_at=TimePoint.unknown(),
+                    accession=accession, publication_data_version=publication_version,
+                    evidence_version=evidence_version, data_version=data_version,
+                    manifest_sha256=digest, chunk_id=None)
+                sources.append(json.loads(_note_pin(ref)))
+            return _inventory(schema_version=1, owner_key=account.id, sources=sources,
+                source_verification="unverified_reference", original_availability="not_checked")
+        return self._run(token, discover, cancellation=cancellation)
 
     def invalidate_account_tokens(self, token, *, cancellation=None):
         def invalidate(repo, account, now):

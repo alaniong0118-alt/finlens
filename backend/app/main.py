@@ -249,6 +249,11 @@ app = FastAPI(
 )
 app.router.route_class = VersionedRoute
 
+# No service, issuer, browser origin or session is configured here. Private
+# routes remain outside the SEC read-only admission allowlists.
+from app.private_workspace_http import PrivateWorkspace
+app.mount("/private-research", PrivateWorkspace(), name="private-research")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

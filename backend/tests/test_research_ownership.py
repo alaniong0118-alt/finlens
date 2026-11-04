@@ -40,6 +40,7 @@ class FakeDatabase:
         self.rows = {ResearchAccount: {}, ResearchSession: {}, ResearchArtifact: {}, ResearchNote: {}}
         self.events, self.hooks = [], {}
         self.offset = 0
+        self.publications = []
         self.commit_error = None
         self.rollback_error = self.close_error = False
 
@@ -128,10 +129,34 @@ class FakeRepository:
         self.db.fire("add")
         self.session.rows[type(row)][row.artifact_id if type(row) is ResearchNote else row.id] = row
 
+    def flush(self):
+        self.operation.checkpoint()
+        self.session.flush()
+        self.operation.checkpoint()
+
     def note(self, owner, session, artifact):
         self.db.fire("note_lock")
         return next((r for r in self.session.rows[ResearchNote].values()
             if r.owner_id == owner and r.session_id == session and r.artifact_id == artifact), None)
+
+    def note_rows(self, owner, after):
+        rows = []
+        for note in self.session.rows[ResearchNote].values():
+            parent = self.session.rows[ResearchSession].get(note.session_id)
+            artifact = self.session.rows[ResearchArtifact].get(note.artifact_id)
+            if (parent is not None and artifact is not None
+                    and note.owner_id == parent.owner_id == artifact.owner_id == owner
+                    and parent.state == "active" and artifact.state == "reserved"
+                    and artifact.session_id == note.session_id
+                    and parent.revision == artifact.session_revision == note.session_revision
+                    and artifact.revision == note.artifact_revision and (after is None or note.artifact_id > after)):
+                rows.append(note)
+        return sorted(rows, key=lambda row: row.artifact_id)[:own.NOTE_PAGE + 1]
+
+    def source_rows(self, cik):
+        return [(publication.accession_number, publication.data_version, publication.content_digest,
+                 state.evidence_version, state.data_version) for publication, state in self.db.publications
+                if publication.company_cik == cik][:51]
 
 
 class OwnershipTests(CryptoFixtures):
@@ -528,6 +553,26 @@ class SchemaAndSQLTests(unittest.TestCase):
             self.assertIn("research_notes." + field + " =", str(compiled))
         self.assertIn("FOR UPDATE", str(compiled))
 
+    def test_discovery_queries_bound_owners_lifecycle_and_scalar_source_metadata(self):
+        statements = []
+        class Session:
+            def execute(self, statement):
+                statements.append(statement)
+                return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []), all=lambda: [])
+        repo = own._Repository(Session(), own._Operation(None, __import__("time").monotonic))
+        repo.note_rows("owner", "after")
+        repo.source_rows("0000000001")
+        notes = statements[0].compile(dialect=postgresql.dialect())
+        self.assertEqual(list(notes.params.values()).count("owner"), 3)
+        self.assertIn("research_notes.artifact_id >", str(notes))
+        for field in ("research_sessions.state", "research_artifacts.state", "research_sessions.revision",
+                      "research_artifacts.session_revision", "research_artifacts.revision"):
+            self.assertIn(field, str(notes))
+        sources = str(statements[1].compile(dialect=postgresql.dialect()))
+        for forbidden_column in ("cleaned_text", "facts", "configuration", "embedding"):
+            self.assertNotIn(forbidden_column, sources)
+        self.assertIn("filing_publications.company_cik =", sources)
+
 
 class NoteTests(CryptoFixtures):
     """Same offline transaction harness; no SQLite or second persistence engine."""
@@ -555,6 +600,10 @@ class NoteTests(CryptoFixtures):
     def save(self, **changes):
         return self.service.save_note(*self.args(), changes.get("body", self.body),
                                       changes.get("source", self.source), cancellation=changes.get("cancellation"))
+
+    def atomic_save(self, request="atomic-note", **changes):
+        return self.service.save_new_note(self.alice, self.session.key, 1, request,
+            changes.get("body", self.body), changes.get("source", self.source), cancellation=changes.get("cancellation"))
 
     def fails(self, call, code, state="not_issued"):
         with self.assertRaises((own.OwnershipFailure, auth.AuthFailure)) as caught:
@@ -721,6 +770,101 @@ class NoteTests(CryptoFixtures):
         self.alice = self.token()
         self.db.close_error = True
         self.fails(lambda: self.service.export_note(*self.args()), "OWNERSHIP_CLEANUP_UNVERIFIED", "confirmed")
+
+    def test_discovery_is_paginated_owner_bound_and_excludes_revoked_notes(self):
+        self.save()
+        for i in range(21):
+            artifact = self.service.reserve_artifact(self.alice, self.session.key, 1, f"page-{i}")
+            self.service.save_note(self.alice, self.session.key, 1, artifact.key, 1, f"note {i}", self.source)
+        self.service.create_session(self.bob, "bob")
+        bob = json.loads(self.service.list_notes(self.bob).encode())
+        self.assertEqual(bob["items"], [])
+        first = json.loads(self.service.list_notes(self.alice).encode())
+        second = json.loads(self.service.list_notes(self.alice, first["next_cursor"]).encode())
+        self.assertEqual((len(first["items"]), len(second["items"])), (20, 2))
+        self.assertIsNone(second["next_cursor"])
+        self.assertEqual(len({r["artifact_key"] for r in first["items"] + second["items"]}), 22)
+        self.service.revoke_session(self.alice, self.session.key, 1)
+        self.assertEqual(json.loads(self.service.list_notes(self.alice).encode())["items"], [])
+
+    def test_atomic_note_validates_before_store_and_rejected_requests_cannot_drain_quota(self):
+        before = set(self.db.rows[ResearchArtifact])
+        for number in range(101):
+            self.fails(lambda: self.atomic_save(f"invalid-{number}", body=""), "OWNERSHIP_NOTE_INVALID")
+        self.fails(lambda: self.atomic_save(source=KeyRef("artifact", "wrong-reference-type")), "OWNERSHIP_NOTE_INVALID")
+        self.assertEqual(self.db.events, [])
+        self.assertEqual(set(self.db.rows[ResearchArtifact]), before)
+        self.assertEqual(self.db.rows[ResearchNote], {})
+        self.assertEqual(self.atomic_save().body, self.body)
+
+    def test_atomic_note_replay_conflicts_use_one_owner_locked_transaction(self):
+        saved = self.atomic_save()
+        self.assertEqual([event for event in self.db.events if event.endswith("_lock")],
+                         ["account_lock", "session_lock", "artifact_lock", "note_lock"])
+        self.assertEqual(self.db.events.count("commit_before"), 1)
+        self.assertEqual(self.atomic_save(), saved)
+        self.fails(lambda: self.atomic_save(body="different racing submission"), "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+        self.fails(lambda: self.atomic_save(source=replace(self.source, manifest_sha256="b" * 64)),
+                   "OWNERSHIP_IDEMPOTENCY_CONFLICT")
+        self.assertEqual(len(self.db.rows[ResearchArtifact]), 2)  # Existing setup reservation plus one saved note.
+        self.assertEqual(len(self.db.rows[ResearchNote]), 1)
+
+    def test_atomic_note_failure_after_artifact_flush_rolls_back_both_rows(self):
+        before = set(self.db.rows[ResearchArtifact])
+        def fail():
+            raise RuntimeError("synthetic failure between artifact flush and note insertion")
+        self.db.hooks["note_lock"] = fail
+        self.fails(self.atomic_save, "OWNERSHIP_DATABASE_FAILURE")
+        self.assertEqual(set(self.db.rows[ResearchArtifact]), before)
+        self.assertEqual(self.db.rows[ResearchNote], {})
+        self.db.hooks.clear()
+        with patch.object(own, "MAX_OUTPUT", 1):
+            self.fails(self.atomic_save, "OWNERSHIP_RESOURCE_LIMIT")
+        self.assertEqual(set(self.db.rows[ResearchArtifact]), before)
+        self.assertEqual(self.db.rows[ResearchNote], {})
+
+    def test_atomic_note_cancellation_before_commit_leaves_no_new_reservation(self):
+        cancel = own.Cancellation()
+        before = set(self.db.rows[ResearchArtifact])
+        self.db.hooks["flush"] = cancel.cancel
+        self.fails(lambda: self.atomic_save(cancellation=cancel), "OWNERSHIP_CANCELLED")
+        self.assertEqual(set(self.db.rows[ResearchArtifact]), before)
+        self.assertEqual(self.db.rows[ResearchNote], {})
+        self.assertNotIn("commit_before", self.db.events)
+
+    def test_atomic_note_uncertain_commit_keeps_both_or_neither_and_explicit_replay_is_idempotent(self):
+        for point, count in (("before", 0), ("after", 1)):
+            before_artifacts, before_notes = set(self.db.rows[ResearchArtifact]), set(self.db.rows[ResearchNote])
+            self.db.commit_error = point
+            self.fails(lambda: self.atomic_save(point), "OWNERSHIP_COMMIT_INDETERMINATE", "indeterminate")
+            artifacts = set(self.db.rows[ResearchArtifact]) - before_artifacts
+            notes = set(self.db.rows[ResearchNote]) - before_notes
+            self.assertEqual(artifacts, notes)
+            self.assertEqual(len(notes), count)
+            self.db.commit_error = None
+            saved = self.atomic_save(point)
+            self.assertEqual(self.atomic_save(point), saved)
+            self.assertEqual(len(set(self.db.rows[ResearchArtifact]) - before_artifacts), 1)
+            self.assertEqual(len(set(self.db.rows[ResearchNote]) - before_notes), 1)
+
+    def test_atomic_note_last_quota_slot_allows_identical_replay_and_denies_new_request(self):
+        with patch.object(own, "MAX_ARTIFACTS", 2):
+            saved = self.atomic_save()
+            self.assertEqual(self.atomic_save(), saved)
+            self.fails(lambda: self.atomic_save("new-request"), "OWNERSHIP_QUOTA_EXCEEDED")
+        self.assertEqual(len(self.db.rows[ResearchArtifact]), 2)
+        self.assertEqual(len(self.db.rows[ResearchNote]), 1)
+
+    def test_atomic_note_cancellation_after_commit_withholds_delivery_and_keeps_both_rows(self):
+        cancel = own.Cancellation()
+        before = set(self.db.rows[ResearchArtifact])
+        self.db.hooks["commit_after"] = cancel.cancel
+        self.fails(lambda: self.atomic_save(cancellation=cancel), "OWNERSHIP_CANCELLED", "confirmed")
+        self.assertEqual(set(self.db.rows[ResearchArtifact]) - before, set(self.db.rows[ResearchNote]))
+        self.assertEqual(len(self.db.rows[ResearchNote]), 1)
+        self.assertNotIn("rollback", self.db.events)
+        self.db.hooks.clear()
+        self.assertEqual(self.atomic_save().body, self.body)
 
 
 if __name__ == "__main__":
