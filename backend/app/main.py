@@ -1044,6 +1044,11 @@ def answer_company_filing_question(
     return {**metadata, **answer}
 
 
+# Synthetic candidate has no dependencies on company/database research.
+from app.hypothetical_risk_route import router as hypothetical_risk_router
+app.include_router(hypothetical_risk_router)
+
+
 # Freeze admission only after all maintained routes have been registered.
 # Observation stays INSIDE release admission; messages and error ordering are unchanged.
 app.add_middleware(latency.EvidenceLatencyMiddleware, profile=server_profile)
