@@ -73,6 +73,15 @@ CHINESE_VALUE_QUESTION = re.compile(
     rf"(?P<period>{_ZH_LATEST}|{_ZH_FISCAL}){_ZH_SPACE}(?:的{_ZH_SPACE})?"
     rf"(?P<metric>{_ZH_METRIC}){_ZH_SPACE}(?:是多少|為多少|为多少){_ZH_SPACE}(?:[?？]{_ZH_SPACE})?"
 )
+_ZH_REVENUE = "|".join(re.escape(term) for term in sorted(CHINESE_VALUE_METRICS, key=len, reverse=True)
+                       if CHINESE_VALUE_METRICS[term] == "revenue")
+CHINESE_REVENUE_COMPARISON = re.compile(
+    rf"{_ZH_SPACE}(?:[請请]{_ZH_SPACE})?(?:比較|比较){_ZH_SPACE}"
+    rf"(?:(?:股票代號|股票代碼|股票代码){_ZH_SPACE}(?P<ticker>[A-Za-z][A-Za-z0-9.-]{{0,9}}){_ZH_SPACE}的{_ZH_SPACE})?"
+    rf"(?P<year_a>(?:19|20)[0-9]{{2}}){_ZH_SPACE}(?:財年|财年){_ZH_SPACE}(?:與|与|和){_ZH_SPACE}"
+    rf"(?P<year_b>(?:19|20)[0-9]{{2}}){_ZH_SPACE}(?:財年|财年){_ZH_SPACE}(?:的{_ZH_SPACE})?"
+    rf"(?:{_ZH_REVENUE}){_ZH_SPACE}(?:[?？]{_ZH_SPACE})?"
+)
 
 
 def supported_question_text(question):
@@ -133,7 +142,7 @@ def company_aliases(company):
     aliases = {name, short}
     # A distinctive first name is useful (Apple, Microsoft, JPMorgan), but
     # generic first words must never consume financial/question vocabulary.
-    first = name.split()[0]
+    first = name.split()[0] if name else ""
     if len(first) > 2 and first not in {"bank", "general", "american", "united", "home", "eli", "johnson", "morgan", "goldman", "walt"}:
         aliases.add(first)
     if len(company.ticker) > 1:  # single-letter tickers collide with prose
@@ -553,9 +562,30 @@ def recognize_chinese_value(question, selected, companies):
                           MathematicalIntent("value"), period_intent), None
 
 
+def recognize_chinese_revenue_comparison(question, selected, companies):
+    """Two explicit fiscal labels, no discarded qualifiers or inferred growth."""
+    match = CHINESE_REVENUE_COMPARISON.fullmatch(question)
+    if match is None:
+        return None, None
+    years = sorted((int(match["year_a"]), int(match["year_b"])))
+    if years[0] == years[1]:
+        return None, "not_matched"
+    if match["ticker"]:
+        named = next((company for company in companies if company.ticker.upper() == match["ticker"].upper()), None)
+        if named is None:
+            return None, "not_matched"
+        if named.ticker.upper() != selected.ticker.upper():
+            return None, "company_mismatch"
+    return bind_operation("revenue", tuple(FiscalPeriodRequest(fiscal_year=year) for year in years),
+                          MathematicalIntent("level_change")), None
+
+
 def recognize_operation(question, selected, companies):
     """Keep the typed operation intact across the closed question grammars."""
     chinese, rejection = recognize_chinese_value(question, selected, companies)
+    if chinese is not None or rejection is not None:
+        return chinese, rejection
+    chinese, rejection = recognize_chinese_revenue_comparison(question, selected, companies)
     if chinese is not None or rejection is not None:
         return chinese, rejection
     math = classify_math_intent(question)
