@@ -96,6 +96,16 @@ test(desktopTitles.gaps, async ({ page, scenario }) => {
   const refresh = page.getByRole('button', { name: 'Refresh comparison', exact: true });
   await refresh.scrollIntoViewIfNeeded(); await refresh.focus(); await page.keyboard.press('Tab');
   await expectKeyboardFocus(view(page));
+  // The optional chart follows the filter in native Tab order and remains usable.
+  const chartSummary = page.getByText('Visualize a metric (optional)', { exact: true });
+  const chartDetails = chartSummary.locator('..');
+  await page.keyboard.press('Tab'); await expectKeyboardFocus(chartSummary);
+  await page.keyboard.press('Enter'); await expect(chartDetails).toHaveJSProperty('open', true);
+  await page.keyboard.press('Tab'); await expectKeyboardFocus(chartDetails.getByLabel('Metric to visualize', { exact: true }));
+  await page.keyboard.press('Shift+Tab'); await expectKeyboardFocus(chartSummary);
+  await page.keyboard.press('Enter'); await expect(chartDetails).toHaveJSProperty('open', false);
+  await page.keyboard.press('Shift+Tab'); await expectKeyboardFocus(view(page));
+  expect(scenario.ledger).toHaveLength(before);
   await page.keyboard.press('End'); await page.keyboard.press('Enter');
   await expect(view(page)).toHaveValue('gaps'); await expect(rows(page)).toHaveCount(4);
   await expect(count(page)).toHaveText(summary(4, 4));

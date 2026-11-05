@@ -31,3 +31,23 @@ plottable. When the gaps filter is active, a control beside the chart restores
 the full evidence table without a request. Five synthetic chart tests, one
 existing-harness mounted filter-restoration test and the scoped TypeScript check
 pass. This does not establish real-browser or real-data acceptance.
+
+## CI keyboard-order correction — active
+
+CI run 42084661148 for e2d25c failed the desktop coverage-gap keyboard
+case: Tab from Refresh comparison did not reach the Metric rows selector.
+The new chart disclosure is placed between them in DOM order. Move the chart
+after the coverage selector, retain native disclosure and evidence restore,
+and extend both DOM-order regression and the existing browser spec to exercise
+the selector and chart via keyboard. No assertion is removed. Pending sign-in,
+Risk Lab and multi-metric files are outside scope. Browser acceptance is not
+claimed unless a permitted run actually executes.
+
+Correction validation: 10 focused synthetic mounted tests pass against the
+scratch component, including DOM ordering, chart disclosure focus, coverage
+restoration, cancellation and publication changes. Scoped TypeScript checking
+and browser-spec syntax transpilation pass. The existing browser spec retains
+the failed keyboard assertion and adds native Tab/Enter checks for opening and
+closing the chart without requests. No browser was run; CI must verify actual
+keyboard focus, focus-visible styling and geometry after independent review.
+The prior Docker and process denials were not retried.

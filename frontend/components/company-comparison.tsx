@@ -272,7 +272,6 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
       {reportingWindowsDiffer(results) && <p className="notice" role="note">Reporting windows differ. These fiscal-year labels represent different accounting date ranges; compare them with care.</p>}
       {results.some(r => r.period === null) && <p className="notice" role="note">A requested annual window is missing or ambiguous for at least one company. No other reporting period has been substituted.</p>}
       {bases.size > 1 && <p className="notice" role="note">Revenue economic bases differ. Cross-company equivalence has not been established.</p>}
-      <CompanyComparisonChart key={requestKey} columns={columns} onShowAll={gapsOnly ? () => setCoverageFilter({ key: requestKey, gapsOnly: false }) : undefined} />
       <div className="comparison-actions">
         <label htmlFor="comparison-metric-view">Metric rows<select id="comparison-metric-view" value={gapsOnly ? "gaps" : "all"}
           aria-describedby="comparison-coverage-help comparison-coverage-count" onChange={event => setCoverageFilter({ key: requestKey, gapsOnly: event.target.value === "gaps" })}>
@@ -281,6 +280,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
         </select></label>
         {gapsOnly && <button type="button" className="secondary-button" onClick={() => setCoverageFilter({ key: requestKey, gapsOnly: false })}>Show all metrics</button>}
       </div>
+      <CompanyComparisonChart key={requestKey} columns={columns} onShowAll={gapsOnly ? () => setCoverageFilter({ key: requestKey, gapsOnly: false }) : undefined} />
       <p className="muted small" id="comparison-coverage-help">Coverage gaps include unavailable, not-applicable and unverified values. Availability alone does not establish comparability.</p>
       <p className="muted small" id="comparison-coverage-count" role="status" aria-live="polite">Showing {visibleMetrics.length} of {COMPARISON_METRICS.length} metric rows. Rows with unavailable or not-applicable values: {unavailableMetrics.length}. Unverified company responses: {unverifiedCompanies}.</p>
       {visibleMetrics.length === 0 && <p className="notice">No coverage gaps in the current validated responses. Select Show all metrics to inspect values and comparability.</p>}

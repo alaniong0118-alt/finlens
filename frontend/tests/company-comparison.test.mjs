@@ -1420,3 +1420,20 @@ test('REVIEW chart restores hidden metric evidence without requesting data', asy
  await act(async()=>button.click());assert.equal(coverageRows(app).length,11);assert.equal(app.host.querySelector('#comparison-metric-view').value,'all');
  assert.ok([...coverageRows(app)].some(row=>row.textContent.includes('Revenue') && row.querySelector('details')));assert.equal(app.requests.length,requests);
 });
+
+
+test('keyboard DOM order keeps coverage selector before optional chart disclosure', async ctx => {
+ const app=await focusTable(ctx); const count=app.requests.length;
+ const refresh=[...app.host.querySelectorAll('button')].find(button=>button.textContent==='Refresh comparison');
+ const view=app.host.querySelector('#comparison-metric-view');
+ const summary=[...app.host.querySelectorAll('summary')].find(element=>element.textContent==='Visualize a metric (optional)');
+ assert.ok(refresh && view && summary); assert.equal(summary.parentElement.open,false);
+ const focusable=[...app.host.querySelectorAll('button:not(:disabled),select:not(:disabled),summary,[tabindex="0"],a[href]')]
+   .filter(element=>!element.closest('details:not([open])') || element.tagName==='SUMMARY');
+ assert.equal(focusable[focusable.indexOf(refresh)+1],view);
+ assert.equal(focusable[focusable.indexOf(view)+1],summary);
+ await act(async()=>summary.focus());assert.equal(document.activeElement,summary);
+ await act(async()=>summary.click());assert.equal(summary.parentElement.open,true);
+ const metric=summary.parentElement.querySelector('select');assert.ok(metric);await act(async()=>metric.focus());assert.equal(document.activeElement,metric);
+ await act(async()=>summary.click());assert.equal(summary.parentElement.open,false);assert.equal(app.requests.length,count);
+});
