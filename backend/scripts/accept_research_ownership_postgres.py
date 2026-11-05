@@ -47,6 +47,11 @@ CATALOG_READS = {"filing_publications": ("company_cik", "accession_number", "dat
                  "company_refresh_state": ("company_cik", "evidence_version", "data_version")}
 MOUNTS = {"/var/lib/postgresql/data": 256 * MIB, "/tmp": 16 * MIB,
           "/var/run/postgresql": 16 * MIB, "/dev/shm": 64 * MIB, "/dev": 64 * MIB}
+# Disclosure allowlist only; this never changes mount admission policy.
+MOUNT_DIAGNOSTIC_PATHS = frozenset({
+    "/var/lib/postgresql/data", "/tmp", "/var/run/postgresql",
+    "/run/postgresql", "/dev/shm", "/dev",
+})
 CASE_NAMES = ("migration_and_provisioning", "privileges", "authentication_boundary", "first_distinct", "first_replay",
               "session_last_slot", "artifact_last_slot", "artifact_replay_conflict", "foreign_constraints", "exact_identity",
               "revisions", "reservation_before_revocation", "revocation_before_reservation", "read_before_revocation",
@@ -65,6 +70,18 @@ with context.begin_transaction():
 
 class Refusal(ValueError):
     pass
+
+
+class TmpfsBoundRefusal(Refusal):
+    """One bounded kernel-mount diagnostic; never retain source/root/options."""
+    def __init__(self, path, amount, bound):
+        super().__init__("tmpfs_bound_mismatch")
+        self.detail = {
+            "mount_point": path if path in MOUNT_DIAGNOSTIC_PATHS else "<redacted>",
+            "mount_point_sha256": hashlib.sha256(path.encode("ascii")).hexdigest(),
+            "filesystem": "tmpfs", "observed_bytes": min(amount, 2**63 - 1),
+            "observed_bytes_capped": amount > 2**63 - 1, "permitted_bytes": bound,
+        }
 
 
 class CommandFailure(RuntimeError):
@@ -408,7 +425,8 @@ def validate_mountinfo(raw):
         amount = int(match[1]) * {"": 1, "k": 1024, "m": MIB, "g": 1024 * MIB}[match[2]]
         # Masked /proc character-device mounts share bounded /dev, never disk.
         bound = MOUNTS.get(path, 64 * MIB if path.startswith("/proc/") else 0)
-        require(0 < amount <= bound, "tmpfs_bound_mismatch")
+        if not 0 < amount <= bound:
+            raise TmpfsBoundRefusal(path, amount, bound)
         seen.add(path)
     require(set(MOUNTS) | {"/", "/etc/hosts", "/etc/hostname", "/etc/resolv.conf"} <= seen,
             "required_mount_missing")
@@ -684,7 +702,13 @@ class Run:
             port = int(ports[0]["HostPort"])
             require(1024 <= port <= 65535 and port != 5432, "unsafe_assigned_port")
             mountinfo = self.command(["container", "exec", self.ids["container"], "cat", "/proc/self/mountinfo"])
-            validate_mountinfo(mountinfo.stdout)
+            try:
+                validate_mountinfo(mountinfo.stdout)
+            except TmpfsBoundRefusal as error:
+                self.receipt(event="mount_validation_refused", code=str(error), detail=error.detail,
+                             mountinfo_bytes=len(mountinfo.stdout),
+                             mountinfo_sha256=hashlib.sha256(mountinfo.stdout).hexdigest())
+                raise
             cgroup = self.command(["container", "exec", self.ids["container"], "cat", "/sys/fs/cgroup/memory.max",
                                    "/sys/fs/cgroup/memory.swap.max", "/sys/fs/cgroup/cpu.max", "/sys/fs/cgroup/pids.max"])
             validate_cgroup(cgroup.stdout)

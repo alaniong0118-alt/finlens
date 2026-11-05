@@ -2588,6 +2588,94 @@ def offline_checks():
                         with self.assertRaisesRegex(module.Refusal,"container_start_unverified"): run._started_container(value)
                     self.assertEqual(value,before)
 
+        def test_77_tmpfs_diagnostic_keeps_policy_and_distinguishes_failure_causes(self):
+            raw=mountinfo()
+            variants=(
+                (raw.replace(b"/var/run/postgresql",b"/run/postgresql"),"/run/postgresql",16*module.MIB,0),
+                (raw.replace(b"size=268435456",b"size=536870912"),"/var/lib/postgresql/data",512*module.MIB,256*module.MIB),
+                (raw+b"1 0 0:0 / /unexpected rw - tmpfs tmpfs rw,size=1048576\n","/unexpected",module.MIB,0),
+                (raw.replace(b"size=268435456",b"size=0"),"/var/lib/postgresql/data",0,256*module.MIB))
+            module.validate_mountinfo(raw)
+            for data,path,amount,bound in variants:
+                with self.subTest(path=path,amount=amount), self.assertRaises(module.TmpfsBoundRefusal) as raised:
+                    module.validate_mountinfo(data)
+                self.assertIsInstance(raised.exception,module.Refusal)
+                self.assertEqual(str(raised.exception),"tmpfs_bound_mismatch")
+                self.assertEqual(raised.exception.detail,{"mount_point":path if path in module.MOUNT_DIAGNOSTIC_PATHS else "<redacted>","mount_point_sha256":hashlib.sha256(path.encode()).hexdigest(),
+                    "filesystem":"tmpfs","observed_bytes":amount,"observed_bytes_capped":False,"permitted_bytes":bound})
+
+        def test_78_tmpfs_diagnostic_is_small_and_redacts_non_path_payloads(self):
+            for path in ("/"+"x"*10000,"/escaped\\040path","/secret-token:"+"x"*100):
+                data=mountinfo()+f"1 0 0:0 / {path} rw - tmpfs tmpfs rw,size={'9'*100}\n".encode()
+                with self.subTest(length=len(path)), self.assertRaises(module.TmpfsBoundRefusal) as raised:
+                    module.validate_mountinfo(data)
+                detail=raised.exception.detail
+                self.assertEqual(detail["mount_point"],"<redacted>")
+                self.assertEqual(detail["mount_point_sha256"],hashlib.sha256(path.encode()).hexdigest())
+                self.assertEqual(detail["observed_bytes"],2**63-1)
+                self.assertTrue(detail["observed_bytes_capped"])
+                self.assertLess(len(json.dumps(detail).encode()),768)
+                self.assertNotIn(path,json.dumps(detail))
+
+        def test_79_tmpfs_diagnostic_precedes_refusal_and_cleanup_survives_sink_failure(self):
+            canary="SYNTHETIC-CREDENTIAL-CANARY-123"
+            cases=((path,sink_fails) for path in ("/run/postgresql","/unexpected/"+canary,"/proc/"+canary) for sink_fails in (False,True))
+            for path,sink_fails in cases:
+                run,fake=new_run();ordinary=fake.run
+                data=(mountinfo().replace(b"/var/run/postgresql",b"/run/postgresql") if path=="/run/postgresql" else
+                      mountinfo()+f"1 0 0:0 / {path} rw - tmpfs tmpfs rw,size=536870912\n".encode())
+                def adapter(argv,**kwargs):
+                    args=argv[3:]
+                    if args[:2]==["context","inspect"]: return module.Output((run.args.expected_context_endpoint+"\n").encode(),b"",0)
+                    if args[:2]==["image","inspect"]: return module.Output((run.image_id+"\n").encode(),b"",0)
+                    if args[:2]==["container","exec"]:
+                        fake.calls.append((args,kwargs))
+                        if args[3]=="pg_isready": return module.Output(b"ready",b"",0)
+                        check(args[3:]==["cat","/proc/self/mountinfo"],"unexpected_post_mount_command")
+                        return module.Output(data,b"",0)
+                    return ordinary(argv,**kwargs)
+                def receipt(**values):
+                    if sink_fails and values.get("event")=="mount_validation_refused": raise OSError("synthetic_receipt_failure")
+                    run.receipts.append(values)
+                fake.run=adapter;run.directory=Path("synthetic-offline-receipt");run.receipt=receipt
+                output=io.StringIO()
+                with self.subTest(path=path,sink_fails=sink_fails), patch.object(module.secrets,"token_urlsafe",lambda n:"synthetic-only-not-a-credential"), patch("sys.stdout",new=output):
+                    self.assertEqual(run.execute(),1)
+                self.assertNotIn(canary,json.dumps(run.receipts)+output.getvalue())
+                if path not in module.MOUNT_DIAGNOSTIC_PATHS: self.assertNotIn(path,json.dumps(run.receipts)+output.getvalue())
+                self.assertFalse(fake.resources)
+                self.assertTrue(any(r.get("event")=="final" and r.get("cleanup")=="confirmed" for r in run.receipts))
+                self.assertFalse(any(r.get("event")=="postgres_observations" for r in run.receipts))
+                if not sink_fails:
+                    diagnostic=next(r for r in run.receipts if r.get("event")=="mount_validation_refused")
+                    self.assertEqual(diagnostic["detail"]["mount_point"],path if path in module.MOUNT_DIAGNOSTIC_PATHS else "<redacted>")
+                    self.assertEqual(diagnostic["mountinfo_bytes"],len(data))
+                    self.assertEqual(diagnostic["mountinfo_sha256"],hashlib.sha256(data).hexdigest())
+                    self.assertLess(len(json.dumps(diagnostic).encode()),1024)
+                    self.assertNotIn(data.decode(),json.dumps(diagnostic))
+                    self.assertTrue(any(r.get("event")=="run_failed" and r.get("code")=="tmpfs_bound_mismatch" for r in run.receipts))
+
+        def test_80_mount_path_disclosure_uses_exact_allowlist_and_hashes_every_other_token(self):
+            canary="SYNTHETIC-CREDENTIAL-CANARY-123"
+            expected=frozenset({"/var/lib/postgresql/data","/tmp","/var/run/postgresql","/run/postgresql","/dev/shm","/dev"})
+            self.assertEqual(module.MOUNT_DIAGNOSTIC_PATHS,expected)
+            unknown=("/unexpected/"+canary,"/tmp/"+canary,"/var/run/postgresql/"+canary,"/run/postgresql/"+canary,
+                     "/proc/"+canary,"/TMP","/tmp/","//tmp","/tmp/..","/tmp/.","/var//run/postgresql",
+                     "/var/run/./postgresql","/run/postgresql/","/dev//",
+                     "/tmp"+chr(92)+"057"+canary,"/tmp"+chr(92)+"040"+canary,"%2Ftmp/"+canary)
+            for path in (*sorted(expected),*unknown):
+                data=mountinfo()+f"1 0 0:0 / {path} rw - tmpfs tmpfs rw,size=536870912\n".encode()
+                with self.subTest(path=path), self.assertRaises(module.TmpfsBoundRefusal) as raised:
+                    module.validate_mountinfo(data)
+                detail=raised.exception.detail
+                self.assertEqual(detail["mount_point_sha256"],hashlib.sha256(path.encode("ascii")).hexdigest())
+                self.assertEqual(str(raised.exception),"tmpfs_bound_mismatch")
+                if path in expected: self.assertEqual(detail["mount_point"],path)
+                else:
+                    self.assertEqual(detail["mount_point"],"<redacted>")
+                    self.assertNotIn(path,json.dumps(detail))
+                    self.assertNotIn(canary,json.dumps(detail))
+
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(OfflineChecks)
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     print(json.dumps({"offline_only": True, "tests": result.testsRun, "failures": len(result.failures),
