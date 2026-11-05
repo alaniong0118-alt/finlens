@@ -444,7 +444,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     <div aria-live="polite" aria-busy={answerLoading}>
       {answerLoading && <p className="loading-state">Checking stored financial observations…</p>}
       {answerError && <p className="notice">Direct financial answer unavailable: {answerError} {(retrievalScope === "company" ? companyEvidenceReady : filing) && "SEC evidence research continues independently."}</p>}
-      {searchedVersion === version && answer?.matched && <DirectResearchAnswer answer={answer} />}
+      {searchedVersion === version && answer?.matched && <DirectResearchAnswer answer={answer} companyCik={company.cik} />}
       {searchedVersion === version && answer?.status === "company_mismatch" && <p className="notice">{answer.explanation}</p>}
       {searchedVersion === version && answer?.status === "not_matched" && <p className="muted small">This question is outside supported direct financial answers.{(retrievalScope === "company" ? companyEvidenceReady : filing) && " SEC evidence research continues independently."}</p>}
     </div>

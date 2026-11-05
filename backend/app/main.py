@@ -50,7 +50,7 @@ from app.answer_service import (
 from app.models import Company, FinancialFact, FilingChunk
 from app.financial_metrics_service import load_financial_metrics, UnknownCompany, UnknownMetric
 from app.financial_metric_schemas import AnnualFinancialComparison, NormalizedFinancialSummary, NormalizedMetricHistory, PeriodKind
-from app.research_answer_service import ResearchAnswer, ResearchAnswerRequest, answer_research_question
+from app.research_answer_service import MultiResearchAnswer, ResearchAnswer, ResearchAnswerRequest, answer_research_question
 from app.freshness_service import (
     freshness, read_session, request_scope, require_published, schema_ready,
     research_chunks, stored_research_text, validate_chunks, validate_research_input,
@@ -350,7 +350,7 @@ def get_companies() -> list[CompanyResponse]:
         ]
 
 
-@app.post("/companies/{ticker}/research-answer", response_model=ResearchAnswer)
+@app.post("/companies/{ticker}/research-answer", response_model=MultiResearchAnswer | ResearchAnswer)
 def deterministic_research_answer(ticker: str, request: ResearchAnswerRequest):
     validate_research_input(request.question)
     with read_session(HttpSessionLocal) as session:

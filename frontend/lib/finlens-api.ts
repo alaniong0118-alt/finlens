@@ -720,7 +720,7 @@ export type FinancialPeriod = {
   fiscal_year: number | null; fiscal_period: string | null; fiscal_label_basis: string;
 };
 export type FactProvenance = {
-  fact_id: number; original_concept: string; value: string; unit: string;
+  fact_id: number; canonical_metric?: string; original_concept: string; value: string; unit: string;
   period_start: string | null; period_end: string; form: string; filed: string;
   accession_number: string; sec_url: string; company_cik: string;
   source_fiscal_year: number | null; source_fiscal_period: string | null;
@@ -782,7 +782,10 @@ export type ResearchAnswer = {
   formatted_value: string | null; answer_text: string | null; explanation: string | null;
   observation: NormalizedMetric | null; comparability: MetricHistory["comparability"] | null;
   selection_policy: string;
-  answer_kind: "latest_metric" | "historical_metric" | "period_comparison";
+  answer_kind: "latest_metric" | "historical_metric" | "period_comparison" | "multi_metric";
+  company_cik?: string;
+  metrics?: ResearchAnswer[];
+  window_status?: "incompatible" | "unverified";
   requested_period: FiscalPeriodRequest | null;
   comparison: MetricComparison | null;
   formatted_absolute_change: string | null; formatted_percentage_change: string | null;

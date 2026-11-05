@@ -132,6 +132,43 @@ class ResearchAnswer(BaseModel):
     formatted_percentage_change: str | None = None
 
 
+class MultiResearchAnswer(ResearchAnswer):
+    # Separate model leaves the existing single-answer JSON shape untouched.
+    answer_kind: Literal["multi_metric"] = "multi_metric"
+    company_cik: str
+    metrics: list[ResearchAnswer] = Field(min_length=2, max_length=3)
+    window_status: Literal["incompatible", "unverified"] = "unverified"
+
+
+# Closed vocabulary and whole-utterance grammar. No inference of comparisons,
+# growth, calendar periods, companies, or qualifiers is permitted here.
+MULTI_METRICS = {
+    "revenue": "revenue", "gross profit": "gross_profit",
+    "operating income": "operating_income", "net income": "net_income",
+    "total assets": "total_assets", "total liabilities": "total_liabilities",
+    "operating cash flow": "operating_cash_flow", "diluted eps": "diluted_eps",
+}
+_MULTI_TERM = "|".join(re.escape(x) for x in sorted(MULTI_METRICS, key=len, reverse=True))
+MULTI_QUESTION = re.compile(
+    rf"\s*(?:what (?:were|are) )?(?P<a>{_MULTI_TERM})(?:, (?P<b>{_MULTI_TERM}),? and | and )"
+    rf"(?P<c>{_MULTI_TERM}) for (?:fy\s*|fiscal year )(?P<year>(?:19|20)[0-9]{{2}})\??\s*",
+    re.IGNORECASE | re.ASCII,
+)
+
+
+def recognize_multi_metric(question):
+    if not supported_question_text(question):
+        return None
+    match = MULTI_QUESTION.fullmatch(question)
+    if match is None:
+        return None
+    names = [MULTI_METRICS[match[name].lower()] for name in ("a", "b", "c") if match[name]]
+    if len(names) != len(set(names)):
+        return None
+    period = FiscalPeriodRequest(fiscal_year=int(match["year"]))
+    return tuple(bind_operation(name, (period,), MathematicalIntent("value")) for name in names)
+
+
 def words(text):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", text.lower())).strip()
 
@@ -528,6 +565,26 @@ def answer_research_question(session, ticker, question):
     selected = next((company for company in companies if company.ticker == ticker.upper()), None)
     if selected is None:
         raise UnknownCompany(ticker)
+    operations = recognize_multi_metric(question)
+    if operations is not None:
+        if not all(operation_agrees(operation) for operation in operations):
+            return ResearchAnswer(ticker=selected.ticker, company_name=selected.name, question=question,
+                                  matched=False, status="not_matched", explanation="Unsupported financial operation.")
+        facts = list(session.scalars(select(FinancialFact).where(FinancialFact.company_cik == selected.cik).order_by(FinancialFact.id)))
+        service = FinancialMetrics(selected, facts)
+        items = [resolve_historical_answer(service, question, operation) for operation in operations]
+        periods = [item.observation.period for item in items
+                   if item.observation and item.status == "available" and item.observation.period]
+        ends = {period.end for period in periods}
+        starts = {period.start for period in periods if period.kind != "instant" and period.start is not None}
+        window_status = "incompatible" if len(ends) > 1 or len(starts) > 1 else "unverified"
+        status = ("available" if any(item.status == "available" for item in items)
+                  else "not_applicable" if all(item.status == "not_applicable" for item in items)
+                  else "unavailable")
+        return MultiResearchAnswer(ticker=selected.ticker, company_name=selected.name,
+                                   question=question, matched=True, status=status, company_cik=selected.cik,
+                                   period_intent="annual", requested_period=operations[0].periods[0],
+                                   answer_text="Each metric has its own availability and sources.", metrics=items, window_status=window_status)
     operation, rejection = recognize_operation(question, selected, companies)
     if rejection or not operation_agrees(operation):
         return ResearchAnswer(ticker=selected.ticker, company_name=selected.name, question=question,
