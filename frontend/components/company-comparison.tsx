@@ -5,6 +5,7 @@ import { describeApiError, FinLensApiError, getAnnualFinancials, getFreshness, v
 import { COMPARISON_METRICS, comparisonYears, metricComparability, reportingWindowsDiffer, validCompanySelection, validateAnnualResponse } from "@/lib/company-comparison";
 import { formatMetric, METRIC_LABELS, periodLabel } from "@/lib/research";
 import { MetricProvenance } from "@/components/financial-research";
+import CompanyComparisonChart from "@/components/company-comparison-chart";
 import { serializeResearchNote } from "@/lib/research-note";
 
 type CompanyScope = { company: Company; version: number | null; years: number[]; error?: string };
@@ -271,6 +272,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
       {reportingWindowsDiffer(results) && <p className="notice" role="note">Reporting windows differ. These fiscal-year labels represent different accounting date ranges; compare them with care.</p>}
       {results.some(r => r.period === null) && <p className="notice" role="note">A requested annual window is missing or ambiguous for at least one company. No other reporting period has been substituted.</p>}
       {bases.size > 1 && <p className="notice" role="note">Revenue economic bases differ. Cross-company equivalence has not been established.</p>}
+      <CompanyComparisonChart key={requestKey} columns={columns} onShowAll={gapsOnly ? () => setCoverageFilter({ key: requestKey, gapsOnly: false }) : undefined} />
       <div className="comparison-actions">
         <label htmlFor="comparison-metric-view">Metric rows<select id="comparison-metric-view" value={gapsOnly ? "gaps" : "all"}
           aria-describedby="comparison-coverage-help comparison-coverage-count" onChange={event => setCoverageFilter({ key: requestKey, gapsOnly: event.target.value === "gaps" })}>

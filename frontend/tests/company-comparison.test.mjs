@@ -2,7 +2,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
@@ -26,6 +26,10 @@ before(async () => {
       jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true,
     } }).outputText;
     const localRequire = name => {
+      if (name.startsWith('./')) {
+        const base = fileURLToPath(new URL(name, pathToFileURL(path)));
+        return load(['.tsx', '.ts'].map(extension => base + extension).find(existsSync));
+      }
       if (!name.startsWith('@/')) return require(name);
       const base = fileURLToPath(new URL(`../${name.slice(2)}`, import.meta.url));
       return load(['.tsx', '.ts'].map(extension => base + extension).find(existsSync));
@@ -1404,4 +1408,15 @@ for (const change of ['year', 'company', 'refresh', 'cancel']) test(`coverage fi
   for (const ticker of tickers) await app.release(app.request(ticker, `financials/annual?fiscal_year=${year}`), response(ticker, year));
   assert.equal(app.host.querySelector('#comparison-metric-view').value, 'all');
   assert.equal(coverageRows(app).length, 11); assert.match(coverageCount(app).textContent, /^Showing 11 of 11/);
+});
+
+test('REVIEW chart restores hidden metric evidence without requesting data', async ctx => {
+ const app=await focusTable(ctx); const requests=app.requests.length;
+ await app.change('#comparison-metric-view','gaps'); assert.equal(coverageRows(app).length,4);
+ const details=[...app.host.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Visualize a metric (optional)'); assert.ok(details);
+ const select=details.querySelector('select'); await act(async()=>{select.value='revenue';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ assert.ok(details.querySelector('svg')); assert.match(details.textContent,/coverage-gap filter may hide/);
+ const button=[...details.querySelectorAll('button')].find(b=>b.textContent==='Show all metric rows and sources');assert.ok(button);
+ await act(async()=>button.click());assert.equal(coverageRows(app).length,11);assert.equal(app.host.querySelector('#comparison-metric-view').value,'all');
+ assert.ok([...coverageRows(app)].some(row=>row.textContent.includes('Revenue') && row.querySelector('details')));assert.equal(app.requests.length,requests);
 });
