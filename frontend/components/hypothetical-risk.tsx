@@ -3,6 +3,8 @@
 import {useEffect, useRef, useState} from "react";
 import {HypotheticalReplay} from "./hypothetical-replay";
 import {formInputs, requestRisk, type RiskReceipt} from "../lib/hypothetical-risk";
+import {requestStatistics, type StatisticsReceipt} from "../lib/hypothetical-panel-statistics";
+import {HypotheticalPanelStatistics} from "./hypothetical-panel-statistics";
 
 const unavailable: Record<string, string> = {insufficient_scenarios: "fewer than two complete scenarios", insufficient_tail_mass: "less than one observation of tail mass", portfolio_value_not_declared: "no declared portfolio value", nonpositive_portfolio_value: "declared portfolio value is not positive"};
 const inputStyle = {width: "100%", minWidth: 0, font: "inherit", padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--text)", minHeight: 44};
@@ -11,6 +13,7 @@ export function HypotheticalRisk() {
   const form = useRef<HTMLFormElement | null>(null);
   const [revision, setRevision] = useState(0);
   const [receipt, setReceipt] = useState<RiskReceipt | null>(null);
+  const [statistics, setStatistics] = useState<StatisticsReceipt | null>(null);
   const [status, setStatus] = useState("Enter your hypothetical inputs to calculate.");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,21 +24,23 @@ export function HypotheticalRisk() {
     if (timer.current) clearTimeout(timer.current); timer.current = null;
   }
   useEffect(() => () => { generation.current++; controller.current?.abort(); if (timer.current) clearTimeout(timer.current); }, []);
-  function cancel() { invalidate(); setBusy(false); setReceipt(null); setError(null); setStatus("Calculation cancelled. Submit explicitly to retry."); }
-  function edit() {invalidate(); setReceipt(null); setError(null); setBusy(false); setStatus("Inputs changed. Calculate again to view a current result.");}
+  function cancel() { invalidate(); setBusy(false); setReceipt(null); setStatistics(null); setError(null); setStatus("Calculation cancelled. Submit explicitly to retry."); }
+  function edit() {invalidate(); setReceipt(null); setStatistics(null); setError(null); setBusy(false); setStatus("Inputs changed. Calculate again to view a current result.");}
   async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); invalidate(); setReceipt(null); setError(null); setBusy(false);
+    event.preventDefault(); invalidate(); setReceipt(null); setStatistics(null); setError(null); setBusy(false);
+    const assetStatistics = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "statistics";
     try {
       const inputs = formInputs(event.currentTarget), id = generation.current;
-      const active = new AbortController(); controller.current = active; setBusy(true); setStatus("Calculating hypothetical sample losses…");
+      const active = new AbortController(); controller.current = active; setBusy(true); setStatus(assetStatistics ? "Calculating hypothetical asset statistics…" : "Calculating hypothetical sample losses…");
       timer.current = setTimeout(() => {
         if (id !== generation.current) return;
         invalidate(); setBusy(false); setError("Calculation timed out. Submit explicitly to retry."); setStatus("");
       }, 10000);
       try {
-        const result = await requestRisk(inputs, active.signal);
+        const result = assetStatistics ? await requestStatistics(inputs, active.signal) : await requestRisk(inputs, active.signal);
         if (id !== generation.current || active.signal.aborted) return;
-        setReceipt(result); setStatus("Hypothetical calculation complete. Review sample limitations and the audit.");
+        if (assetStatistics) setStatistics(result as StatisticsReceipt); else setReceipt(result as RiskReceipt);
+        setStatus("Hypothetical calculation complete. Review sample limitations and the audit.");
       } catch (reason) {
         if (id !== generation.current || active.signal.aborted) return;
         setError(reason instanceof Error ? reason.message : "Calculation failed. Retry explicitly."); setStatus("");
@@ -53,7 +58,7 @@ export function HypotheticalRisk() {
       <p>Enter chronological intervals with each end equal to the next start and exactly one positive gross factor per asset. A factor of 1 means unchanged. Calendar completeness and economic inputs are unverified. No missing observation is dropped, filled or bridged. Dates describe supplied intervals, not verified trading sessions.</p>
       <p>Maximum 8 assets, 120 intervals, horizon 1–20 supplied intervals. Exact ordinary decimal strings: at most 24 digits, 12 fractional places; no exponent notation. Request 128 KiB; response 1 MiB. One calculation per backend process. No fees, financing or rebalancing. Cancellation stops display and transport; bounded server work may finish.</p>
     </section>
-    <form ref={form} className="panel" style={{marginTop: 20}} onSubmit={submit} onInput={edit} onChange={edit}>
+    <form ref={form} className="panel" style={{marginTop: 20}} aria-busy={busy} onSubmit={submit} onInput={edit} onChange={edit}>
       <h2>Hypothetical inputs</h2>
       <div className="comparison-values">
         <label>Reporting currency<input style={inputStyle} className="block" name="currency" required defaultValue="USD" maxLength={3} pattern="[A-Z]{3}" /></label>
@@ -66,10 +71,12 @@ export function HypotheticalRisk() {
       <textarea id="risk-exposures" name="exposures" required rows={4} maxLength={1200} aria-describedby="exposure-help" spellCheck={false} />
       <label htmlFor="risk-sessions" style={{marginTop: 16}}>Exact gross-return factors</label><p id="session-help" className="small muted">One line per interval: interval_id YYYY-MM-DD YYYY-MM-DD factor_for_first_asset factor_for_second_asset … Use the exposure order above. Empty inventory is allowed and returns insufficient scenarios.</p>
       <textarea id="risk-sessions" name="sessions" rows={8} maxLength={50000} aria-describedby="session-help" spellCheck={false} />
-      <div className="risk-comparison-actions"><button className="primary-button" type="submit">{busy ? "Restart calculation" : "Calculate hypothetical risk"}</button><button className="secondary-button" style={{marginTop: 0}} type="button" onClick={cancel} disabled={!busy}>Cancel calculation</button></div>
+      <p id="asset-statistics-help">Asset statistics use every supplied interval without exposure weighting or annualization. Their separate results are not included in v1 Risk Lab receipt replay.</p>
+      <div className="risk-comparison-actions"><button className="primary-button" type="submit">{busy ? "Restart calculation" : "Calculate hypothetical risk"}</button><button className="secondary-button" style={{marginTop:0}} type="submit" name="calculation" value="statistics" aria-describedby="asset-statistics-help">Calculate asset statistics</button><button className="secondary-button" style={{marginTop: 0}} type="button" onClick={cancel} disabled={!busy}>Cancel calculation</button></div>
     </form>
     <HypotheticalReplay method="risk" receipt={receipt} busy={busy} form={form} generation={generation} revision={revision} restored={()=>{edit();setStatus("Imported hypothetical assumptions. Review inputs and calculate explicitly for a fresh result.");}}/>
     <p role="status" aria-live="polite" style={{margin: "16px 0"}}>{status}</p>{error && <p role="alert">{error}</p>}
+    {statistics && <HypotheticalPanelStatistics receipt={statistics}/>}
     {r && <section className="panel" aria-labelledby="risk-result"><h2 id="risk-result">Hypothetical sample results</h2>
       <p>{r.scenario_count} scenarios · horizon {r.horizon} supplied intervals · confidence {receipt.inputs.confidence} · {r.reporting_currency}</p>
       <p>{r.overlapping ? `Overlapping windows share ${r.horizon - 1} intervals with adjacent chronological windows. They are not independent observations.` : "No overlapping scenario windows."} These computational minima do not establish statistical adequacy or future coverage.</p>

@@ -82,7 +82,7 @@ def encode(value):
     return value
 
 
-def calculate_request(value):
+def parse_inputs(value):
     record(value, ("reporting_currency", "exposure_date", "exposures", "sessions", "confidence", "horizon", "portfolio_value"))
     currency = value["reporting_currency"]
     require(type(currency) is str and re.fullmatch(r"[A-Z]{3}", currency), "invalid_reporting_currency")
@@ -99,11 +99,15 @@ def calculate_request(value):
         require(type(item["factors"]) is dict and len(item["factors"]) <= MAX_ASSETS, "incomplete_factor_panel")
         factors = tuple(AssetFactor(token(asset), number(factor)) for asset, factor in item["factors"].items())
         sessions.append(FactorSession(token(item["session_id"]), day(item["start"]), day(item["end"]), factors))
-    result = calculate_historical_risk(exposures=tuple(exposures), reporting_currency=currency,
+    return dict(exposures=tuple(exposures), reporting_currency=currency,
         exposure_date=day(value["exposure_date"]),
         panel=ExactFactorPanel("user-hypothetical", "user-entered-exact-gross-factors-v1", tuple(sessions)),
         horizon=value["horizon"], confidence=number(value["confidence"]),
         portfolio_value=None if value["portfolio_value"] is None else number(value["portfolio_value"]))
+
+
+def calculate_request(value):
+    result = calculate_historical_risk(**parse_inputs(value))
     return {"schema_id": SCHEMA_ID, "inputs": value, "result": encode(result)}
 
 

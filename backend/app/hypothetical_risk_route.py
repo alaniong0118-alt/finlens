@@ -99,3 +99,9 @@ async def hypothetical_risk(request: Request):
 async def hypothetical_stress(request: Request):
     from app.hypothetical_stress import response_bytes as stress_response_bytes
     return await _hypothetical_response(request, stress_response_bytes)
+
+
+@router.post("/hypothetical-panel-statistics", include_in_schema=False)
+async def hypothetical_panel_statistics(request: Request):
+    from app.hypothetical_panel_statistics import response_bytes as statistics_response_bytes
+    return await _hypothetical_response(request, statistics_response_bytes)

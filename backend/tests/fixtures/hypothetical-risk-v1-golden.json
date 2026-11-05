@@ -1,0 +1,3548 @@
+{
+  "schema": "frozen-hypothetical-risk-v1-golden-v1",
+  "baseline_commit": "b05f59d706b4e840ebcbebf34c796628000fe0eb",
+  "source_sha256": {
+    "backend/app/portfolio_risk.py": "0295126fe62d0538eb8dc37c84ce79a73eba23e6c2aea2b53b13e126d9c60c0e",
+    "backend/app/hypothetical_risk.py": "efd58894e8bb808e7cb3c3b271d69e7f5fc84b661431315d6717136e88811993"
+  },
+  "response_encoding": "UTF-8; JSON ensure_ascii=True, separators comma/colon; original input key order retained",
+  "case_count": 56,
+  "groups": {
+    "varied": 45,
+    "replay_export": 11
+  },
+  "cases": [
+    {
+      "group": "varied",
+      "name": "varied-00",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 1,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1716,
+      "response_sha256": "55c410764889b50af0fb34a834060b586530ece4bad215bba9c7fa598a668e81"
+    },
+    {
+      "group": "varied",
+      "name": "varied-01",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1781,
+      "response_sha256": "b67058eb1943f20b2357bf938d0138c7d66fc0269f4ce6ea73e120f56cecd8b9"
+    },
+    {
+      "group": "varied",
+      "name": "varied-02",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1776,
+      "response_sha256": "10a433d3dd042687e892089845751e1a8d987675b36d5731603533f8dcb8d0e3"
+    },
+    {
+      "group": "varied",
+      "name": "varied-03",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 2,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1720,
+      "response_sha256": "1d48cc3f1b7e0a1c7b2509b967d79e62fca7378e800dcff9bfe787a8b858c423"
+    },
+    {
+      "group": "varied",
+      "name": "varied-04",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 2,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1777,
+      "response_sha256": "00e4e96c5c3e042f99fd5c8aa69350bfbc78f39daf73e819754600670d6dc7e8"
+    },
+    {
+      "group": "varied",
+      "name": "varied-05",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 2,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1780,
+      "response_sha256": "8ee23aac0345902cfe9c6a1b0a93fef94d9bc49095dc38762087fc3fe7819f57"
+    },
+    {
+      "group": "varied",
+      "name": "varied-06",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 20,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1718,
+      "response_sha256": "6088a74db296d8deeb5bf3713dff64feb8b48f1eddb8a95e5f87df695cc8911d"
+    },
+    {
+      "group": "varied",
+      "name": "varied-07",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 20,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1783,
+      "response_sha256": "37ed485eeffee847898079791c0410a0bfe98fe6ab9a7be6d2e46c563a281068"
+    },
+    {
+      "group": "varied",
+      "name": "varied-08",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 20,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1778,
+      "response_sha256": "77e87f8f8f8ed9d8ee3d50aa1dc297273726e89daf547f8e0a87f471a8049957"
+    },
+    {
+      "group": "varied",
+      "name": "varied-09",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 1,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2340,
+      "response_sha256": "404e10bd551e5605e61df514f6b0406068f82afddc5685cebd9de0899d4f1cdc"
+    },
+    {
+      "group": "varied",
+      "name": "varied-10",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2376,
+      "response_sha256": "36abf489eba6019ea3db08b557d1be0d8a9768d4c4dbb6d27cc8bf5c54e2e04f"
+    },
+    {
+      "group": "varied",
+      "name": "varied-11",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2401,
+      "response_sha256": "914af0ab88c3c7311b2e2391301a74f7377ce003bc46b0e000d94dd4d4ebb490"
+    },
+    {
+      "group": "varied",
+      "name": "varied-12",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 2,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2142,
+      "response_sha256": "4c7d61079372f001a5592f3edb7f1487dcc462d6c1300340b7369ff508184242"
+    },
+    {
+      "group": "varied",
+      "name": "varied-13",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 2,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2207,
+      "response_sha256": "f001241a2fec2a6d7f1d965a3ff809d0cd45867df2de80c9f6f01cd43c803b95"
+    },
+    {
+      "group": "varied",
+      "name": "varied-14",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 2,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2202,
+      "response_sha256": "47145ad6fbced494409bf12f67b7e6ce3aa82c44d79a2fd3a45c16dce38263a1"
+    },
+    {
+      "group": "varied",
+      "name": "varied-15",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 20,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2148,
+      "response_sha256": "d3ee84ba1ca191a07a7b1020e8ec1bb19d69bf289fc117018afba1361a2a0fcc"
+    },
+    {
+      "group": "varied",
+      "name": "varied-16",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 20,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2205,
+      "response_sha256": "78cf49c7d4951611fbb87df5c9b12d3ca49b4f644d150aedfa4cc8f2ee9f82d8"
+    },
+    {
+      "group": "varied",
+      "name": "varied-17",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 20,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2208,
+      "response_sha256": "6ad9c37089990237dd1ce376b37798d952df6f67e2ec2bd3466aee1747df98af"
+    },
+    {
+      "group": "varied",
+      "name": "varied-18",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 1,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 3134,
+      "response_sha256": "b2bf9b76d40fe29cd7b286de7eb9dec5c016b48e0896e7c345c2acb1864d87d8"
+    },
+    {
+      "group": "varied",
+      "name": "varied-19",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 3086,
+      "response_sha256": "c1f3a35eb1833dcfa606e2e646f37fdcd48f34da3f1f805c91743fd794becb21"
+    },
+    {
+      "group": "varied",
+      "name": "varied-20",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 3067,
+      "response_sha256": "84d44d636850be9f7c6d3028719c7217ee60ab1eb996e54443ac168f541ac8af"
+    },
+    {
+      "group": "varied",
+      "name": "varied-21",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 2,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2792,
+      "response_sha256": "a76fce4eddfc25ec066b205c109879ae423947aa9a95bbff2264f977820aacc7"
+    },
+    {
+      "group": "varied",
+      "name": "varied-22",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 2,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2807,
+      "response_sha256": "d71daadb299bdcf36247e61da2357ca7d36d5375f20b9e93b9651fa644fc4099"
+    },
+    {
+      "group": "varied",
+      "name": "varied-23",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 2,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2853,
+      "response_sha256": "263cf1f9303057c3217a4d14db2bd88638d5616270972bf6348955916a926d43"
+    },
+    {
+      "group": "varied",
+      "name": "varied-24",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 20,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2572,
+      "response_sha256": "4dc0ea1f2235e8de472cdc0dab1890cc8be6ee138bda3118cb1ed27e2bf31a49"
+    },
+    {
+      "group": "varied",
+      "name": "varied-25",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 20,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2637,
+      "response_sha256": "00cc577c2961651a57ea8a016e5a74c8d68212892f497c7e187dee6f41d64812"
+    },
+    {
+      "group": "varied",
+      "name": "varied-26",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 20,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2632,
+      "response_sha256": "8e80310a2d9796bd46e40e2e09db1c8500f2f4210ceaabf25a58d2aa4468034e"
+    },
+    {
+      "group": "varied",
+      "name": "varied-27",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 1,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 5244,
+      "response_sha256": "7ef8e93d1d37fac79c2e43c17f1fd30ade097c11e1c0f59957846421da47f100"
+    },
+    {
+      "group": "varied",
+      "name": "varied-28",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 5180,
+      "response_sha256": "982a9991dbb610fdda2fb769cc1375af0731660fe2d6450071b7a08ce80b586e"
+    },
+    {
+      "group": "varied",
+      "name": "varied-29",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 4994,
+      "response_sha256": "c4601b543720b1f9d71dbc0f69817bd1b5aae55ccb7b23bcbb21893ba0addac7"
+    },
+    {
+      "group": "varied",
+      "name": "varied-30",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 2,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 4895,
+      "response_sha256": "3b7d29c0a6293d5e7bb9db0dae296eaba43f5720107c8819e60efa5138f7ccce"
+    },
+    {
+      "group": "varied",
+      "name": "varied-31",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 2,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 4868,
+      "response_sha256": "49b62342293edc9b3297894537a6029c0b878b7e133f85e32f38e7f03d3ecce6"
+    },
+    {
+      "group": "varied",
+      "name": "varied-32",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 2,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 4701,
+      "response_sha256": "996e57ccd9c46a89962c05667067bcac7c8fba3a1b408e13bcb3bf5f14c29313"
+    },
+    {
+      "group": "varied",
+      "name": "varied-33",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 20,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 3857,
+      "response_sha256": "35310a4d06a987750d505b38418855eb952891ce621dcfc2ba7ecad8e1111342"
+    },
+    {
+      "group": "varied",
+      "name": "varied-34",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 20,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 3914,
+      "response_sha256": "b4368943520f3a223e085c9f663a08dc0e5dc3c1c4cc8a9021f9d25a944fa48e"
+    },
+    {
+      "group": "varied",
+      "name": "varied-35",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 20,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 3917,
+      "response_sha256": "a45ca949a1533b673887d47e40951af79ee34b5dbfe0032a7d8d2b99bfba7791"
+    },
+    {
+      "group": "varied",
+      "name": "varied-36",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 1,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 8443,
+      "response_sha256": "705d89ae03f4d20f86ef8c05cc238ae9ab97a982c517e30399f9d243e4902281"
+    },
+    {
+      "group": "varied",
+      "name": "varied-37",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 8743,
+      "response_sha256": "d6bbc7b3646b6a2f61739c49e0cbe1f6b6688637b4098539c516e94137fe7774"
+    },
+    {
+      "group": "varied",
+      "name": "varied-38",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 7867,
+      "response_sha256": "9b6b9be11d8c9743cf289a1c1bf8f3f3f1d2db20c13afcd0489ce0e6307ac557"
+    },
+    {
+      "group": "varied",
+      "name": "varied-39",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 2,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 8701,
+      "response_sha256": "4f4482c201be85268105be04dfe47711ca1f92dd2131f4e54df5f7fc4455434d"
+    },
+    {
+      "group": "varied",
+      "name": "varied-40",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 2,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 8291,
+      "response_sha256": "1019ef906d46825f2b6abb86fe02652d9351896af54103c4cc6dfc663d8d5d3b"
+    },
+    {
+      "group": "varied",
+      "name": "varied-41",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 2,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 8186,
+      "response_sha256": "79247a2ef2c51189f364b72711aba0d7378e7fcc5cf61efea0794643cccc04f9"
+    },
+    {
+      "group": "varied",
+      "name": "varied-42",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 20,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 5992,
+      "response_sha256": "7f97ad3314fe027e12578e0e2cb6ccd85329e4d2e033a6568f375e92da290c8c"
+    },
+    {
+      "group": "varied",
+      "name": "varied-43",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 20,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "-25"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6057,
+      "response_sha256": "cdb8da189c698541865ac9fb731102ba485c54c84b795df6fdeebf260636c4dc"
+    },
+    {
+      "group": "varied",
+      "name": "varied-44",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 20,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          },
+          {
+            "asset_id": "zero-short",
+            "amount": "0"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96",
+              "zero-short": "1.000000000001"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9",
+              "zero-short": "1.000000000001"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6052,
+      "response_sha256": "214eaf2dedd260840fc4908eb8e7f19ddd287083163d1b939c3aeb316b246ce8"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-00",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6787,
+      "response_sha256": "db825a7eca59c8e2c90e04c80d3514b02dc9fe36801932c0a6bb3738daa1e74d"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-01",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.85",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6790,
+      "response_sha256": "92aedcfc2a9d0e02d70a5362f908dd0f3a59df854e7ffdd8445e9448661dd304"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-02",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.95",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6067,
+      "response_sha256": "b781cfd24322a997268390ab7a139a23d8266eb5507daa9d8dfa6a9c07270180"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-03",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.5",
+        "horizon": 2,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6580,
+      "response_sha256": "9841fb91dadece05b867c535b88ad708d2e23c8ed80d8a212c33d0999a4c04d3"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-04",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": []
+      },
+      "response_bytes": 1613,
+      "response_sha256": "56e9b994541ab2a9b638564f7b2632907bbd621b923cb929e7dbdacde49c4a4d"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-05",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          }
+        ]
+      },
+      "response_bytes": 2048,
+      "response_sha256": "44bb8bf3a203f4152fd371fda908a25c4921c67c1dc505f99dfd61127064640c"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-06",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": null,
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6642,
+      "response_sha256": "75bd6b723e38122a427130d7cfc7a6dacca4d3eb2cbe6f40fff22d8a1f809d52"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-07",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "0",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6703,
+      "response_sha256": "762cfdfebccf85655e95a0e56d57af61aa66831d0a6ae09841695345040a9841"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-08",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "-10",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6709,
+      "response_sha256": "8683fd68d2ff743411e85e28762167570e75921a940696de960a2e7d82700969"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-09",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6787,
+      "response_sha256": "db825a7eca59c8e2c90e04c80d3514b02dc9fe36801932c0a6bb3738daa1e74d"
+    },
+    {
+      "group": "replay_export",
+      "name": "replay-10",
+      "inputs": {
+        "reporting_currency": "USD",
+        "exposure_date": "2026-02-01",
+        "confidence": "0.8",
+        "horizon": 1,
+        "portfolio_value": "100",
+        "exposures": [
+          {
+            "asset_id": "long",
+            "amount": "-100"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "s0",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "factors": {
+              "long": "1.04"
+            }
+          },
+          {
+            "session_id": "s1",
+            "start": "2026-01-02",
+            "end": "2026-01-03",
+            "factors": {
+              "long": "1.02"
+            }
+          },
+          {
+            "session_id": "s2",
+            "start": "2026-01-03",
+            "end": "2026-01-04",
+            "factors": {
+              "long": "1"
+            }
+          },
+          {
+            "session_id": "s3",
+            "start": "2026-01-04",
+            "end": "2026-01-05",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s4",
+            "start": "2026-01-05",
+            "end": "2026-01-06",
+            "factors": {
+              "long": "0.99"
+            }
+          },
+          {
+            "session_id": "s5",
+            "start": "2026-01-06",
+            "end": "2026-01-07",
+            "factors": {
+              "long": "0.98"
+            }
+          },
+          {
+            "session_id": "s6",
+            "start": "2026-01-07",
+            "end": "2026-01-08",
+            "factors": {
+              "long": "0.97"
+            }
+          },
+          {
+            "session_id": "s7",
+            "start": "2026-01-08",
+            "end": "2026-01-09",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s8",
+            "start": "2026-01-09",
+            "end": "2026-01-10",
+            "factors": {
+              "long": "0.96"
+            }
+          },
+          {
+            "session_id": "s9",
+            "start": "2026-01-10",
+            "end": "2026-01-11",
+            "factors": {
+              "long": "0.9"
+            }
+          }
+        ]
+      },
+      "response_bytes": 6802,
+      "response_sha256": "efaa57787f951d40cf7e3d6b0f54b7a6cb6eb97b192eb5068c0d58ef18018094"
+    }
+  ]
+}

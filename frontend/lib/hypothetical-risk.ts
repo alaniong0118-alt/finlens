@@ -128,10 +128,10 @@ export function formInputs(form: HTMLFormElement): RiskInputs {
 export async function requestRisk(inputs: RiskInputs, signal: AbortSignal): Promise<RiskReceipt> {
   return requestHypothetical("hypothetical-risk", inputs, signal, validateReceipt);
 }
-export async function requestHypothetical<I, R>(endpoint: "hypothetical-risk" | "hypothetical-stress", inputs: I, signal: AbortSignal,
+export async function requestHypothetical<I, R>(endpoint: "hypothetical-risk" | "hypothetical-stress" | "hypothetical-panel-statistics", inputs: I, signal: AbortSignal,
   validate: (value: unknown, inputs: I) => R,
   rejectedMessage = "Calculation rejected. Check exact decimal strings, dates, complete factors and the stated limits, then retry."): Promise<R> {
-  check(endpoint === "hypothetical-risk" || endpoint === "hypothetical-stress");
+  check(endpoint === "hypothetical-risk" || endpoint === "hypothetical-stress" || endpoint === "hypothetical-panel-statistics");
   const body = JSON.stringify(inputs);
   if (new TextEncoder().encode(body).length > 131072) throw new Error("Inputs exceed the request limit.");
   const response = await fetch(`/api/finlens/${endpoint}`, {method: "POST", headers: {"Content-Type": "application/json"}, body, signal, cache: "no-store"});
