@@ -222,3 +222,15 @@ footer { margin:32px 0 5px; border-top:1px solid var(--border); padding-top:18px
 .dual-filing-columns { margin-top: 1rem; }
 
 .dual-filing-selection { margin-top: .4rem; }
+
+.filing-passage-comparison { margin-block: 1.25rem; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; min-width: 0; }
+.filing-passage-comparison form { display: grid; gap: .75rem; }
+.filing-passage-comparison .dual-filing-controls label { display: grid; gap: .35rem; min-width: 0; }
+.filing-passage-comparison select { width: 100%; min-width: 0; }
+.filing-passage-comparison form > button { justify-self: start; }
+.passage-comparison-side { min-width: 0; }
+.passage-alignment-text, .passage-original { white-space: pre-wrap; overflow-wrap: anywhere; }
+.passage-wording-a, .passage-wording-b { border-radius: .15rem; }
+.passage-wording-a { background: var(--surface); text-decoration: underline dotted; text-underline-offset: .2em; }
+.passage-wording-b { background: var(--surface); text-decoration: underline double; text-underline-offset: .2em; }
+.passage-wording-label { font-size: .8em; font-weight: 700; }

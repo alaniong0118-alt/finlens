@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useId, useRef, useState } from "react";
 import { FinLensApiError, getPassageTone, versionedController, type FilingToneResponse } from "@/lib/finlens-api";
 import { toneParts, type ToneIdentity } from "@/lib/filing-tone";
 import { useResearchVersion } from "@/components/research-freshness";
@@ -31,7 +31,9 @@ const unscorable = {
   all_matches_negated: "All matched terms were negated and excluded. No score is available.",
 };
 
-export default function PassageTone({ identity }: { identity: ToneIdentity | null }) {
+export type RegisterAnalysisCancellation = (cancel: () => void) => () => void;
+
+export default function PassageTone({ identity, registerAnalysisCancellation }: { identity: ToneIdentity | null; registerAnalysisCancellation?: RegisterAnalysisCancellation }) {
   const { version, changed } = useResearchVersion();
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -60,6 +62,11 @@ export default function PassageTone({ identity }: { identity: ToneIdentity | nul
   useEffect(() => {
     if (!open && returnFocus.current) { returnFocus.current = false; trigger.current?.focus(); }
   }, [open]);
+  useLayoutEffect(() => registerAnalysisCancellation?.(() => {
+    generation.current.value++; controller.current?.abort(); pending.current = false;
+    returnFocus.current = false;
+    setOpen(false); setLoading(false); setResult(null); setError(null); setVisibleMatches(20);
+  }), [registerAnalysisCancellation]);
 
   function close() {
     generation.current.value++; controller.current?.abort(); pending.current = false;

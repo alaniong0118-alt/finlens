@@ -89,7 +89,10 @@ def _build_context(ranked_chunks, query, limit, *, company_wide=False):
 
         # Indent every source line so the block-scalar boundary remains clear
         # even if the filing text contains bracketed source-like strings.
-        lines = chunk.text.split("\n") if company_wide else chunk.text.splitlines()
+        # LF is the framing separator, not a request to normalize source text.
+        # splitlines() would alter CRLF/Unicode separators and discard a final LF,
+        # making different stored excerpts appear to have identical wording.
+        lines = chunk.text.split("\n")
         indented_text = "\n".join(f"  {line}" for line in lines)
         headers = (
             f"chunk_id: {chunk.chunk_id}\n"

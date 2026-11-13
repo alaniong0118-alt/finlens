@@ -118,7 +118,7 @@ export function evidencePassages(result: EvidenceContext) {
     // Company metadata is one JSON line. Only fully indented body lines can be
     // displayed; filename/header text must never become a source's passage.
     const passages = new Map<string, string>();
-    const pattern = /^\[SOURCE (source_[1-9]\d*)\]\nmetadata: ([^\n]+)\ntext: \|-\n((?:  [^\n]*\n)*)\[END SOURCE \1\](?=\n|$)/gm;
+    const pattern = /(?:^|\n)\[SOURCE (source_[1-9]\d*)\]\nmetadata: ([^\n]+)\ntext: \|-\n((?:  [^\n]*\n)*)\[END SOURCE \1\](?=\n|$)/g;
     const identityKeys = ["company_cik", "accession_number", "filename", "chunk_id", "form", "filed", "start_char", "end_char"] as const;
     for (const match of result.context.matchAll(pattern)) {
       const citation = result.citations.find(item => item.citation_id === match[1]);
@@ -140,7 +140,9 @@ export function evidencePassages(result: EvidenceContext) {
     });
   }
   const blocks = new Map<string, string>();
-  const pattern = /^\[SOURCE (source_[1-9]\d*)\]\n[\s\S]*?^text: \|-\n([\s\S]*?)^\[END SOURCE \1\](?=\n|$)/gm;
+  // SOURCE framing uses LF only. JavaScript multiline anchors also recognize
+  // CR/U+2028/U+2029, which are literal body data, never source boundaries.
+  const pattern = /(?:^|\n)\[SOURCE (source_[1-9]\d*)\]\n(?:[^\n]*\n)*?text: \|-\n((?:  [^\n]*\n)*)\[END SOURCE \1\](?=\n|$)/g;
   for (const match of result.context.matchAll(pattern)) {
     if (!blocks.has(match[1])) blocks.set(match[1], match[2].replace(/\n$/, "").split("\n").map((line) => line.startsWith("  ") ? line.slice(2) : line).join("\n"));
   }

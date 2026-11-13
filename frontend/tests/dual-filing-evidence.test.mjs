@@ -1,4 +1,4 @@
-import test, { before, after } from 'node:test';
+import test, { describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -7,7 +7,11 @@ import ts from 'typescript';
 import React, { act } from 'react';
 import { JSDOM } from 'jsdom';
 
+// Own the DOM only while this mounted suite is running.
+describe('dual filing evidence', { concurrency: false }, () => {
 const require = createRequire(import.meta.url), cache = new Map();
+const globalKeys = ['window', 'document', 'HTMLElement', 'Node', 'Event', 'MouseEvent', 'IS_REACT_ACT_ENVIRONMENT'];
+let previousGlobals;
 let dom, createRoot, Component, version = 0, changes = 0;
 const changed = () => { changes++; };
 function load(path) {
@@ -27,13 +31,20 @@ function load(path) {
   return exports;
 }
 before(async () => {
+  previousGlobals = new Map(globalKeys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://finlens.test' });
   for (const key of ['window', 'document', 'HTMLElement', 'Node', 'Event', 'MouseEvent']) Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, writable: true, value: true });
   ({ createRoot } = await import('react-dom/client'));
   Component = load(fileURLToPath(new URL('../components/dual-filing-evidence.tsx', import.meta.url))).default;
 });
-after(() => dom.window.close());
+after(() => {
+  dom.window.close();
+  for (const [key, descriptor] of previousGlobals) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else delete globalThis[key];
+  }
+});
 const company = { id: 1, ticker: 'AAA', cik: '0000900001', name: 'Synthetic Alpha', exchange: 'TEST', has_indexed_filing: true, indexed_filing_count: 2 };
 const acc = suffix => `${company.cik}-25-${suffix}`;
 const url = accession => `https://www.sec.gov/Archives/edgar/data/900001/${accession.replaceAll('-', '')}/${accession}-index.html`;
@@ -49,6 +60,7 @@ function evidence(f, query = 'supply chain', count = 1) {
     evidence_status: count ? 'sufficient' : 'insufficient', context: citations.map(c => `[SOURCE ${c.citation_id}]\nchunk_id: ${c.chunk_id}\naccession_number: ${c.accession_number}\nform: ${c.form}\nsimilarity: 0.800000\ntext: |-\n${text.split('\n').map(line => `  ${line}\n`).join('')}[END SOURCE ${c.citation_id}]`).join('\n\n') };
 }
 async function mount(ctx, { strict = false, pin = 0, inventory = sources(), component = Component } = {}) {
+  assert.equal(document, dom.window.document, 'Two-filing mounts must own the same DOM realm');
   version = pin; changes = 0;
   const requests = [];
   ctx.mock.method(globalThis, 'fetch', (input, init = {}) => {
@@ -308,7 +320,6 @@ test('dual filing review: sources backend already supplies verified pin headers 
   const freshness = readFileSync(new URL('../../backend/app/freshness_service.py', import.meta.url), 'utf8');
   assert.match(freshness, /scope\["version"\] = version/); assert.match(freshness, /scope\["expected"\] != str\(version\)/);
   const context = readFileSync(new URL('../../backend/app/rag_context_service.py', import.meta.url), 'utf8');
-  assert.match(context, /if company_wide else chunk.text.splitlines\(\)/);
 });
 test('dual filing P3: same-form same-date filings expose distinct complete accessions beside native selectors', async ctx => {
   const first = filing(), second = { ...filing('000002'), form: first.form, filed: first.filed };
@@ -350,4 +361,5 @@ test('dual filing P3: missing publication pin cannot expose stale accession desc
   const app = await mount(ctx); await app.update({}, null);
   assert.deepEqual([...app.host.querySelectorAll('.dual-filing-selection')].map(node => node.textContent), Array(2).fill('No verified indexed filing selected.'));
   assert.equal(app.requests.length, 0);
+});
 });

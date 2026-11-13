@@ -4,6 +4,7 @@ import { getFilingContext, versionedController, FinLensApiError, type Company, t
 import { comparisonFilings, validateComparisonEvidence, type ComparisonFiling } from "@/lib/dual-filing-evidence";
 import { evidencePassages, formatDate } from "@/lib/research";
 import { useResearchVersion } from "@/components/research-freshness";
+import FilingPassageComparison from "@/components/filing-passage-comparison";
 
 type Column = { filing: ComparisonFiling; status: "pending" | "ready" | "error"; result?: FilingContext; message?: string };
 type Snapshot = { owner: string; generation: number; columns: Column[] };
@@ -83,6 +84,9 @@ export default function DualFilingEvidence({ company, sources }: { company: Comp
     </form>
     <div className="small" role="status" aria-live="polite">{pending ? "Searching both selected filings. Results settle independently." : visible ? "Filing searches settled. Inspect each source separately; no comparison conclusion is generated." : "Select two filings and submit a question. Edits clear both results; searches run only on submit."}</div>
     {visible && <><p className="small wrap-anywhere">{company.ticker} · CIK {company.cik} · Publication {version} · Question: “{query.trim()}”</p>
+      {visible.columns[0]?.status === "ready" && visible.columns[1]?.status === "ready"
+        && visible.columns[0].result && visible.columns[1].result
+        && <FilingPassageComparison key={visible.generation} results={[visible.columns[0].result, visible.columns[1].result]} />}
       <div className="dual-filing-columns">{visible.columns.map((column, index) => <section className="dual-filing-column" key={column.filing.accession_number} aria-labelledby={`${id}-filing-${index}`} aria-busy={column.status === "pending"}>
         <h4 id={`${id}-filing-${index}`}>Filing {index === 0 ? "A" : "B"} · {column.filing.form}</h4>
         <p className="small">Filed {formatDate(column.filing.filed)}</p><p className="small mono wrap-anywhere">Accession {column.filing.accession_number}</p>
