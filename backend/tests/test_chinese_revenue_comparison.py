@@ -98,6 +98,62 @@ class ChineseRevenueComparisons(unittest.TestCase):
         self.companies = [self.company, company("MSFT", 2)]
         self.facts = [fact(2022, "40", 1), fact(2024, "100", 2), fact(2025, "110", 3)]
 
+    def test_precision_preserves_nonzero_direct_values(self):
+        tiny = self.answer('FY2024 revenue', [fact(2024, '0.0001', 2)])
+        self.assertEqual(tiny['formatted_value'], '$0.0001')
+        self.assertIn('$0.0001', tiny['answer_text'])
+
+    def test_precision_distinguishes_comparison_endpoints(self):
+        values = [fact(2024, '1000000000000000000.0000', 1),
+                  fact(2025, '1000000000000000000.0001', 2)]
+        result = self.answer('compare FY2024 and FY2025 revenue', values)
+        self.assertEqual(result['comparison']['direction'], 'increase')
+        self.assertIn('$1,000,000,000,000,000,000', result['answer_text'])
+        self.assertIn('$1,000,000,000,000,000,000.0001', result['answer_text'])
+        self.assertNotEqual(result['formatted_percentage_change'], '+0.00%')
+        self.assertEqual([p['fact_id'] for p in result['comparison']['earlier']['provenance']], [1])
+        self.assertEqual([p['fact_id'] for p in result['comparison']['later']['provenance']], [2])
+
+    def test_precision_nonzero_ratio_and_share_values_are_not_zero(self):
+        self.assertEqual(answers.format_value(Decimal('0.00000001'), 'ratio'), '0.000001%')
+        self.assertEqual(answers.format_value(Decimal('-0.0001'), 'USD/share'), '-$0.0001 per share')
+        self.assertEqual(answers.format_value(Decimal('-0.00000001'), 'ratio'), '-0.000001%')
+        self.assertEqual(answers.format_value(Decimal('-0.0001'), 'USD'), '-$0.0001')
+        self.assertEqual(answers.format_value(Decimal('0'), 'USD'), '$0.00')
+        self.assertEqual(answers.format_value(Decimal('1000000000'), 'USD'), '$1.00B')
+
+    def test_precision_compact_scale_boundaries_preserve_distinct_values(self):
+        cases = [
+            ('999.9999', '1000.0001', '$999.9999', '$1,000.0001'),
+            ('999999.9999', '1000000.0001', '$999,999.9999', '$1,000,000.0001'),
+            ('999999999.9999', '1000000000.0001', '$999,999,999.9999', '$1,000,000,000.0001'),
+            ('999999999999.9999', '1000000000000.0001', '$999,999,999,999.9999', '$1,000,000,000,000.0001'),
+        ]
+        for low, high, shown_low, shown_high in cases:
+            for sign in (1, -1):
+                with self.subTest(boundary=low, sign=sign):
+                    earlier, later = ((low, high) if sign == 1 else ('-' + high, '-' + low))
+                    result = self.answer('compare FY2024 and FY2025 revenue',
+                        [fact(2024, earlier, 1), fact(2025, later, 2)])
+                    self.assertEqual(result['comparison']['direction'], 'increase')
+                    self.assertIn(shown_low, result['answer_text'])
+                    self.assertIn(shown_high, result['answer_text'])
+                    if sign < 0:
+                        self.assertIn('-' + shown_low, result['answer_text'])
+                        self.assertIn('-' + shown_high, result['answer_text'])
+                    self.assertEqual([p['fact_id'] for p in result['comparison']['earlier']['provenance']], [1])
+                    self.assertEqual([p['fact_id'] for p in result['comparison']['later']['provenance']], [2])
+
+    def test_precision_extreme_display_is_bounded(self):
+        for value in (Decimal('1e1000000'), Decimal('1e-1000000'),
+                      Decimal('1' * 100), Decimal('NaN'), Decimal('Infinity')):
+            with self.subTest(value=str(value)):
+                self.assertEqual(answers.format_value(value, 'USD'), '[value outside display bounds]')
+                self.assertEqual(answers.format_exact_value(value, 'ratio'), '[value outside display bounds]')
+        self.assertEqual(answers.format_value(Decimal('999.9999'), 'USD'), '$1,000.00')
+        self.assertEqual(answers.format_value(Decimal('1000.0001'), 'USD'), '$1.00K')
+
+
     def answer(self, question, facts=None):
         loader = RecordLoader(self.companies, self.facts if facts is None else facts)
         result = answers.answer_research_question(loader, "TEST", question)

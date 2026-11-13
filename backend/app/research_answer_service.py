@@ -486,11 +486,16 @@ def resolve_historical_answer(service, question, operation):
     change = comparison.absolute_change
     sign = "+" if change > 0 else ""
     if comparison.earlier.unit == "ratio":
-        result.formatted_absolute_change = f"{sign}{format_value(change, 'ratio')[:-1]} percentage points"
+        formatted_change = format_value(change, 'ratio')
+        result.formatted_absolute_change = (f"{sign}{formatted_change[:-1]} percentage points"
+                                            if formatted_change.endswith('%') else formatted_change)
     else:
-        result.formatted_absolute_change = sign + format_value(change, comparison.earlier.unit)
+        formatted_change = format_value(change, comparison.earlier.unit)
+        result.formatted_absolute_change = formatted_change if formatted_change == _DISPLAY_UNAVAILABLE else sign + formatted_change
     if comparison.percentage_status == "available":
-        result.formatted_percentage_change = ("+" if comparison.percentage_change > 0 else "") + format_value(comparison.percentage_change, "ratio")
+        formatted_change = format_value(comparison.percentage_change, "ratio")
+        result.formatted_percentage_change = (formatted_change if formatted_change == _DISPLAY_UNAVAILABLE else
+                                              ("+" if comparison.percentage_change > 0 else "") + formatted_change)
     result.formatted_value = result.formatted_percentage_change or result.formatted_absolute_change
     action = {"increase": "increased", "decrease": "decreased", "no_change": "was unchanged"}[comparison.direction]
     detail = f" ({result.formatted_percentage_change})" if result.formatted_percentage_change else ""
@@ -499,8 +504,19 @@ def resolve_historical_answer(service, question, operation):
         asked = "increase" if re.search(r"\bincrease\b", words(question)) else "decrease" if re.search(r"\bdecrease\b", words(question)) else None
         if asked:
             prefix = "Yes. " if comparison.direction == asked else "No. "
-    result.answer_text = (f"{prefix}{label} {action} from {format_value(comparison.earlier.value, comparison.earlier.unit)} in {periods[0].label} "
-                          f"to {format_value(comparison.later.value, comparison.later.unit)} in {periods[1].label}{detail}.")
+    earlier, earlier_displayed = _format_value_and_representation(comparison.earlier.value, comparison.earlier.unit)
+    later, later_displayed = _format_value_and_representation(comparison.later.value, comparison.later.unit)
+    if (earlier_displayed is not None and earlier_displayed == later_displayed
+            and comparison.earlier.value != comparison.later.value):
+        earlier = format_exact_value(comparison.earlier.value, comparison.earlier.unit)
+        later = format_exact_value(comparison.later.value, comparison.later.unit)
+    result.answer_text = (f"{prefix}{label} {action} from {earlier} in {periods[0].label} "
+                          f"to {later} in {periods[1].label}{detail}.")
+    # The text also travels without the structured comparison card (for
+    # example in a saved answer), so retain the amount and its qualification.
+    result.answer_text += f" Absolute change: {result.formatted_absolute_change}."
+    if comparison.percentage_status != "available" and comparison.percentage_reason:
+        result.answer_text += f" {comparison.percentage_reason}"
     if metric == "revenue":
         if operation.operation == "adjacent_year_yoy_growth":
             result.answer_text += " Year-over-year change."
@@ -509,17 +525,63 @@ def resolve_historical_answer(service, question, operation):
     return result
 
 
-def format_value(value: Decimal, unit: str):
+
+# Well beyond Numeric(24, 4) facts and 28-digit derived calculations; reject
+# pathological display inputs before constructing huge contexts or strings.
+_DISPLAY_MAX_DIGITS = 80
+_DISPLAY_MAX_EXPONENT = 100
+_DISPLAY_UNAVAILABLE = "[value outside display bounds]"
+
+
+def _displayable_decimal(value):
+    return (value.is_finite() and len(value.as_tuple().digits) <= _DISPLAY_MAX_DIGITS
+            and abs(value.adjusted()) <= _DISPLAY_MAX_EXPONENT)
+
+
+def format_exact_value(value: Decimal, unit: str):
+    """Display the admitted decimal without rounding when necessary."""
+    if not _displayable_decimal(value):
+        return _DISPLAY_UNAVAILABLE
+    with localcontext() as ctx:
+        ctx.prec = max(40, len(value.as_tuple().digits) + abs(value.adjusted()) + 10)
+        number = value * 100 if unit == "ratio" else value
+        raw = format(abs(number), 'f')
+        whole, _, fraction = raw.partition('.')
+        fraction = fraction.rstrip('0')
+        digits = f"{int(whole):,}" + (f".{fraction}" if fraction else '')
+        sign = '-' if number < 0 else ''
+        if unit == "ratio":
+            return f"{sign}{digits}%"
+        return f"{sign}${digits}" + (" per share" if unit == "USD/share" else "")
+
+
+def _format_value_and_representation(value: Decimal, unit: str):
+    """Return display text and the exact numeric amount that text represents."""
+    if not _displayable_decimal(value):
+        return _DISPLAY_UNAVAILABLE, None
     with localcontext() as ctx:
         ctx.prec = max(40, len(value.as_tuple().digits) + abs(value.adjusted()) + 10)
         if unit == "ratio":
-            return f"{value * 100:,.2f}%"
+            number = value * 100
+            rounded = number.quantize(Decimal('0.01'))
+            if value and not rounded:
+                return format_exact_value(value, unit), number
+            return f"{number:,.2f}%", rounded
         if unit == "USD/share":
-            return f"{'-' if value < 0 else ''}${abs(value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f} per share"
+            rounded = abs(value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if value and not rounded:
+                return format_exact_value(value, unit), value
+            return f"{'-' if value < 0 else ''}${rounded:,.2f} per share", rounded.copy_sign(value)
         absolute = abs(value)
         scale, suffix = next(((scale, suffix) for scale, suffix in [(Decimal('1e12'), 'T'), (Decimal('1e9'), 'B'), (Decimal('1e6'), 'M'), (Decimal('1e3'), 'K')] if absolute >= scale), (Decimal(1), ''))
         rounded = (absolute / scale).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        return f"{'-' if value < 0 else ''}${rounded:,.2f}{suffix}"
+        if value and not rounded:
+            return format_exact_value(value, unit), value
+        return f"{'-' if value < 0 else ''}${rounded:,.2f}{suffix}", (rounded * scale).copy_sign(value)
+
+
+def format_value(value: Decimal, unit: str):
+    return _format_value_and_representation(value, unit)[0]
 
 
 PERIOD_TEXT = {"quarter": "quarter", "annual": "year", "half_year": "six-month YTD period", "nine_months": "nine-month YTD period"}
