@@ -45,10 +45,8 @@ async function install(context: BrowserContext, page: Page, scenario: Scenario) 
     if (!request.path.endsWith('/context')) return;
     const body = data.evidence(request.ticker!, request.query.get('q')!, Number(request.pin), request.path.includes('/filings/') ? data.accession(request.ticker!) : undefined);
     body.citations = Array.from({ length: 3 }, (_, index) => ({ ...body.citations[0], citation_id: `source_${index + 1}`, chunk_id: `chunk_${String(index).padStart(4, '0')}`, sec_url: sourceUrl(request.ticker!), start_char: 9000 + index * 3000, end_char: 12000 + index * 3000 }));
-    body.context = body.citations.map(citation => {
-      const metadata = Object.fromEntries(['company_cik', 'accession_number', 'filename', 'chunk_id', 'form', 'filed', 'start_char', 'end_char'].map(key => [key, citation[key as keyof typeof citation]]));
-      return `[SOURCE ${citation.citation_id}]\nmetadata: ${JSON.stringify(metadata)}\ntext: |-\n  Search preview is separate from exact tone text.\n[END SOURCE ${citation.citation_id}]`;
-    }).join('\n\n');
+    body.context = body.citations.map(citation => data.evidenceSourceBlock(citation,
+      'Search preview is separate from exact tone text.', 'retrieval_scope' in body)).join('\n\n');
     return { body };
   });
   await context.addInitScript(() => { Object.assign(window, { toneMarkupExecutions: 0, unsafe: () => { (window as unknown as { toneMarkupExecutions: number }).toneMarkupExecutions++; } }); });

@@ -208,10 +208,18 @@ export function sources(ticker: string): FilingSource[] {
 export function answer(ticker: string, question: string): ResearchAnswer {
   return { ticker, company_name: company(ticker).name, question, matched: true, status: 'available', metric: 'revenue', metric_label: 'Revenue', period_intent: 'latest_available', formatted_value: ticker === 'AAA' ? '$1B' : '$2B', answer_text: `${company(ticker).name} synthetic reported revenue.`, explanation: null, observation: observation(ticker, 'revenue'), comparability: null, selection_policy: 'Synthetic fixture', answer_kind: 'latest_metric', requested_period: null, comparison: null, formatted_absolute_change: null, formatted_percentage_change: null };
 }
+// Mirror _build_context's two wire formats. Selected filings use retrieval
+// headers; company-wide evidence binds the citation identity as one JSON line.
+export function evidenceSourceBlock(citation: Citation, text: string, companyWide: boolean): string {
+  const metadata = Object.fromEntries(['company_cik', 'accession_number', 'filename', 'chunk_id', 'form', 'filed', 'start_char', 'end_char'].map(key => [key, citation[key as keyof Citation]]));
+  const headers = companyWide ? `metadata: ${JSON.stringify(metadata)}\n`
+    : `chunk_id: ${citation.chunk_id}\naccession_number: ${citation.accession_number}\nform: ${citation.form}\nsimilarity: ${citation.similarity.toFixed(6)}\n`;
+  return `[SOURCE ${citation.citation_id}]\n${headers}text: |-\n${text.split('\n').map(line => `  ${line}`).join('\n')}\n[END SOURCE ${citation.citation_id}]`;
+}
 export function evidence(ticker: string, query: string, version: number, filing?: string): FilingContext | CompanyContext {
   const text = `${company(ticker).name} synthetic filing passage about reported revenue.`;
   const citation: Citation = { company_cik: company(ticker).cik, citation_id: 'source_1', chunk_id: `${ticker}-synthetic-1`, accession_number: filing ?? accession(ticker), form: '10-K', filed: '2026-02-01', filename: 'synthetic.htm', start_char: 0, end_char: text.length, sec_url: secUrl(ticker), similarity: 0.9, semantic_similarity: 0.9, lexical_score: 1, hybrid_score: 1, evidence_reason: 'synthetic_exact_match' };
-  const metadata = Object.fromEntries(['company_cik', 'accession_number', 'filename', 'chunk_id', 'form', 'filed', 'start_char', 'end_char'].map(key => [key, citation[key as keyof Citation]]));
-  const base = { ticker, company_name: company(ticker).name, query, context: `[SOURCE source_1]\nmetadata: ${JSON.stringify(metadata)}\ntext: |-\n  ${text}\n[END SOURCE source_1]`, citations: [citation], evidence_status: 'sufficient' as const };
+  if (filing) citation.sec_url = `https://www.sec.gov/Archives/edgar/data/${Number(company(ticker).cik)}/${filing.replaceAll('-', '')}/${filing}-index.html`;
+  const base = { ticker, company_name: company(ticker).name, query, context: evidenceSourceBlock(citation, text, !filing), citations: [citation], evidence_status: 'sufficient' as const };
   return filing ? { ...base, accession_number: filing } : { ...base, retrieval_scope: 'company', company_cik: company(ticker).cik, data_version: version, evidence_version: version, searched_accessions: [accession(ticker)], excluded_publication_count: 0 };
 }
