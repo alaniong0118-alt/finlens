@@ -412,17 +412,20 @@ def chunk_filing_text(
             len(text),
         )
 
-        chunk_text = text[start:end].strip()
+        window = text[start:end]
+        chunk_text = window.strip()
 
         if chunk_text:
+            # Offsets identify the stored passage, excluding trimmed padding.
+            chunk_start = start + len(window) - len(window.lstrip())
             chunks.append(
                 {
                     "chunk_id": (
                         f"chunk_{chunk_index:04d}"
                     ),
                     "text": chunk_text,
-                    "start_char": start,
-                    "end_char": end,
+                    "start_char": chunk_start,
+                    "end_char": chunk_start + len(chunk_text),
                 }
             )
 
