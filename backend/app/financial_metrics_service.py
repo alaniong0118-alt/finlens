@@ -47,7 +47,7 @@ def usable(fact, definition):
             and fact.form in {"10-Q", "10-Q/A", "10-K", "10-K/A"}
             and fact.filed is not None and fact.period_end is not None
             and fact.filed >= fact.period_end
-            and re.fullmatch(r"\d{10}-\d{2}-\d{6}", fact.accession_number or "")
+            and re.fullmatch(r"[0-9]{10}-[0-9]{2}-[0-9]{6}", fact.accession_number or "")
             and period_kind(fact, definition) is not None)
 
 
