@@ -385,8 +385,16 @@ def api(monkeypatch):
             yield client, loader, session, model
 
 
-def test_api_exact_year_choices_version_pin_and_existing_endpoints(api):
+@pytest.mark.parametrize("include_instant_facts", [False, True])
+def test_api_exact_year_choices_version_pin_and_existing_endpoints(api, include_instant_facts):
     client, loader, session, model = api
+    if include_instant_facts:
+        instant = dict(period_start=None, end="2026-03-31", form="10-Q",
+                       filed=date(2026, 5, 1), accession_number="0000000001-26-000002")
+        model = view(fact(), fact("Liabilities", "100", id=2, **instant),
+                     fact("Assets", "400", id=3, **instant),
+                     fact("CashAndCashEquivalentsAtCarryingValue", "0", id=4, **instant))
+        loader.return_value = model
     headers = {"X-FinLens-Data-Version": "7"}
     discovery = client.get("/companies/test/financials/annual", headers=headers)
     assert discovery.status_code == 200
@@ -394,10 +402,29 @@ def test_api_exact_year_choices_version_pin_and_existing_endpoints(api):
     assert discovery.headers["Cache-Control"] == "no-store"
     assert discovery.json()["fiscal_years"] == [2025]
     assert discovery.json()["metrics"] == {}
+    assert "balance_sheet_ratios" not in discovery.json()
     selected = client.get("/companies/TEST/financials/annual?fiscal_year=2025", headers=headers)
     assert selected.json() == model.annual_comparison(2025).model_dump(mode="json")
+    assert "balance_sheet_ratios" not in selected.json()
     summary = client.get("/companies/TEST/financials/summary?period=annual", headers=headers)
-    assert summary.json() == model.summary("annual").model_dump(mode="json")
+    # Only the public summary opts into independently dated balance-sheet ratios.
+    assert summary.status_code == 200
+    assert summary.headers["X-FinLens-Data-Version"] == "7"
+    assert summary.json() == model.summary("annual", include_balance_ratios=True).model_dump(mode="json")
+    assert "balance_sheet_ratios" not in model.summary("annual").model_dump(mode="json")
+    ratios = summary.json()["balance_sheet_ratios"]
+    assert set(ratios) == {"total_liabilities_to_total_assets", "cash_and_equivalents_to_total_liabilities"}
+    if include_instant_facts:
+        assert summary.json()["period"]["end"] == "2025-12-31"
+        for name, value, source_ids in [("total_liabilities_to_total_assets", "0.25", [2, 3]),
+                                         ("cash_and_equivalents_to_total_liabilities", "0", [4, 2])]:
+            point = ratios[name]
+            assert point["status"] == "available" and point["value"] == value
+            assert point["period"]["kind"] == "instant" and point["period"]["end"] == "2026-03-31"
+            assert [source["fact_id"] for source in point["provenance"]] == source_ids
+    else:
+        assert all(point["status"] == "unavailable" and point["value"] is None and point["reason"]
+                   and point["provenance"] == point["inputs"] == [] for point in ratios.values())
     history = client.get("/companies/TEST/financials/metrics/revenue?period=annual", headers=headers)
     assert history.json() == model.history("revenue", "annual").model_dump(mode="json")
     assert all("READ ONLY" in str(call.args[0]) for call in session.execute.call_args_list)
