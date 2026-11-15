@@ -333,6 +333,7 @@ def get_financial_history(
     )
 
     grouped: dict[tuple, dict] = {}
+    selected_sources: dict[tuple, dict[str, tuple]] = {}
 
     for record in quarterly_records:
         key = (
@@ -346,12 +347,13 @@ def get_financial_history(
                 "period_end": record.period_end,
                 "fiscal_year": None,
                 "fiscal_period": None,
-                "filed": record.filed,
-                "form": record.form,
+                "filed": None,
+                "form": None,
                 "revenue": None,
                 "net_income": None,
                 "diluted_eps": None,
             }
+            selected_sources[key] = {}
 
         if record.fiscal_period in {
             "Q1",
@@ -362,14 +364,6 @@ def get_financial_history(
                 record.fiscal_period
             )
 
-        if (
-            record.form in {"10-Q", "10-Q/A"}
-            and grouped[key]["form"]
-            not in {"10-Q", "10-Q/A"}
-        ):
-            grouped[key]["filed"] = record.filed
-            grouped[key]["form"] = record.form
-
         if record.metric == "Revenues":
             grouped[key]["revenue"] = record.value
 
@@ -378,6 +372,25 @@ def get_financial_history(
 
         elif record.metric == "EarningsPerShareDiluted":
             grouped[key]["diluted_eps"] = record.value
+
+        else:
+            continue
+
+        selected_sources[key][record.metric] = (
+            record.accession_number,
+            record.filed,
+            record.form,
+        )
+
+    # The legacy response has only one filing per period row. Do not
+    # attribute figures from different filings to a single source.
+    for key, item in grouped.items():
+        sources = selected_sources[key]
+        common = set(sources.values())
+        if len(common) == 1:
+            accession, filed, form = next(iter(common))
+            if filed is not None and form and (accession or len(sources) == 1):
+                item["filed"], item["form"] = filed, form
 
     history = sorted(
         grouped.values(),
