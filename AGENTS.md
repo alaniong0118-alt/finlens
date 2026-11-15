@@ -490,21 +490,15 @@ They should track:
 
 # Git
 
-Keep milestones logically separated.
+Commit and push only within current user authorization. An explicit standing authorization applies when its repository, target branch, change scope, and verification conditions match the current task. Proceed without asking again when those conditions are met. This file does not itself grant publication authority.
 
-Do not mix unrelated changes.
+Before committing, inspect the working tree and index. Verify that the exact staged diff matches the reviewed change, relevant tests passed for that change, and no secrets, generated noise, protected-file changes, or unrelated work are included. Preserve other contributors’ staged and unstaged work. Use an isolated checkout when needed.
 
-Do not commit generated noise.
+Before pushing, verify the intended remote, target branch, and current remote tip. Inspect every commit the push would publish. Use a normal fast-forward push. If the remote has diverged, an outgoing commit falls outside the reviewed scope, or a branch rule prevents the push, stop that publication step and report the specific mismatch. Never force-push, rewrite published history, or bypass branch protections.
 
-Do not push unless explicitly authorized.
+After pushing, verify that the target branch contains the intended commit. Report its SHA and Git status. Follow applicable CI runs for that exact SHA to completion, or hand monitoring to a coordinator who confirms receipt. Distinguish passed, failed, skipped, cancelled, and untriggered checks. If a check was expected but no run appears, inspect the workflow triggers and changed paths. On failure, capture the failing job and advance the authorized fix.
 
-A milestone should end with a clean explanation of:
-
-- files changed,
-- behavior changed,
-- verification performed,
-- remaining blockers,
-- suggested commit message.
+For uncommitted work, report the remaining blocker or next action and suggest a commit message. For published work, report the actual commit and verification results.
 
 # Engineering priority
 
