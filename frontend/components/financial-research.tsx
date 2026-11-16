@@ -208,7 +208,8 @@ function validateHistoryResponse(value: unknown, company: Pick<Company, "ticker"
     && Array.isArray(item.fact_ids) && item.fact_ids.every(id => Number.isSafeInteger(id))
     && (item.period === undefined || financialPeriod(item.period));
   const observation = (item: unknown): boolean => record(item) && item.metric === metric && item.unit === expectedUnit && status(item.status)
-    && (item.status === "available" ? decimal(item.value) : item.value === null) && nullableText(item.reason) && nullableText(item.formula)
+    && (item.status === "available" ? decimal(item.value) && Array.isArray(item.provenance) && item.provenance.length > 0
+      : item.value === null) && nullableText(item.reason) && nullableText(item.formula)
     && optionalText(item.revenue_basis) && (item.period === null ? item.status !== "available"
       : record(item.period) && item.period.kind === period && financialPeriod(item.period))
     && Array.isArray(item.provenance) && item.provenance.every(source)
