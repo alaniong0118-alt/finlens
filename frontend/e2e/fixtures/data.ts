@@ -40,9 +40,17 @@ export function observation(ticker: string, metric: string, kind: PeriodKind = '
 export function summary(ticker: string, kind: PeriodKind = 'quarter'): FinancialSummary {
   return { ticker, company_name: company(ticker).name, company_cik: company(ticker).cik, requested_period: kind, period: period(kind), metrics: Object.fromEntries(metrics.map(id => [id, observation(ticker, id, kind)])), selection_policy: 'Synthetic fixed observations; no production data.' };
 }
+export function historyObservation(ticker: string, metric: string, kind: PeriodKind, year = 2025): NormalizedMetric {
+  const point = observation(ticker, metric, kind, year);
+  point.provenance = point.provenance.map((source) => {
+    const accession = source.accession_number;
+    return { ...source, sec_url: `https://www.sec.gov/Archives/edgar/data/${Number(source.company_cik)}/${accession.replaceAll('-', '')}/${accession}-index.html` };
+  });
+  return point;
+}
 export function history(ticker: string, metric: string, kind: PeriodKind): MetricHistory {
-  const point = observation(ticker, metric, kind);
-  const zero = observation(ticker, metric, kind, 2024);
+  const point = historyObservation(ticker, metric, kind);
+  const zero = historyObservation(ticker, metric, kind, 2024);
   zero.value = '0'; zero.provenance = zero.provenance.map(source => ({ ...source, value: '0' }));
   const unavailable: NormalizedMetric = { ...point, status: 'unavailable', value: null, reason: 'Synthetic source evidence is unavailable for this older observation.', period: period(kind, 2023), provenance: [], alternatives: [], inputs: [] };
   const points = ['revenue', 'operating_cash_flow', 'diluted_eps', 'total_assets'].includes(metric) ? [unavailable, zero, point] : [point];

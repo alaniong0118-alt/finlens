@@ -85,6 +85,24 @@ test('SEC-LINK-01 financial provenance and filing evidence render canonical anch
  }
 });
 
+test('strict financial source rendering requires a positive ASCII registrant CIK and binds it to the selected issuer', () => {
+ const accession_number = '0000123456-25-000007';
+ const sec_url = 'https://www.sec.gov/Archives/edgar/data/900001/000012345625000007/0000123456-25-000007-index.html';
+ const fact = { ...source, accession_number, company_cik: '900001', sec_url };
+ const render = (provenance, expectedIssuerCik) => renderToStaticMarkup(React.createElement(finance.MetricProvenance, {
+  point: { ...point, provenance: [provenance] }, filingLinkVerification: { issuerCik: expectedIssuerCik },
+ }));
+ assert.ok(render(fact, '0000900001').includes(sec_url));
+ for (const company_cik of [900001, null, '0', '0000000000', '00000900001', '+900001', '９００００１', '900001\n', '900002']) {
+  const html = render({ ...fact, company_cik }, '900001');
+  assert.doesNotMatch(html, /<a\b/, String(company_cik));
+  assert.match(html, /SEC filing link could not be verified/);
+ }
+ const unbound = render(fact, '900002');
+ assert.doesNotMatch(unbound, /<a\b/);
+ assert.match(unbound, /SEC filing link could not be verified/);
+});
+
 test('FD-01 catalog contains exactly the existing 15 metrics, grouped with correct display periods', () => {
  const expected=['revenue','gross_profit','operating_income','net_income','diluted_eps','cash_and_equivalents','total_assets','total_liabilities','operating_cash_flow','capital_expenditures','free_cash_flow','revenue_growth_yoy','gross_margin','operating_margin','net_margin'];
  assert.deepEqual(METRIC_CATALOG.map(item=>item.id).sort(),expected.sort());

@@ -49,7 +49,37 @@ function alternativePeriodLabel(source: Pick<FactProvenance, "period_start" | "p
   return `Period: ${formatDate(source.period_start)} – ${formatDate(source.period_end)}`;
 }
 
-export function MetricProvenance({ point, summary = "Sources and details" }: { point: NormalizedMetric; summary?: string }) {
+function normalizedRegistrantCik(value: unknown): string | undefined {
+  if (typeof value !== "string" || !/^[0-9]{1,10}$/.test(value)) return undefined;
+  return value.replace(/^0+/, "") || undefined;
+}
+
+function verifiedFactFilingUrl(source: FactProvenance, expectedIssuerCik: unknown): string | undefined {
+  const cik = normalizedRegistrantCik(source.company_cik);
+  const accession = source.accession_number;
+  if (!cik || cik !== normalizedRegistrantCik(expectedIssuerCik) || typeof accession !== "string"
+    || !/^[0-9]{10}-[0-9]{2}-[0-9]{6}$/.test(accession)) {
+    return undefined;
+  }
+  const expected = `https://www.sec.gov/Archives/edgar/data/${cik}/${accession.replaceAll("-", "")}/${accession}-index.html`;
+  return source.sec_url === expected ? expected : undefined;
+}
+
+type FilingLinkVerification = { issuerCik: unknown };
+
+function FactFilingLink({ source, verification, alternative = false }: {
+  source: FactProvenance; verification?: FilingLinkVerification; alternative?: boolean;
+}) {
+  const url = verification ? verifiedFactFilingUrl(source, verification.issuerCik) : officialSecUrl(source.sec_url);
+  if (!url && !verification) return null;
+  return <>{alternative && " · "}{url
+    ? <a href={url} target="_blank" rel="noopener noreferrer">{alternative ? "SEC source ↗" : "Open official SEC filing ↗"}</a>
+    : <span>SEC filing link could not be verified.</span>}</>;
+}
+
+export function MetricProvenance({ point, summary = "Sources and details", filingLinkVerification }: {
+  point: NormalizedMetric; summary?: string; filingLinkVerification?: FilingLinkVerification;
+}) {
   return <details className="provenance"><summary>{summary}</summary>
     <div className="details-body">
       <p>{periodLabel(point.period)}</p>
@@ -65,10 +95,10 @@ export function MetricProvenance({ point, summary = "Sources and details" }: { p
         <p>{source.form} · Filed {formatDate(source.filed)}</p>
         <p className="mono wrap-anywhere">Accession {source.accession_number} · Fact {source.fact_id}</p>
         <p>Source filing context: {source.source_fiscal_year ?? "Year unknown"} / {source.source_fiscal_period ?? "Period unknown"} (may describe a comparative filing).</p>
-        {officialSecUrl(source.sec_url) && <a href={officialSecUrl(source.sec_url)} target="_blank" rel="noopener noreferrer">Open official SEC filing ↗</a>}
+        <FactFilingLink source={source} verification={filingLinkVerification} />
       </div>)}
       {point.alternatives.length > 0 && <details><summary>{point.alternatives.length} alternative source observations</summary>
-        {point.alternatives.map((source) => <p key={source.fact_id} className="source-record wrap-anywhere">{source.original_concept} · {source.value} {source.unit} · {alternativePeriodLabel(source)} · {source.form} · Filed {formatDate(source.filed)} · {source.accession_number}{officialSecUrl(source.sec_url) && <> · <a href={officialSecUrl(source.sec_url)} target="_blank" rel="noopener noreferrer">SEC source ↗</a></>}</p>)}
+        {point.alternatives.map((source) => <p key={source.fact_id} className="source-record wrap-anywhere">{source.original_concept} · {source.value} {source.unit} · {alternativePeriodLabel(source)} · {source.form} · Filed {formatDate(source.filed)} · {source.accession_number}<FactFilingLink source={source} verification={filingLinkVerification} alternative /></p>)}
       </details>}
     </div>
   </details>;
@@ -128,7 +158,7 @@ export function revealHistorySourceFocus(event: FocusEvent<HTMLDivElement>) {
   else if (after > 0) region.scrollLeft += after;
 }
 
-function HistoryView({ data }: { data: MetricHistory }) {
+function HistoryView({ data, issuerCik }: { data: MetricHistory; issuerCik: string }) {
   const rows = historyChartRows(data);
   const warning = epsWarning(data);
   const hasValues = rows.some((row) => row.value !== null);
@@ -157,7 +187,7 @@ function HistoryView({ data }: { data: MetricHistory }) {
           <thead><tr><th scope="col">Period</th><th scope="col">Reported value</th><th scope="col">Provenance</th></tr></thead>
           <tbody>{rows.map((row, index) => <tr key={`${row.date}-${index}`}>
             <td>{periodLabel(row.point.period)}</td><td>{row.label}{row.point.status !== "available" && row.point.reason && <p className="small metric-reason">{row.point.reason}</p>}{row.point.revenue_basis && <span className="small muted block">{row.point.revenue_basis.replaceAll("_", " ")}</span>}</td>
-            <td><MetricProvenance point={row.point} /></td>
+            <td><MetricProvenance point={row.point} filingLinkVerification={{ issuerCik }} /></td>
           </tr>)}</tbody>
         </table></div>
       </details>
@@ -292,7 +322,7 @@ function MetricHistoryPanel({ company }: { company: Company }) {
       {loading && <p className="loading-state">{version === null ? "Waiting for publication version…" : "Loading selected history…"}</p>}
       {error && <><p role="alert" className="error-state">{error}</p>
         <button type="button" className="secondary-button" disabled={loading || version === null} onClick={retryHistory}>Retry history</button></>}
-      {data && !loading && loadedVersion === version && <HistoryView data={data} />}
+      {data && !loading && loadedVersion === version && <HistoryView data={data} issuerCik={company.cik} />}
     </div>
   </section>;
 }

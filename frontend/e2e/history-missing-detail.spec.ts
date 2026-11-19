@@ -4,13 +4,13 @@ import * as data from './fixtures/data';
 
 // Existing synthetic observations only; no source value, date or identity changes.
 function missingHistory() {
-  const first = data.observation('AAA', 'revenue', 'quarter', 2024);
-  const second = data.observation('AAA', 'revenue', 'quarter', 2025);
+  const first = data.historyObservation('AAA', 'revenue', 'quarter', 2024);
+  const second = data.historyObservation('AAA', 'revenue', 'quarter', 2025);
   first.status = second.status = 'unavailable'; first.value = second.value = null;
   first.reason = 'Synthetic 2024 source bases are incompatible.';
   second.reason = 'Synthetic 2025 compatible input is missing.';
   second.provenance = [];
-  second.alternatives = data.observation('AAA', 'revenue', 'annual', 2024).provenance;
+  second.alternatives = data.historyObservation('AAA', 'revenue', 'annual', 2024).provenance;
   return { ...data.history('AAA', 'revenue', 'quarter'), status: 'unavailable' as const,
     reason: 'Synthetic returned history has no compatible values.', history: [first, second] };
 }

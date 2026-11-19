@@ -37,7 +37,7 @@ const freshnessPath = base + 'freshness';
 const summaryPath = base + 'financials/summary?period=quarter';
 const historyPath = base + 'financials/metrics/revenue?period=quarter&limit=12';
 
-test('available financial history without selected provenance fails closed while verified retry and snapshot survive', async ctx => {
+async function mountResearch(ctx, issuer = company) {
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://finlens.test' });
   const previous = new Map();
   for (const key of ['window', 'document', 'HTMLElement', 'SVGElement', 'Node', 'Event', 'MouseEvent', 'IS_REACT_ACT_ENVIRONMENT']) {
@@ -94,9 +94,14 @@ test('available financial history without selected provenance fails closed while
   const host = document.body.appendChild(document.createElement('div'));
   root = createRoot(host);
   await act(async () => root.render(React.createElement(ResearchFreshness,
-    { ticker: company.ticker, catalogChanged: async () => true }, React.createElement(FinancialResearch, { company }))));
+    { ticker: issuer.ticker, catalogChanged: async () => true }, React.createElement(FinancialResearch, { company: issuer }))));
   assert.deepEqual(requests.map(entry => entry.url), [freshnessPath]);
   await release(freshnessPath, freshness);
+  return { host, requests, release };
+}
+
+test('available financial history without selected provenance fails closed while verified retry and snapshot survive', async ctx => {
+  const { host, requests, release } = await mountResearch(ctx);
   await release(summaryPath, summary, 7);
   const snapshot = host.querySelector('[aria-labelledby="snapshot-title"]');
   const snapshotMetrics = snapshot.querySelector('.metric-grid');
@@ -114,11 +119,44 @@ test('available financial history without selected provenance fails closed while
   assert.ok(retry && !retry.disabled);
   await act(async () => retry.click());
   const unavailable = { ...point(null, false, prior), status: 'unavailable', reason: 'No selected source for prior quarter.' };
-  await release(historyPath, history(unavailable, point('300000000')), 7);
+  const crossSubmitterAccession = '0000123456-25-000007';
+  const crossSubmitterUrl = 'https://www.sec.gov/Archives/edgar/data/900001/000012345625000007/0000123456-25-000007-index.html';
+  const accepted = point('300000000');
+  accepted.provenance[0] = { ...accepted.provenance[0], accession_number: crossSubmitterAccession, sec_url: crossSubmitterUrl };
+  const invalidAlternatives = [
+    { sec_url: alternative.sec_url.replace('/900001/', '/900002/') },
+    { sec_url: secUrl },
+    { sec_url: alternative.sec_url + '?view=inline' },
+    { sec_url: alternative.sec_url + '#section' },
+    { sec_url: alternative.sec_url.replace('www.sec.gov', 'sec.gov') },
+    { sec_url: alternative.sec_url.replace('/900001/', '/0900001/') },
+    { accession_number: '0000900001-25-00000２' },
+  ].map((change, index) => ({ ...alternative, ...change, fact_id: index + 3 }));
+  accepted.alternatives = [alternative, ...invalidAlternatives];
+  const earlier = { ...prior, start: '2024-07-01', end: '2024-09-30', fiscal_period: 'Q3' };
+  const unverified = point('200000000', true, earlier);
+  unverified.provenance[0].sec_url = secUrl.replace('/900001/', '/900002/');
+  await release(historyPath, history(unverified, unavailable, accepted), 7);
+
   assert.equal(trends.querySelector('[role="alert"]'), null);
-  assert.match(trends.querySelector('table').textContent, /No selected source for prior quarter/);
-  assert.match(trends.querySelector('table').textContent, /\$300M/);
-  assert.equal(trends.querySelector('table .source-record a').getAttribute('href'), secUrl);
+  const [unverifiedRow, unavailableRow, acceptedRow] = trends.querySelectorAll('tbody tr');
+  assert.match(unavailableRow.textContent, /No selected source for prior quarter/);
+  assert.match(unverifiedRow.textContent, /\$200M/);
+  assert.match(unverifiedRow.textContent, /Synthetic source revenue/);
+  assert.match(unverifiedRow.textContent, /Accession 0000900001-25-000001/);
+  assert.equal(unverifiedRow.querySelector('a')?.getAttribute('href') ?? null, null, 'a selected fact cannot link to a different registrant');
+  assert.match(unverifiedRow.textContent, /SEC filing link could not be verified/);
+  assert.match(acceptedRow.textContent, /\$300M/);
+  const [selectedRecord, validAlternative, ...unverifiedAlternatives] = acceptedRow.querySelectorAll('.source-record');
+  assert.equal(selectedRecord.querySelector('a').getAttribute('href'), crossSubmitterUrl);
+  assert.equal(validAlternative.querySelector('a').getAttribute('href'), alternative.sec_url);
+  assert.equal(unverifiedAlternatives.length, invalidAlternatives.length);
+  for (const [index, record] of unverifiedAlternatives.entries()) {
+    assert.equal(record.querySelector('a')?.getAttribute('href') ?? null, null, `alternative ${index + 1}`);
+    assert.match(record.textContent, /250000000 USD/);
+    assert.ok(record.textContent.includes(invalidAlternatives[index].accession_number));
+    assert.match(record.textContent, /SEC filing link could not be verified/);
+  }
   assert.equal(snapshot.querySelector('.metric-grid'), snapshotMetrics);
   assert.equal(requests.some(entry => entry.rejected), false);
   const signatures = requests.map(({ method, url, pin, body }) => [method, url, pin, body]);
@@ -127,4 +165,34 @@ test('available financial history without selected provenance fails closed while
   ].sort());
   assert.deepEqual(signatures.at(-1), ['GET', historyPath, '7', false]);
   assert.equal(requests.length, 4);
+});
+
+test('Reported Financial Trends keeps filing links unverified when issuer and source CIKs are missing', async ctx => {
+  const issuer = { ...company };
+  delete issuer.cik;
+  const { host, requests, release } = await mountResearch(ctx, issuer);
+  const snapshot = { ...summary };
+  delete snapshot.company_cik;
+  await release(summaryPath, snapshot, 7);
+
+  const selected = point('300000000');
+  delete selected.provenance[0].company_cik;
+  selected.alternatives = [{ ...selected.provenance[0], fact_id: 2 }];
+  const response = history(selected);
+  delete response.company_cik;
+  await release(historyPath, response, 7);
+
+  const trends = host.querySelector('[aria-labelledby="history-title"]');
+  assert.equal(trends.querySelector('[role="alert"]'), null);
+  const row = trends.querySelector('tbody tr');
+  assert.match(row.textContent, /\$300M/);
+  const records = [...row.querySelectorAll('.source-record')];
+  assert.equal(records.length, 2);
+  for (const record of records) {
+    assert.match(record.textContent, /Synthetic source revenue/);
+    assert.ok(record.textContent.includes(accession));
+    assert.equal(record.querySelector('a')?.getAttribute('href') ?? null, null);
+    assert.match(record.textContent, /SEC filing link could not be verified/);
+  }
+  assert.equal(requests.some(entry => entry.rejected), false);
 });
