@@ -395,7 +395,7 @@ async function requestJson<T>(
   init?: RequestInit,
   requirePublishedVersion = false,
   researchDeadline = true,
-  validate?: (payload: T) => void,
+  validate?: (payload: T, response: Response) => void,
 ): Promise<T> {
   // Publication ownership belongs to the caller, never the transport controller.
   const callerSignal = init?.signal;
@@ -424,7 +424,7 @@ async function requestJson<T>(
   callerSignal?.addEventListener("abort", callerCancelled, { once: true });
   if (callerSignal?.aborted) callerCancelled();
 
-  const readResponse = async (): Promise<T> => {
+  const readResponse = async (): Promise<{ result: T; response: Response }> => {
     checkCancellation();
     let response: Response;
     try {
@@ -478,15 +478,15 @@ async function requestJson<T>(
       throw new FinLensApiError("FinLens returned an empty response.", 502, "INVALID_RESPONSE");
     }
     checkCancellation();
-    return payload as T;
+    return { result: payload as T, response };
   };
 
   try {
     // Abort is best effort. This race settles even if fetch or json ignores it.
-    const result = await Promise.race([cancellation, readResponse()]);
+    const { result, response } = await Promise.race([cancellation, readResponse()]);
     checkCancellation();
     // Endpoint validation shares this deadline, caller listener and error checkpoint.
-    validate?.(result);
+    validate?.(result, response);
     checkCancellation();
     return result;
   } catch (error) {
@@ -500,6 +500,30 @@ async function requestJson<T>(
 
 export function getCompanies(signal?: AbortSignal): Promise<Company[]> {
   return requestJson<Company[]>("/companies", { signal });
+}
+
+export async function getHomeCatalog(signal: AbortSignal): Promise<{ companies: Company[]; complete: boolean }> {
+  let complete = false;
+  const companies = await requestJson<Company[]>("/companies", { signal }, false, true, (rows, response) => {
+    if (!Array.isArray(rows) || !rows.every(row => row && typeof row === "object"
+      && Number.isSafeInteger(row.id) && row.id > 0
+      && typeof row.ticker === "string" && row.ticker !== "" && row.ticker === row.ticker.trim()
+      && typeof row.name === "string" && row.name.trim() !== ""
+      && typeof row.cik === "string" && /^\d{1,10}$/.test(row.cik) && Number(row.cik) > 0
+      && typeof row.exchange === "string"
+      && typeof row.has_indexed_filing === "boolean"
+      && Number.isSafeInteger(row.indexed_filing_count) && row.indexed_filing_count >= 0)) {
+      throw new FinLensApiError("The company catalog response could not be verified.", 502, "INVALID_RESPONSE");
+    }
+    // The default endpoint returns every local company. Partial or redirected
+    // responses can still supply valid rows, but cannot establish absence.
+    complete = response.status === 200 && !response.redirected
+      && !response.headers.has("Content-Range") && !response.headers.has("Link")
+      && new Set(rows.map(row => row.ticker.trim().toUpperCase())).size === rows.length
+      && new Set(rows.map(row => Number(row.cik))).size === rows.length
+      && new Set(rows.map(row => row.id)).size === rows.length;
+  });
+  return { companies, complete };
 }
 
 export function getFilingSources(ticker: string, signal?: AbortSignal, requirePublishedVersion = false): Promise<FilingSource[]> {
