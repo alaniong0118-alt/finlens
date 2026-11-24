@@ -1,0 +1,323 @@
+name: FinLens public production build diagnostics
+on:
+  push:
+    branches: [proof/finlens-prod-diagnostic-4e20c66c-once]
+permissions:
+  contents: read
+concurrency:
+  group: finlens-public-prod-diagnostic-4e20c66c-once
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'alaniong0118-alt/finlens' && github.run_attempt == '1' && github.event.created == true && github.event.before == '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      FINLENS_API_BASE_URL: http://127.0.0.1:3108
+      CI: 'true'
+    steps:
+      - id: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Bind exact public source and only workflow change
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=4e20c66c3bc3b9ed9a2a897639028ab2c23ac967
+          workflow=.github/workflows/finlens-public-prod-diagnostic.yml
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n1 HEAD)" = "$GITHUB_SHA $expected"
+          test "$(git diff --name-status "$expected" HEAD)" = "$(printf 'A\t%s' "$workflow")"
+          test -z "$(git status --porcelain)"
+      - id: node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.21.0'
+          architecture: x64
+          check-latest: false
+      - name: Install exact official public lock without lifecycle hooks
+        id: install
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.21.0
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const nodes = Object.entries(lock.packages ?? {}).filter(([name]) => name);
+          if (lock.lockfileVersion !== 3 || nodes.length < 400 || nodes.length > 1000) process.exit(2);
+          for (const [, entry] of nodes) {
+            const url = new URL(entry.resolved);
+            if (url.origin !== 'https://registry.npmjs.org' || url.username || url.password || url.search || url.hash ||
+                !url.pathname.endsWith('.tgz') || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(entry.integrity) || entry.link)
+              process.exit(2);
+          }
+          NODE
+          test ! -e .npmrc && test ! -e ../.npmrc
+          sha256sum package-lock.json > "$RUNNER_TEMP/finlens-lock.sha"
+          user_cfg="$RUNNER_TEMP/finlens-user.npmrc"; global_cfg="$RUNNER_TEMP/finlens-global.npmrc"
+          (set -o noclobber; : > "$user_cfg"; : > "$global_cfg")
+          timeout --signal=TERM --kill-after=5s 240s npm ci --ignore-scripts --no-audit --no-fund \
+            --registry=https://registry.npmjs.org --userconfig="$user_cfg" --globalconfig="$global_cfg" \
+            --cache="$RUNNER_TEMP/finlens-npm-cache" --loglevel=error 2>&1 | head -c 1048577 >"$RUNNER_TEMP/finlens-install.log"
+          test "$(wc -c < "$RUNNER_TEMP/finlens-install.log")" -le 1048576
+          sha256sum -c "$RUNNER_TEMP/finlens-lock.sha"
+          test "$(node -p 'require("next/package.json").version')" = 15.5.28
+      - name: Capture one production build
+        id: capture
+        working-directory: frontend
+        shell: bash
+        run: |
+          python3 -I -B - <<'PY'
+          """Inert hosted-build capture design; exact reviewed wrapper integration still required."""
+          import hashlib,json,os,re,selectors,signal,subprocess,time
+          from pathlib import Path
+
+          LIMIT={"stdout":1048576,"stderr":1048576}
+          DEADLINE=330
+          REL = re.compile(rb"(?:(?:\./)?(?:app|components|lib|e2e|scripts)/[A-Za-z0-9_./-]{1,180}|next\.config\.ts|playwright\.config\.ts|tsconfig\.json)")
+          LOC = re.compile(rb"((?:\./)?[A-Za-z0-9_./-]{1,220}):([1-9][0-9]{0,5})(?::([1-9][0-9]{0,4}))?(?::|$)")
+          TS = re.compile(rb"(?:error[ \t]+)?(TS[0-9]{4,5})(?=[: \t]|$)")
+
+          def safe_diagnostic(streams, tracked):
+              stage="BUILD_INVOCATION"
+              loc=None
+              code=None
+              classes=set()
+              for log in streams.values():
+                  for line in log.splitlines():
+                      if b"Creating an optimized production build" in line: classes.add("COMPILE")
+                      if b"Linting and checking validity of types" in line: classes.add("TYPE_OR_LINT")
+                      if b"Collecting page data" in line or b"Generating static pages" in line: classes.add("PRERENDER")
+                      if b"Failed to load SWC binary" in line: classes.add("SWC")
+                      if b"Type error:" in line: classes.add("TYPE_ERROR")
+                      if b"Module not found:" in line: classes.add("COMPILE_ERROR")
+                      m=LOC.match(line)
+                      if m:
+                          candidate=m[1].removeprefix(b"./")
+                          if REL.fullmatch(candidate) and b".." not in candidate.split(b"/") and candidate in tracked:
+                              item=(candidate.decode("ascii"),int(m[2]),int(m[3]) if m[3] else None)
+                              loc=item if loc is None or loc==item else False
+                      t=TS.search(line)
+                      if t and (b"error TS" in line or line.lstrip().startswith(t[1])):
+                          item=t[1].decode("ascii")
+                          code=item if code is None or code==item else False
+              for level in ("TYPE_ERROR","SWC","COMPILE_ERROR","PRERENDER","TYPE_OR_LINT","COMPILE"):
+                  if level in classes:
+                      stage=level
+                      break
+              return {"stage":stage,"location":loc if loc else None,"errorCode":code if code else None}
+
+          def run_bounded(argv, env, tracked):
+              buffers={key:bytearray() for key in LIMIT}
+              reason="OK"
+              child=None
+              child_rc=None
+              eof=set()
+              cleanup="NOT_SPAWNED"
+              close_failed=False
+              t0=time.monotonic()
+              try:
+                  child=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE,start_new_session=True,env=env)
+                  with selectors.DefaultSelector() as sel:
+                      for key in LIMIT:
+                          pipe=getattr(child,key)
+                          os.set_blocking(pipe.fileno(),False)
+                          sel.register(pipe,selectors.EVENT_READ,key)
+                      deadline=t0+DEADLINE
+                      while sel.get_map():
+                          left=deadline-time.monotonic()
+                          if left<=0:
+                              reason="PIPE_EOF_TIMEOUT"
+                              break
+                          for k,_ in sel.select(min(left,0.2)):
+                              label=k.data
+                              try:
+                                  raw=os.read(k.fd,min(65536,LIMIT[label]+1-len(buffers[label])))
+                              except BlockingIOError:
+                                  continue
+                              if not raw:
+                                  eof.add(label)
+                                  sel.unregister(k.fileobj)
+                                  continue
+                              buffers[label].extend(raw)
+                              if len(buffers[label])>LIMIT[label]:
+                                  reason="OVERFLOW_"+label.upper()
+                                  break
+                          if reason!="OK":
+                              break
+                  if reason=="OK":
+                      while time.monotonic() < deadline:
+                          if os.waitid(os.P_PID,child.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) is not None:
+                              break
+                          time.sleep(0.02)
+                      else:
+                          reason="CHILD_TIMEOUT"
+              except subprocess.TimeoutExpired:
+                  reason="CHILD_TIMEOUT"
+              except Exception:
+                  reason="SPAWN_FAILED" if child is None else "CAPTURE_FAILED"
+              finally:
+                  if child is not None:
+                      try:
+                          os.killpg(child.pid,signal.SIGKILL)
+                          cleanup="SIGNALLED_NOT_ATTESTED"
+                      except ProcessLookupError:
+                          cleanup="ABSENT_AT_PROBE"
+                      except OSError:
+                          cleanup="SIGNAL_FAILED"
+                      try:
+                          child_rc=child.wait(timeout=5)
+                          if reason=="OK" and child_rc!=0: reason="CHILD_NONZERO"
+                      except Exception:
+                          cleanup="LEADER_REAP_FAILED"
+                      for key in LIMIT:
+                          try: getattr(child,key).close()
+                          except Exception: close_failed=True
+              try:
+                  diagnostic=safe_diagnostic({k:bytes(v) for k,v in buffers.items()},tracked)
+              except Exception:
+                  diagnostic={"stage":"DIAGNOSTIC_PARSER_FAILED","location":None,"errorCode":None}
+              return dict(result=reason,childExit=child_rc,cleanup=cleanup,closeFailed=close_failed,elapsedMs=round((time.monotonic()-t0)*1000),
+                          streams={k:{"capturedBytes":len(v),"sha256":hashlib.sha256(v).hexdigest(),"eof":k in eof} for k,v in buffers.items()},
+                          diagnostic=diagnostic)
+
+          def exclusive_receipt(path, payload):
+              data=(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=True)+"\n").encode("ascii")
+              if len(data)>4096:
+                  raise ValueError("RECEIPT_LIMIT")
+              with Path(path).open("xb") as output:
+                  output.write(data)
+                  output.flush()
+                  os.fsync(output.fileno())
+
+          def publish_receipt(path, payload, emit=print):
+              try:
+                  exclusive_receipt(path,payload)
+                  return True
+              except Exception:
+                  emit('{"status":"HOLD","reason":"RECEIPT_SINK_FAILED"}')
+                  return False
+
+          SOURCE = "4e20c66c3bc3b9ed9a2a897639028ab2c23ac967"
+          target = Path(os.environ["RUNNER_TEMP"]) / "finlens-build-receipt.json"
+          receipt = {"status":"HOLD","source":SOURCE,"workflowHead":os.environ["GITHUB_SHA"],
+                     "runId":os.environ["GITHUB_RUN_ID"],"networkEgress":"NOT_ATTESTED"}
+          passed=False
+          try:
+              receipt["stage"]="CAPTURE_ADMISSION"
+              tracked_raw=subprocess.run(["git","ls-tree","-r","-z","--name-only",SOURCE,"--","."],
+                                           check=True,capture_output=True,timeout=5).stdout
+              if len(tracked_raw) > 1048576:
+                  raise ValueError("TRACKED_PATH_CAP")
+              tracked=set(tracked_raw.rstrip(b"\0").split(b"\0"))
+              if Path(".next-prod").exists() or Path(".next-prod").is_symlink():
+                  raise ValueError("OUTPUT_NOT_VIRGIN")
+              node=os.path.realpath(os.path.join(os.environ["RUNNER_TOOL_CACHE"],"node","24.21.0","x64","bin","node"))
+              env={"PATH":os.path.dirname(node)+":/usr/bin:/bin","LC_ALL":"C.UTF-8",
+                   "HOME":os.environ["RUNNER_TEMP"],"TMPDIR":os.environ["RUNNER_TEMP"],
+                   "NEXT_TELEMETRY_DISABLED":"1","FINLENS_API_BASE_URL":"http://127.0.0.1:3108","CI":"true"}
+              receipt["stage"]="NEXT_BUILD"
+              proof=run_bounded([node,"node_modules/next/dist/bin/next","build"],env,tracked)
+              receipt["capture"]=proof
+              if (proof["result"]!="OK" or proof["childExit"]!=0 or proof["closeFailed"]
+                  or proof["cleanup"] not in {"ABSENT_AT_PROBE","SIGNALLED_NOT_ATTESTED"}
+                  or proof["diagnostic"]["stage"]=="DIAGNOSTIC_PARSER_FAILED"
+                  or not all(s["eof"] for s in proof["streams"].values())):
+                  raise ValueError("CAPTURE_HOLD")
+              receipt["stage"]="BUILD_OUTPUT_PROOF"
+              lock=Path("package-lock.json")
+              lock_digest=hashlib.sha256(lock.read_bytes()).hexdigest()
+              expected=(Path(os.environ["RUNNER_TEMP"])/"finlens-lock.sha").read_text("ascii").split()[0]
+              if lock_digest!=expected:
+                  raise ValueError("LOCK_DRIFT")
+              out=Path(".next-prod")
+              if not stat.S_ISDIR(out.lstat().st_mode):
+                  raise ValueError("OUTPUT_ROOT")
+              files={}
+              for name in ("BUILD_ID","build-manifest.json","routes-manifest.json"):
+                  p=out/name
+                  st=p.lstat()
+                  if not stat.S_ISREG(st.st_mode) or not 0<st.st_size<=4194304:
+                      raise ValueError("BUILD_OUTPUT")
+                  data=p.read_bytes()
+                  if len(data)!=st.st_size:
+                      raise ValueError("OUTPUT_DRIFT")
+                  files[name]=hashlib.sha256(data).hexdigest()
+                  if name=="BUILD_ID":
+                      ident=data.decode("ascii").strip()
+                      if re.fullmatch(r"[A-Za-z0-9_-]{1,128}",ident) is None:
+                          raise ValueError("BUILD_ID")
+              receipt.update(status="HOSTED_PRODUCTION_BUILD_OBSERVED",stage="COMPLETE",
+                             buildId=ident,filesSHA256=files,lockSHA256=lock_digest,buildOnly=True)
+              passed=True
+          except Exception:
+              pass # Fixed stage and fixed capture codes only.
+          pending=target.with_suffix(".pending")
+          if not publish_receipt(pending,receipt):
+              raise SystemExit(2)
+          try:
+              os.link(pending,target)
+          except OSError:
+              print('{"status":"HOLD","reason":"RECEIPT_SINK_FAILED"}')
+              raise SystemExit(2)
+          print("FINLENS_BUILD_RECEIPT " + target.read_text("ascii").rstrip("\n"), flush=True)
+          raise SystemExit(0 if passed else 1)
+          PY
+      - name: Retain sanitized preflight failure if needed
+        id: fallback
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          SOURCE_OUTCOME: ${{ steps.source.outcome }}
+          NODE_OUTCOME: ${{ steps.node.outcome }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+        run: |
+          python3 -I -B - <<'PY'
+          import json,os
+          from pathlib import Path
+          target=Path(os.environ["RUNNER_TEMP"])/"finlens-build-receipt.json"
+          if target.exists():
+              raise SystemExit(0)
+          stages=("CHECKOUT","SOURCE","NODE","INSTALL","CAPTURE")
+          stage=next((key for key in stages if os.environ[key+"_OUTCOME"]!="success"),"RECEIPT_MISSING")
+          status={"status":"HOLD","stage":stage,"source":"4e20c66c3bc3b9ed9a2a897639028ab2c23ac967",
+                  "workflowHead":os.environ["GITHUB_SHA"],"runId":os.environ["GITHUB_RUN_ID"]}
+          try:
+              record=json.dumps(status,sort_keys=True,separators=(",",":"),ensure_ascii=True)
+              if len(record.encode("ascii"))+1>4096:
+                  raise ValueError("RECEIPT_LIMIT")
+              pending=target.with_suffix(".fallback-pending")
+              with pending.open("x",encoding="ascii") as f:
+                  f.write(record+"\n")
+              os.link(pending,target)
+              print("FINLENS_BUILD_RECEIPT " + record, flush=True)
+          except Exception:
+              print('{"status":"HOLD","reason":"RECEIPT_SINK_FAILED"}')
+              raise SystemExit(2)
+          PY
+      - name: Upload sanitized receipt only
+        id: receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: finlens-production-diagnostic-receipt-4e20c66c
+          path: ${{ runner.temp }}/finlens-build-receipt.json
+          if-no-files-found: error
+          retention-days: 3
+      - name: Resolve outcome after receipt attempt
+        if: ${{ always() }}
+        env:
+          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+        shell: bash
+        run: |
+          test "$CAPTURE_OUTCOME" = success && test "$RECEIPT_OUTCOME" = success
