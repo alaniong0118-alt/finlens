@@ -1,0 +1,108 @@
+name: FinLens public production build proof
+on:
+  push:
+    branches: [proof/finlens-prod-build-4e20c66c-once]
+permissions:
+  contents: read
+concurrency:
+  group: finlens-public-prod-build-4e20c66c-once
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'alaniong0118-alt/finlens' && github.run_attempt == '1' && github.event.created == true && github.event.before == '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      FINLENS_API_BASE_URL: http://127.0.0.1:3108
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Bind exact public source and only workflow change
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=4e20c66c3bc3b9ed9a2a897639028ab2c23ac967
+          workflow=.github/workflows/finlens-public-prod-build-proof.yml
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n1 HEAD)" = "$GITHUB_SHA $expected"
+          test "$(git diff --name-status "$expected" HEAD)" = "$(printf 'A\t%s' "$workflow")"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.21.0'
+          architecture: x64
+          check-latest: false
+      - name: Install exact official public lock without lifecycle hooks
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.21.0
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const nodes = Object.entries(lock.packages ?? {}).filter(([name]) => name);
+          if (lock.lockfileVersion !== 3 || nodes.length < 400 || nodes.length > 1000) process.exit(2);
+          for (const [, entry] of nodes) {
+            const url = new URL(entry.resolved);
+            if (url.origin !== 'https://registry.npmjs.org' || url.username || url.password || url.search || url.hash ||
+                !url.pathname.endsWith('.tgz') || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(entry.integrity) || entry.link)
+              process.exit(2);
+          }
+          NODE
+          test ! -e .npmrc && test ! -e ../.npmrc
+          sha256sum package-lock.json > "$RUNNER_TEMP/finlens-lock.sha"
+          user_cfg="$RUNNER_TEMP/finlens-user.npmrc"; global_cfg="$RUNNER_TEMP/finlens-global.npmrc"
+          (set -o noclobber; : > "$user_cfg"; : > "$global_cfg")
+          timeout --signal=TERM --kill-after=5s 240s npm ci --ignore-scripts --no-audit --no-fund \
+            --registry=https://registry.npmjs.org --userconfig="$user_cfg" --globalconfig="$global_cfg" \
+            --cache="$RUNNER_TEMP/finlens-npm-cache" --loglevel=error 2>&1 | head -c 1048577 >"$RUNNER_TEMP/finlens-install.log"
+          test "$(wc -c < "$RUNNER_TEMP/finlens-install.log")" -le 1048576
+          sha256sum -c "$RUNNER_TEMP/finlens-lock.sha"
+          test "$(node -p 'require("next/package.json").version')" = 15.5.28
+      - name: Build once and write bounded proof only
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .next-prod
+          started=$(date +%s)
+          timeout --signal=TERM --kill-after=5s 330s node node_modules/next/dist/bin/next build 2>&1 \
+            | head -c 2097153 >"$RUNNER_TEMP/finlens-build.log" || { echo 'PRODUCTION_BUILD_HOLD'; exit 1; }
+          test "$(wc -c < "$RUNNER_TEMP/finlens-build.log")" -le 2097152
+          elapsed=$(( $(date +%s) - started ))
+          sha256sum -c "$RUNNER_TEMP/finlens-lock.sha"
+          python3 -I -B - "$elapsed" <<'PY'
+          import hashlib,json,os,re,stat,sys
+          from pathlib import Path
+          root = Path(".next-prod")
+          digests = {}
+          for name in ("BUILD_ID","build-manifest.json","routes-manifest.json"):
+              path = root / name
+              item = path.lstat()
+              if not stat.S_ISREG(item.st_mode) or not 0 < item.st_size <= 4*1024*1024:
+                  raise SystemExit("BUILD_PROOF_FILE")
+              data = path.read_bytes()
+              if name == "BUILD_ID":
+                  build_id = data.decode("ascii").strip()
+                  if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", build_id):
+                      raise SystemExit("BUILD_PROOF_ID")
+              digests[name] = hashlib.sha256(data).hexdigest()
+          receipt = dict(status="HOSTED_PRODUCTION_BUILD_OBSERVED",source="4e20c66c3bc3b9ed9a2a897639028ab2c23ac967",
+                         workflowHead=os.environ["GITHUB_SHA"],runId=os.environ["GITHUB_RUN_ID"],node="24.21.0",
+                         next="15.5.28",platform="ubuntu-24.04-x64",exit=0,elapsedSeconds=int(sys.argv[1]),
+                         buildId=build_id,filesSHA256=digests,buildOnly=True,networkEgress="NOT_ATTESTED")
+          with (Path(os.environ["RUNNER_TEMP"]) / "finlens-build-receipt.json").open("x",encoding="ascii") as record:
+              json.dump(receipt,record,sort_keys=True,separators=(",",":")); record.write("\n")
+          print("HOSTED_PRODUCTION_BUILD_OBSERVED")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: finlens-production-build-receipt-4e20c66c
+          path: ${{ runner.temp }}/finlens-build-receipt.json
+          if-no-files-found: error
+          retention-days: 3
