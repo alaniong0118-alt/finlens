@@ -92,7 +92,7 @@ export default function SecRiskComparison({ companies }: { companies: Company[] 
             <details className="provenance">
               <summary>Filings searched</summary>
               <div className="details-body">
-                <p className="small muted">This list covers only this issuer's search, not all of its filings.</p>
+                <p className="small muted">This list covers only this issuer&apos;s search, not all of its filings.</p>
                 <ul>{column.result.searched_accessions.map(accession => <li key={accession}>{accession}</li>)}</ul>
               </div>
             </details>
