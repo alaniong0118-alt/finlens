@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { getFinancialInsights, versionedController, type Company } from "@/lib/finlens-api";
 import type { DisplayRecord, InsightsPanel, InsightsPresentation, InsightsResultHandle } from "@/lib/financial-insights";
-import { officialSecUrl } from "@/lib/research";
 import { useResearchVersion } from "@/components/research-freshness";
 
 const METRICS = [
@@ -34,10 +33,9 @@ function EvidenceRecord({ record, disabled, navigate }: { record: DisplayRecord;
     <details><summary>Exact fields and source metadata</summary>
       <p className="mono">Reference: {record.ref.key}</p><p className="mono">Scope: {record.ref.scope}</p>
       <dl className="insights-fields">{record.fields.map(([path, value]) => <div key={path}>
-        <dt>{path}</dt><dd>{value === null ? "Not supplied (null)" : String(value)}
-          {path.endsWith(".sec_url") && typeof value === "string" && officialSecUrl(value) && <>
-            {" · "}<a href={officialSecUrl(value)} target="_blank" rel="noopener noreferrer">Open official SEC filing</a>
-          </>}
+        <dt>{path}</dt><dd>{path.split(".").at(-1) === "sec_url"
+          ? <span data-testid="synthetic-sec-reference">Synthetic SEC reference (not a live source)</span>
+          : value === null ? "Not supplied (null)" : String(value)}
         </dd>
       </div>)}</dl>
     </details>

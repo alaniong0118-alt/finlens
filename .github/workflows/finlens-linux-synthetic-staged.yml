@@ -1,0 +1,561 @@
+name: FinLens same-origin synthetic browser proof
+on:
+  push:
+    branches: [proof/finlens-linux-synthetic-staged-fbfbe356-once]
+permissions:
+  contents: read
+concurrency:
+  group: finlens-linux-synthetic-staged-fbfbe356-once
+  cancel-in-progress: false
+jobs:
+  proof:
+    if: github.repository == 'alaniong0118-alt/finlens' && github.run_attempt == '1' && github.event.created == true && github.event.before == '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - id: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: plan
+        name: Verify single public parent and exact overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=fbfbe35670d8e29be0cfdeec81f7125f3d54d99a
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n1 HEAD)" = "$GITHUB_SHA $base"
+          test -z "$(git status --porcelain)"
+          cat > "$RUNNER_TEMP/finlens-overlay.sha256" <<'MANIFEST'
+          6ff091801cf91fcc79e4ac9402c5270c4592b7a42a9975f65a170f0c44e70bfd  frontend/app/api/finlens/[...demo]/demo-handler.d.mts
+          24964d5d47516137b54b958eefad1f8c7855445d328fd8b6ac51170c08e7ca8f  frontend/app/api/finlens/[...demo]/demo-handler.mjs
+          4a1b9093c57115a7c4bb521f3047229a3e80ee266b4f779ad5dce658625ab180  frontend/app/api/finlens/[...demo]/demo-replies.json
+          3adf8620fa86feed84aceac081085d2017f217d91245b0d19dceb9a5e80fdeab  frontend/app/api/finlens/[...demo]/route.ts
+          bb97ace5b4c825427d9e9bf93f07925e4aacb09f19361241571f785353a9f138  frontend/app/investigations/page.tsx
+          adc23d74e36c719049dce438816f503cbdfad5be52de710ae6e037c36744fdf7  frontend/app/layout.tsx
+          8c015b9ef79e2dbb823236067cd70fadb1972da9ec23a6247ef1d4484e4931f7  frontend/app/page.tsx
+          46c9adeaf7ef6f44864bb74e17c5af7c1ec0412a06e281e99edc6eee42c25c47  frontend/components/company-comparison.tsx
+          57603fe925fe92d087569431aa85cab4d6f146ba7628d293013926fb6344d36a  frontend/components/filing-research.tsx
+          52a5386f4bd92cc241ea606950773afe4ca069fadc19a08c917bb71e0955a1e9  frontend/components/financial-insights.tsx
+          27237931cdeaba2fa3ade3012dfd390cc11f5c0ef0a73a982ccc5f689ad4100a  frontend/components/financial-research.tsx
+          fe7cb8e05c345d5412917be4bb2d5092d9d9a83cf5ea4f01a7b4ebe43ca3bd3e  frontend/next.config.ts
+          MANIFEST
+          test "$(sha256sum "$RUNNER_TEMP/finlens-overlay.sha256" | cut -d' ' -f1)" = 6ac016d7112d400ea880f40b0950ce915ea4ccfe039cd954edd02488717df69e
+          sha256sum --quiet -c "$RUNNER_TEMP/finlens-overlay.sha256"
+          cut -c67- "$RUNNER_TEMP/finlens-overlay.sha256" > "$RUNNER_TEMP/finlens-expected"
+          printf '%s\n' .github/workflows/finlens-linux-synthetic-staged.yml >> "$RUNNER_TEMP/finlens-expected"
+          LC_ALL=C sort "$RUNNER_TEMP/finlens-expected" > "$RUNNER_TEMP/finlens-expected.sorted"
+          git diff --name-only "$base" HEAD | LC_ALL=C sort > "$RUNNER_TEMP/finlens-seen"
+          cmp -s "$RUNNER_TEMP/finlens-expected.sorted" "$RUNNER_TEMP/finlens-seen"
+          test ! -e frontend/.env && test ! -e frontend/.env.local && test ! -e frontend/.env.production && test ! -e frontend/.env.production.local
+      - id: node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.21.0'
+          architecture: x64
+          check-latest: false
+      - id: dependencies
+        name: Acquire only pinned official dependencies
+        working-directory: frontend
+        shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/finlens-official-browser
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.21.0
+          node - <<'NODE'
+          const lock=JSON.parse(require("node:fs").readFileSync("package-lock.json","utf8"));
+          const rows=Object.entries(lock.packages).filter(([n])=>n);
+          if(lock.lockfileVersion!==3 || rows.length!==503) process.exit(2);
+          for(const [,x] of rows){
+            const u=new URL(x.resolved);
+            if(u.origin!=="https://registry.npmjs.org" || u.username || u.password || u.search || u.hash ||
+               !u.pathname.endsWith(".tgz") || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(x.integrity) || x.link) process.exit(2);
+          }
+          NODE
+          test ! -e .npmrc && test ! -e ../.npmrc
+          user="$RUNNER_TEMP/finlens-user.npmrc"; global="$RUNNER_TEMP/finlens-global.npmrc"
+          (set -o noclobber; : > "$user"; : > "$global")
+          sha256sum package-lock.json > "$RUNNER_TEMP/finlens-lock.sha"
+          timeout -k 5s 240s npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org \
+            --userconfig="$user" --globalconfig="$global" --cache="$RUNNER_TEMP/finlens-npm" --loglevel=error \
+            >/dev/null 2>&1
+          sha256sum -c "$RUNNER_TEMP/finlens-lock.sha"
+          test "$(node -p 'require("next/package.json").version')" = 15.5.28
+          test "$(node -p 'require("@playwright/test/package.json").version')" = 1.64.0
+          timeout -k 5s 150s node node_modules/@playwright/test/cli.js install chromium >/dev/null 2>&1
+      - id: acceptance
+        name: Build, run and verify same-origin synthetic journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/finlens-proof"
+          mkdir -m 700 "$base" "$base/home" "$base/tmp"
+          cat > "$base/smoke.mjs" <<'SMOKE'
+          import assert from 'node:assert/strict';
+          import {createRequire} from 'node:module';
+          import path from 'node:path';
+          import fs from 'node:fs';
+
+          import {pathToFileURL} from 'node:url';
+          const STAGES=Object.freeze(['DEPENDENCY_IMPORT','CHROMIUM_BOOT','PAGE_FIXTURES',
+           'FY2024_CONTROLS','POST_LEDGER','PROVENANCE','FINAL_LEDGER','BROWSER_CLOSE']);
+          const MAX_BYTES=256;
+          export async function reportRun(work,cleanup){
+           let current=0,failed=null;
+           const mark=stage=>{
+            if(STAGES[current+1]!==stage||stage==='BROWSER_CLOSE')throw Error('CHECKPOINT_ORDER');
+            current++;
+           };
+           try{
+            await work(mark);
+            if(current!==6)failed=STAGES[current];
+           }catch{failed=STAGES[current]}
+           let cleanupResult='PASS';
+           try{await cleanup()}catch{cleanupResult='HOLD';if(failed===null)failed='BROWSER_CLOSE'}
+           return failed===null
+            ? {schema:1,status:'PASS',stage:'COMPLETE',cleanup:cleanupResult}
+            : {schema:1,status:'HOLD',stage:failed,cleanup:cleanupResult};
+          }
+          export function interpretReceipt(raw,exit){
+           if(raw===null)return {status:'HOLD',reason:'RECEIPT_MISSING'};
+           try{
+            if(!Buffer.isBuffer(raw)||raw.length>MAX_BYTES||!raw.length)throw Error('SHAPE');
+            const x=JSON.parse(raw.toString('ascii'));
+            if(!x||typeof x!=='object'||Array.isArray(x)||Object.keys(x).sort().join(',')!=='cleanup,schema,stage,status'||
+              x.schema!==1||!['PASS','HOLD'].includes(x.cleanup)||
+              !raw.equals(Buffer.from(JSON.stringify({schema:x.schema,status:x.status,stage:x.stage,cleanup:x.cleanup})+'\n')))
+             throw Error('SHAPE');
+            if(exit===0&&x.status==='PASS'&&x.stage==='COMPLETE'&&x.cleanup==='PASS')return x;
+            if(exit===1&&x.status==='HOLD'&&STAGES.includes(x.stage)&&(x.stage!=='BROWSER_CLOSE'||x.cleanup==='HOLD'))return x;
+            return {status:'HOLD',reason:'RECEIPT_EXIT_MISMATCH'};
+           }catch{return {status:'HOLD',reason:'RECEIPT_MALFORMED'}}
+          }
+          function admittedDir(p){
+           if(typeof p!=='string'||!path.isAbsolute(p)||path.resolve(p)!==p||fs.realpathSync(p)!==p)throw Error('RECEIPT_DIR');
+           const s=fs.lstatSync(p);if(!s.isDirectory()||s.uid!==process.getuid()||(s.mode&0o777)!==0o700)throw Error('RECEIPT_DIR');
+           return p;
+          }
+
+          function loadChromium(){
+            const cwd=process.cwd();
+            const require=createRequire(path.join(cwd,'package.json'));
+            const pkg=require.resolve('playwright/package.json');
+            assert.equal(fs.realpathSync(pkg),path.join(cwd,'node_modules','playwright','package.json'));
+            assert.equal(require(pkg).version,'1.64.0');
+            return require('playwright').chromium;
+          }
+          const launch=(chromium)=>chromium.launch({chromiumSandbox:true,args:['--disable-background-networking']});
+          async function runCanary(dir){
+           let stage='DEPENDENCY_IMPORT',failure=null,cleanup='PASS',browser,context;
+           try{
+            const chromium=loadChromium();
+            stage='CHROMIUM_BOOT';
+            browser=await launch(chromium);
+            context=await browser.newContext({serviceWorkers:'block'});
+            const page=await context.newPage();
+            assert.equal(page.url(),'about:blank');
+            assert.equal(await page.evaluate(()=>1),1);
+           }catch{failure=stage}
+           try{
+            try{if(context)await context.close()}finally{if(browser)await browser.close()}
+           }catch{cleanup='HOLD';if(!failure)failure='BROWSER_CLOSE'}
+           const result={schema:1,status:failure?'HOLD':'PASS',stage:failure??'COMPLETE',cleanup};
+           fs.writeFileSync(path.join(dir,'finlens-desktop-smoke.json'),JSON.stringify(result)+'\n',{flag:'wx',mode:0o600});
+           return failure?1:0;
+          }
+          async function runDesktop(dir){
+           let browser,contextForClose;
+           const receipt=await reportRun(async mark=>{
+            const chromium=loadChromium();
+            const origin='http://127.0.0.1:3107';
+            const api='/api/finlens';
+            const seen=new Set(), violations=[];
+            const allowed=new Set(['/companies','/capabilities','/companies/AAA/freshness',
+             '/companies/AAA/financials/insights?mode=discover','/companies/AAA/financials/annual',
+             '/companies/AAA/financials/quarters','/companies/AAA/financials/summary?period=quarter',
+             '/companies/AAA/financials/metrics/revenue?period=quarter&limit=12','/companies/AAA/research-answer']);
+            const successful=new Set();
+            const unpinned=new Set(['/companies','/capabilities','/companies/AAA/freshness']);
+            function observeResponse(res){
+             const u=new URL(res.url());
+             if(!u.pathname.startsWith(api+'/'))return;
+             const key=(u.pathname+u.search).slice(api.length);
+             if(u.origin!==origin||!allowed.has(key)||res.status()!==200||
+                res.headers()['x-finlens-data-version']!==(unpinned.has(key)?undefined:'0')){
+               violations.push('API_RESPONSE');return;
+             }
+             successful.add(key);
+            }
+            
+            mark('CHROMIUM_BOOT');
+            browser=await launch(chromium);
+            mark('PAGE_FIXTURES');
+            const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1440,height:1000}});
+            contextForClose=context;
+            await context.route('**/*',async route=>{
+              const req=route.request(), u=new URL(req.url()), target=u.pathname+u.search;
+              if(u.origin!==origin||req.redirectedFrom()){
+                violations.push('ORIGIN');return route.abort();
+              }
+              if(u.pathname.startsWith(api+'/')){
+                const key=target.slice(api.length), answer=key==='/companies/AAA/research-answer';
+                if(!allowed.has(key)||req.method()!==(answer?'POST':'GET')||
+                  answer&&(req.postData()!=='{"question":"What was FY2024 revenue?"}'||
+                           req.headers()['x-finlens-data-version']!=='0')){
+                  violations.push('API_CONTRACT');return route.abort();
+                }
+                seen.add(key);
+              }
+              await route.continue();
+            });
+            const page=await context.newPage();
+            page.on('response',observeResponse);
+            page.setDefaultTimeout(8000);
+            await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
+            assert.equal(new URL(page.url()).origin,origin);
+            const note=page.getByTestId('finlens-synthetic-trial-banner');
+            await note.waitFor({state:'visible'});
+            assert.match(await note.innerText(),/SYNTHETIC DEMO ONLY/);
+            mark('FY2024_CONTROLS');
+            const editor=page.getByRole('textbox',{name:'Research question or search',exact:true});
+            await page.getByRole('combobox',{name:'Question preparation',exact:true}).selectOption('historical');
+            await page.getByRole('combobox',{name:'Question metric',exact:true}).selectOption('revenue');
+            await page.getByRole('combobox',{name:'Requested fiscal period',exact:true}).selectOption('annual');
+            await page.getByRole('textbox',{name:'Fiscal year',exact:true}).fill('2024');
+            await page.getByRole('button',{name:'Use question',exact:true}).click();
+            assert.equal(await editor.inputValue(),'What was FY2024 revenue?');
+            mark('POST_LEDGER');
+            const [res]=await Promise.all([
+              page.waitForResponse(r=>r.url()===origin+api+'/companies/AAA/research-answer',{timeout:8000}),
+              page.getByRole('button',{name:'Research question',exact:true}).click(),
+            ]);
+            assert.equal(res.status(),200);
+            const answerBody=await res.json();
+            assert.equal(answerBody.ticker,'AAA');assert.equal(answerBody.formatted_value,'$100.00');
+            assert.equal(answerBody.observation.provenance[0].accession_number,'0000900001-24-000000');
+            const answer=page.locator('.direct-answer');
+            const metricValue=answer.locator('.metric-value');
+            await metricValue.waitFor({state:'visible'});
+            assert.equal((await metricValue.innerText()).trim(),'$100.00');
+            assert.match(await answer.innerText(),/\bFY2024\b/);
+            mark('PROVENANCE');
+            await answer.getByText('View provenance',{exact:true}).click();
+            const reference=answer.getByTestId('synthetic-sec-reference');
+            await reference.waitFor({state:'visible'});
+            assert.equal(await reference.evaluate(el=>el.closest('a')===null),true);
+            assert.match(await answer.innerText(),/0000900001-24-000000/);
+            assert.equal(await page.locator('a[href*="000090000124000000"],a[href*="0000900001-24-000000"]').count(),0);
+            mark('FINAL_LEDGER');
+            assert.deepEqual(violations,[]);assert.deepEqual([...seen].sort(),[...allowed].sort());
+            assert.deepEqual([...successful].sort(),[...allowed].sort());
+            // No screenshot by default; a receipt alone satisfies this run.
+           
+           },async ()=>{
+            try{if(contextForClose)await contextForClose.close()}finally{if(browser)await browser.close()}
+           });
+           const raw=Buffer.from(JSON.stringify(receipt)+'\n');
+           if(raw.length>MAX_BYTES)throw Error('RECEIPT_LIMIT');
+           fs.writeFileSync(path.join(dir,'finlens-desktop-smoke.json'),raw,{flag:'wx',mode:0o600});
+           return receipt.status==='PASS'?0:1;
+          }
+          if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+           try{
+            if(process.argv.length!==3&&!(process.argv.length===4&&process.argv[3]==='--boot-canary'))throw Error('ARGV');
+            const dir=admittedDir(process.argv[2]);
+            process.exitCode=await (process.argv.length===4?runCanary(dir):runDesktop(dir));
+           }catch{process.exitCode=2}
+          }
+          SMOKE
+          cat > "$base/verify.py" <<'VERIFY'
+          """FinLens private Linux acceptance supervisor. Run only on separately admitted isolation."""
+          import ctypes,hashlib,json,os,re,signal,stat,subprocess,sys,time
+          from pathlib import Path
+          PORTS=(3107,)
+          class Hold(Exception): pass
+
+          def fail(code): raise Hold(code)
+          def command(source): return [sys.executable,"-IBS","-c",source]
+
+          def children():
+              result=set()
+              pids=[p for p in Path("/proc").iterdir() if p.name.isdecimal()]
+              if len(pids)>8192:fail("PID_INVENTORY_LIMIT")
+              for p in pids:
+                  try:
+                      fields=(p/"stat").read_bytes().rpartition(b")")[2].split()
+                      if int(fields[1])==os.getpid():result.add(int(p.name))
+                  except FileNotFoundError:continue
+              return result
+
+          def listeners(port):
+              found=[]
+              for label in ("tcp","tcp6"):
+                  with open("/proc/net/"+label,encoding="ascii") as stream:
+                      next(stream)
+                      for line in stream:
+                          row=line.split()
+                          if row[3]=="0A" and int(row[1].rsplit(":",1)[1],16)==port:
+                              found.append((label,row[1].split(":")[0],row[9]))
+              return found
+
+          def listener_of(p,port):
+              rows=listeners(port)
+              if not rows:return False
+              if len(rows)!=1 or rows[0][:2]!=("tcp","0100007F"):
+                  fail("LISTENER_NOT_EXACT_LOOPBACK")
+              if os.readlink(f"/proc/{p.pid}/ns/net")!=os.readlink("/proc/self/ns/net"):
+                  fail("NETWORK_NAMESPACE_DRIFT")
+              target=f"socket:[{rows[0][2]}]"
+              for entry in Path(f"/proc/{p.pid}/fd").iterdir():
+                  try:
+                      if os.readlink(entry)==target:return True
+                  except FileNotFoundError:continue
+              fail("LISTENER_NOT_OWNED")
+
+          def stop_owned(roots):
+              end=time.monotonic()+2
+              while time.monotonic()<end:
+                  current=children()
+                  if not current:return True
+                  for n in current:
+                      fd=None
+                      try:
+                          fd=os.pidfd_open(n)
+                          if n in children():signal.pidfd_send_signal(fd,signal.SIGKILL)
+                      except ProcessLookupError:pass
+                      finally:
+                          if fd is not None:os.close(fd)
+                  for p in roots:p.poll()
+                  for n in children()-{p.pid for p in roots}:
+                      try:os.waitpid(n,os.WNOHANG)
+                      except ChildProcessError: pass
+                  time.sleep(.02)
+              return not children()
+
+          def supervise(services,ports,smoke,*,cwd=None,ready=listener_of,start_timeout=30,smoke_timeout=60):
+              result=dict(status="HOLD",phase="ADMISSION",reason="NOT_RUN",cleanup="NOT_NEEDED",
+                          smokeExit=None,networkEgress="REQUIRES_EXTERNAL_ATTESTATION")
+              owns=False; armed=False; managed={}; roots=[]
+              def configure_subreaper(wanted):
+                  libc=ctypes.CDLL(None,use_errno=True)
+                  old=ctypes.c_int()
+                  if libc.prctl(37,ctypes.byref(old),0,0,0)!=0 or libc.prctl(36,wanted,0,0,0)!=0:
+                      fail("SUBREAPER_UNAVAILABLE")
+                  return old.value
+              def interrupted(*_): fail("INTERRUPTED")
+              def start(argv):
+                  if (not isinstance(argv,list) or not 1<=len(argv)<=32 or
+                      not all(isinstance(x,str) and 0<len(x)<=2048 and "\0" not in x for x in argv)
+                      or not os.path.isabs(argv[0])):fail("ARGV")
+                  env={"PATH":os.path.dirname(argv[0])+":/usr/bin:/bin","LC_ALL":"C.UTF-8",
+                       "NEXT_TELEMETRY_DISABLED":"1","FINLENS_API_BASE_URL":"http://127.0.0.1:3108",
+                       "FINLENS_SYNTHETIC_TRIAL":"1","PLAYWRIGHT_BROWSERS_PATH":os.environ["PLAYWRIGHT_BROWSERS_PATH"],
+                       "HOME":os.environ["HOME"],"TMPDIR":os.environ["TMPDIR"]}
+                  p=subprocess.Popen(argv,cwd=cwd,env=env,start_new_session=True,
+                              stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                  roots.append(p);return p
+              try:
+                  if sys.platform!="linux" or not hasattr(os,"pidfd_open") or not hasattr(signal,"pidfd_send_signal"):
+                      fail("LINUX_OWNERSHIP_UNSUPPORTED")
+                  if ports not in (PORTS,()) or len(services)!=len(ports) or not 0<start_timeout<=60 or not 0<smoke_timeout<=120:fail("PLAN")
+                  if children():fail("PREEXISTING_CHILD")
+                  if ready is listener_of and any(listeners(p) for p in ports):fail("PORT_OCCUPIED")
+                  previous=configure_subreaper(1);armed=True
+                  for sig in (signal.SIGINT,signal.SIGTERM):
+                      managed[sig]=signal.signal(sig,interrupted)
+                  owns=True
+                  live=[]
+                  for name,argv,port in zip(("SERVER",),services,ports):
+                      result["phase"]=name
+                      p=start(argv);live.append(p)
+                      until=time.monotonic()+start_timeout
+                      while time.monotonic()<until:
+                          if any(q.poll() is not None for q in live):fail("EARLY_EXIT")
+                          if ready(p,port):break
+                          time.sleep(.025)
+                      else:fail("READY_TIMEOUT")
+                  result["phase"]="SMOKE"
+                  check=start(smoke);until=time.monotonic()+smoke_timeout
+                  while check.poll() is None:
+                      if any(q.poll() is not None for q in live):fail("SERVICE_EXIT")
+                      if time.monotonic()>=until:fail("SMOKE_TIMEOUT")
+                      time.sleep(.025)
+                  result["smokeExit"]=check.returncode
+                  if check.returncode:fail("SMOKE_NONZERO")
+                  if any(q.poll() is not None for q in live):fail("SERVICE_EXIT")
+                  if ready is listener_of and not all(ready(x,p) for x,p in zip(live,ports)):fail("LISTENER_DRIFT")
+                  result.update(status="PASS",reason="VERIFIED_SMOKE_EXIT")
+              except Hold as e:result["reason"]=str(e)
+              except Exception:result["reason"]="SUPERVISOR_EXCEPTION"
+              finally:
+                  for sig in managed:signal.signal(sig,signal.SIG_IGN)
+                  try:
+                      if owns:
+                          clean=stop_owned(roots) and (ready is not listener_of or not any(listeners(p) for p in ports))
+                          result["cleanup"]="EMPTY" if clean else "UNVERIFIED"
+                          if not clean:result.update(status="HOLD",reason="CLEANUP_UNVERIFIED")
+                  except Exception:result.update(status="HOLD",cleanup="UNVERIFIED",reason="CLEANUP_UNVERIFIED")
+                  finally:
+                      for sig,handler in managed.items():signal.signal(sig,handler)
+                      if armed:configure_subreaper(previous)
+              return result
+
+
+
+          STAGES=("DEPENDENCY_IMPORT","CHROMIUM_BOOT","PAGE_FIXTURES","FY2024_CONTROLS",
+                  "POST_LEDGER","PROVENANCE","FINAL_LEDGER","BROWSER_CLOSE")
+          BOOT_STAGES=(STAGES[0],STAGES[1],STAGES[-1])
+
+          def read_stage_receipt(raw, exact_exit, canary):
+              if raw is None:return False,"RECEIPT_MISSING"
+              try:
+                  if not isinstance(raw,bytes) or not 0<len(raw)<=256:raise ValueError()
+                  r=json.loads(raw.decode("ascii"))
+                  if not isinstance(r,dict) or set(r)!={"schema","status","stage","cleanup"} or type(r["schema"]) is not int or r["schema"]!=1:
+                      raise ValueError()
+                  canonical={k:r[k] for k in ("schema","status","stage","cleanup")}
+                  if (json.dumps(canonical,separators=(",",":"))+"\n").encode("ascii")!=raw:raise ValueError()
+                  if r["cleanup"] not in ("PASS","HOLD"):raise ValueError()
+                  if exact_exit==0 and r["status"]=="PASS" and r["stage"]=="COMPLETE" and r["cleanup"]=="PASS":
+                      return True,"COMPLETE"
+                  if exact_exit==1 and r["status"]=="HOLD" and r["stage"] in (BOOT_STAGES if canary else STAGES):
+                      if r["stage"]!="BROWSER_CLOSE" or r["cleanup"]=="HOLD":return False,r["stage"]
+                  return False,"RECEIPT_EXIT_MISMATCH"
+              except Exception:return False,"RECEIPT_MALFORMED"
+
+          def collect_stage(pathname, exit_code, canary):
+              try:
+                  fd=os.open(pathname,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC|os.O_NONBLOCK)
+              except FileNotFoundError:return False,"RECEIPT_MISSING"
+              except OSError:return False,"RECEIPT_MALFORMED"
+              try:
+                  st=os.fstat(fd)
+                  if not stat.S_ISREG(st.st_mode) or st.st_uid!=os.getuid() or st.st_nlink!=1 or stat.S_IMODE(st.st_mode)!=0o600:
+                      return False,"RECEIPT_MALFORMED"
+                  with os.fdopen(fd,"rb",closefd=False) as f: raw=f.read(257)
+                  if len(raw)!=st.st_size:return False,"RECEIPT_MALFORMED"
+                  return read_stage_receipt(raw,exit_code,canary)
+              except OSError:return False,"RECEIPT_MALFORMED"
+              finally:os.close(fd)
+
+          def verify():
+              node, smoke, root, receipt = sys.argv[1:]
+              stage="NAMESPACE"
+              rc=None; snapshot=None; boot=None; browser_stage=None
+              try:
+                  status=Path("/proc/self/status").read_text("ascii")
+                  if os.geteuid()==0 or not re.search(r"^CapEff:\s*0{16}$",status,re.M) or not re.search(r"^NoNewPrivs:\s*1$",status,re.M):
+                      fail("NAMESPACE_IDENTITY")
+                  base=Path(receipt).parent
+                  with (base/"namespace-ready").open("x",encoding="ascii") as gate:gate.write("VERIFIED\n")
+                  boot_dir=base/"boot"; app_dir=base/"journey"
+                  boot_dir.mkdir(mode=0o700);app_dir.mkdir(mode=0o700)
+                  stage="CHROMIUM_CANARY"
+                  boot=supervise([],(),[node,smoke,str(boot_dir),"--boot-canary"],cwd=root,start_timeout=1,smoke_timeout=35)
+                  boot_valid,browser_stage=collect_stage(boot_dir/"finlens-desktop-smoke.json",boot["smokeExit"],True)
+                  if not boot_valid or boot["status"]!="PASS" or boot["cleanup"]!="EMPTY":fail("CANARY_HOLD")
+                  stage="BUILD"
+                  rc=subprocess.run([node,"node_modules/next/dist/bin/next","build"],cwd=root,
+                        stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=330).returncode
+                  if rc!=0:fail("BUILD_NONZERO")
+                  stage="BUILD_OUTPUT"
+                  build=Path(root)/".next-prod"/"BUILD_ID"
+                  if build.is_symlink() or not build.is_file() or build.stat().st_size>128:fail("BUILD_ID")
+                  bid=build.read_text("ascii").strip()
+                  if not re.fullmatch("[A-Za-z0-9_-]{1,128}",bid):fail("BUILD_ID")
+                  stage="RUNTIME"
+                  snapshot=supervise([[node,"node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port","3107"]],
+                                     PORTS,[node,smoke,str(app_dir)],cwd=root,start_timeout=45,smoke_timeout=90)
+                  browser_valid,browser_stage=collect_stage(app_dir/"finlens-desktop-smoke.json",snapshot["smokeExit"],False)
+                  if not browser_valid or snapshot["status"]!="PASS" or snapshot["cleanup"]!="EMPTY":fail("RUNTIME_HOLD")
+                  result={"status":"PASS","stage":"COMPLETE","buildExit":0,"smokeExit":0,"cleanup":"EMPTY",
+                          "browser":"DESKTOP_CHROMIUM","mobile":"NOT_RUN","network":"ISOLATED_LOOPBACK_ONLY",
+                          "browserStage":browser_stage,"canaryExit":boot["smokeExit"],
+                          "buildId":bid}
+              except Hold as exc:
+                  result={"status":"HOLD","stage":stage,"reason":str(exc),"buildExit":rc}
+                  if boot: result["canaryExit"]=boot["smokeExit"]
+                  if browser_stage is not None:result["browserStage"]=browser_stage
+                  if not snapshot and stage=="CHROMIUM_CANARY" and boot:snapshot=boot
+                  if snapshot:
+                      result.update(runtimePhase=snapshot["phase"],runtimeReason=snapshot["reason"],
+                                    cleanup=snapshot["cleanup"],smokeExit=snapshot["smokeExit"])
+              except subprocess.TimeoutExpired:
+                  result={"status":"HOLD","stage":stage,"reason":"BUILD_TIMEOUT","buildExit":None}
+              except Exception:
+                  result={"status":"HOLD","stage":stage,"reason":"VERIFIER_EXCEPTION","buildExit":rc}
+              with open(receipt,"x",encoding="ascii") as out:
+                  out.write(json.dumps(result,sort_keys=True,separators=(",",":"))+"\n")
+              return 0 if result["status"]=="PASS" else 2
+          raise SystemExit(verify())
+          VERIFY
+          cat > "$base/enter.sh" <<'ENTER'
+          set -euo pipefail
+          parent_net="$1"; parent_pid="$2"; uid="$3"; gid="$4"; node="$5"; base="$6"; front="$7"; browser="$8"
+          test "$(readlink /proc/self/ns/net)" != "$parent_net"
+          test "$(readlink /proc/self/ns/pid)" != "$parent_pid"
+          ip link set dev lo up
+          test "$(ip -o link show | cut -d: -f2 | tr -d ' ')" = lo
+          test -z "$(ip -4 route show default)"
+          test -z "$(ip -6 route show default)"
+          exec setpriv --reuid "$uid" --regid "$gid" --clear-groups --no-new-privs \
+            --inh-caps=-all --ambient-caps=-all --bounding-set=-all env -i \
+            PATH="$(dirname "$node"):/usr/bin:/bin" LC_ALL=C.UTF-8 HOME="$base/home" TMPDIR="$base/tmp" CI=true \
+            NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH="$browser" \
+            /usr/bin/python3 -IBS "$base/verify.py" "$node" "$base/smoke.mjs" "$front" "$base/receipt.json"
+          ENTER
+          node="$(readlink -f "$(command -v node)")"
+          front="$GITHUB_WORKSPACE/frontend"
+          ns_net="$(readlink /proc/self/ns/net)"; ns_pid="$(readlink /proc/self/ns/pid)"
+          set +e
+          timeout --signal=TERM --kill-after=5s 540s sudo -n unshare --net --pid --fork --kill-child=KILL --mount-proc \
+            /bin/bash "$base/enter.sh" "$ns_net" "$ns_pid" "$(id -u)" "$(id -g)" "$node" "$base" "$front" \
+            "$RUNNER_TEMP/finlens-official-browser" >/dev/null 2>&1
+          rc=$?
+          set -e
+          if test -f "$base/receipt.json" && test ! -L "$base/receipt.json"; then
+            test "$(wc -c < "$base/receipt.json")" -le 4096
+            cp --no-clobber "$base/receipt.json" "$RUNNER_TEMP/finlens-synthetic-proof.json"
+            exit "$rc"
+          fi
+          if test -f "$base/namespace-ready"; then stage=VERIFIER_ABSENT; else stage=NAMESPACE; fi
+          printf '{"status":"HOLD","stage":"%s","reason":"RECEIPT_MISSING"}\n' "$stage" > "$RUNNER_TEMP/finlens-synthetic-proof.json"
+          exit 2
+      - name: Emit safe diagnostic receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          PLAN: ${{ steps.plan.outcome }}
+          NODE_SETUP: ${{ steps.node.outcome }}
+          DEPENDENCIES: ${{ steps.dependencies.outcome }}
+          ACCEPTANCE: ${{ steps.acceptance.outcome }}
+        run: |
+          python3 -IB - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ["RUNNER_TEMP"])/"finlens-synthetic-proof.json"
+          if not p.exists():
+              stage=next((x for x in ("CHECKOUT","PLAN","NODE_SETUP","DEPENDENCIES","ACCEPTANCE")
+                          if os.environ.get(x)!="success"),"RECEIPT_MISSING")
+              record={"status":"HOLD","stage":stage,"source":"fbfbe35670d8e29be0cfdeec81f7125f3d54d99a",
+                      "workflowHead":os.environ["GITHUB_SHA"],"runId":os.environ["GITHUB_RUN_ID"]}
+              with p.open("x",encoding="ascii") as f:
+                  f.write(json.dumps(record,sort_keys=True,separators=(",",":"))+"\n")
+          line=p.read_text("ascii")
+          if len(line)>4096 or line.count("\n")!=1: raise SystemExit("RECEIPT_SHAPE")
+          result=json.loads(line)
+          allowed={"status","stage","reason","buildExit","smokeExit","cleanup","browser","mobile","network",
+                   "buildId","runtimePhase","runtimeReason","source","workflowHead","runId","browserStage","canaryExit"}
+          import re
+          if not isinstance(result,dict) or not set(result)<=allowed: raise SystemExit("RECEIPT_KEYS")
+          for k,v in result.items():
+              if isinstance(v,str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",v): continue
+              if k in {"buildExit","smokeExit","canaryExit"} and (v is None or type(v) is int and -255<=v<=255):continue
+              raise SystemExit("RECEIPT_VALUE")
+          result.update(source="fbfbe35670d8e29be0cfdeec81f7125f3d54d99a",
+                        workflowHead=os.environ["GITHUB_SHA"],runId=os.environ["GITHUB_RUN_ID"])
+          print("FINLENS_SYNTHETIC_PROOF "+json.dumps(result,sort_keys=True,separators=(",",":")))
+          PY
