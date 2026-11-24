@@ -73,7 +73,7 @@ function FactFilingLink({ source, verification, alternative = false }: {
   const url = verification ? verifiedFactFilingUrl(source, verification.issuerCik) : officialSecUrl(source.sec_url);
   if (!url && !verification) return null;
   return <>{alternative && " · "}{url
-    ? <a href={url} target="_blank" rel="noopener noreferrer">{alternative ? "SEC source ↗" : "Open official SEC filing ↗"}</a>
+    ? <span data-testid="synthetic-sec-reference">Synthetic SEC reference (not a live source)</span>
     : <span>SEC filing link could not be verified.</span>}</>;
 }
 

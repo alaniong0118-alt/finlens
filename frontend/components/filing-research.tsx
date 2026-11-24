@@ -6,7 +6,6 @@ import { citationForClaim, describeApiError, FinLensApiError, versionedControlle
 import { AI_UNAVAILABLE, createRequestScope, evidencePassages, formatDate, officialSecUrl, METRIC_CATALOG, METRIC_GROUPS, QUESTION_SCOPE_LABELS, guidedQuestion, fiscalQuestionPeriods, guidedFiscalQuestion, type FiscalQuestionPeriod, type QuestionScope } from "@/lib/research";
 import DirectResearchAnswer from "@/components/research-answer";
 import DualFilingEvidence from "@/components/dual-filing-evidence";
-import EvidenceReportExport from "@/components/evidence-report-export";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
 import PassageTone, { type RegisterAnalysisCancellation } from "@/components/passage-tone";
 import { RISK_TOPICS, RISK_EXPLANATION, riskTopic, riskQueryLabel, validateRiskEvidence, RiskEvidenceError, type RiskRequest } from "@/lib/sec-risk";
@@ -571,7 +570,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       {purpose === "general" && <p role="status" className="notice evidence-query">Evidence from completed search: “{result.query}”.{!evidenceAnalysisReady ? " Kept for reference until another search succeeds; it does not support a different question." : ""}</p>}
       <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}{purpose === "risk" ? "Filing dates describe the returned sources, not a current or complete risk assessment." : "Passages may describe different periods and are research, not validation of the structured answer."}</p>
       <EvidenceResults key={`evidence-${purpose}-${result.query}-${retrievalScope}`} result={result} answer={purpose === "risk" || !evidenceAnalysisReady || "retrieval_scope" in result || answer?.question !== result.query ? null : answer} company={company} risk={purpose === "risk"} allowAnalysis={evidenceAnalysisReady} registerAnalysisCancellation={registerAnalysisCancellation} />
-      {version !== null && <EvidenceReportExport company={company} result={result} dataVersion={version} referenceOnly={!evidenceAnalysisReady} risk={purpose === "risk"} />}
+      <p className="muted small">Evidence export is unavailable in this synthetic preview.</p>
       {purpose === "general" && ("retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : evidenceAnalysisReady && <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} registerAnalysisCancellation={registerAnalysisCancellation} />)}
     </>}
     </>}
