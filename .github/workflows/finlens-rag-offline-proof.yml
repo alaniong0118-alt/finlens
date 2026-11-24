@@ -1,0 +1,307 @@
+name: FinLens offline adapter proof
+
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+    paths:
+      - '.github/workflows/finlens-rag-offline-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  split-proof:
+    if: >-
+      github.repository == 'alaniong0118-alt/finlens' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'finlens-rag-offline-proof-f5a5c8af' &&
+      github.event.pull_request.base.sha == 'f5a5c8af03f76d108da58b815db4df4feb8b7110' &&
+      github.event.pull_request.draft == true &&
+      github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      BASE_SHA: f5a5c8af03f76d108da58b815db4df4feb8b7110
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Bind exact backend and workflow-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$HEAD_SHA $BASE_SHA"
+          test "$(git diff --name-status --no-renames "$BASE_SHA" "$HEAD_SHA")" = "$(printf 'A\t.github/workflows/finlens-rag-offline-proof.yml')"
+          test "$(git rev-parse "$BASE_SHA:backend")" = "$(git rev-parse HEAD:backend)"
+          test "$(git rev-parse HEAD:backend/requirements-history-bootstrap.lock)" = 11c3a66d812656f9299c82205ef0908cfeb5c0f9
+          test "$(git rev-parse HEAD:backend/requirements-history-contract.lock)" = 0aa3adbad06ec5b0dc51ac1fef3c305c83b420f5
+          test ! -e backend/.env && test ! -L backend/.env
+          test -z "$(git status --porcelain=v1 --untracked-files=all -- backend)"
+          printf 'SOURCE_BOUND backend_tree=%s\n' "$(git rev-parse HEAD:backend)"
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14.7'
+          architecture: x64
+      - name: Install hash-pinned history contract dependencies
+        working-directory: .
+        env:
+          PIP_CONFIG_FILE: /dev/null
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python -I -S -B -c 'import struct, sys, sysconfig; assert sys.version_info[:3] == (3, 14, 7) and struct.calcsize("P") == 8 and not sysconfig.get_config_var("Py_GIL_DISABLED"); print(sys.version)'
+          pilot="$RUNNER_TEMP/finlens-rag-proof"
+          mkdir -m 700 "$pilot"
+          history_wheels="$pilot/wheels"
+          mkdir "$history_wheels"
+          python -I -S -B - "$history_wheels" <<'PY'
+          import hashlib, sys
+          from pathlib import Path
+          from urllib.request import urlopen
+          url = "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl"
+          expected = "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e"
+          lock = Path("backend/requirements-history-bootstrap.lock").read_text(encoding="utf-8")
+          if "pip==26.2.1" not in lock or "--hash=sha256:" + expected not in lock:
+              raise RuntimeError("Unexpected pip bootstrap lock")
+          with urlopen(url, timeout=60) as response:
+              if response.geturl() != url:
+                  raise RuntimeError("Unexpected pip wheel redirect")
+              data = response.read(1816633)
+          if len(data) != 1816632 or hashlib.sha256(data).hexdigest() != expected:
+              raise RuntimeError("Pip bootstrap wheel size/hash mismatch")
+          (Path(sys.argv[1]) / "pip-26.2.1-py3-none-any.whl").write_bytes(data)
+          PY
+          python -I -S -B -m venv --without-pip "$pilot/venv"
+          history_python="$pilot/venv/bin/python"
+          "$history_python" -I -S -B -c 'import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("pip", run_name="__main__", alter_sys=True)' "$history_wheels/pip-26.2.1-py3-none-any.whl" --isolated --disable-pip-version-check --no-cache-dir install --ignore-installed --no-deps --no-index --find-links "$history_wheels" --only-binary=:all: --require-hashes --no-compile --prefix "$pilot/venv" -r backend/requirements-history-bootstrap.lock
+          history_pip='import runpy, sys, sysconfig; sys.path.insert(0, sysconfig.get_path("purelib")); runpy.run_module("pip", run_name="__main__", alter_sys=True)'
+          "$history_python" -I -S -B -c "$history_pip" --isolated --disable-pip-version-check --no-cache-dir download --retries 0 --timeout 20 --only-binary=:all: --require-hashes --index-url https://pypi.org/simple --dest "$history_wheels" -r backend/requirements-history-contract.lock
+          "$history_python" -I -S -B -c "$history_pip" --isolated --disable-pip-version-check --no-cache-dir install --no-index --find-links "$history_wheels" --only-binary=:all: --require-hashes --no-compile --prefix "$pilot/venv" -r backend/requirements-history-contract.lock
+          "$history_python" -I -S -B -c "$history_pip" --isolated --disable-pip-version-check --no-cache-dir check
+      - name: Run nine synthetic tests in a sterile root and network namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          pilot="$RUNNER_TEMP/finlens-rag-proof"
+          py="$pilot/venv/bin/python"
+          tree="$(git rev-parse "$BASE_SHA:backend")"
+          mount_id="$(readlink /proc/self/ns/mnt)"
+          net_id="$(readlink /proc/self/ns/net)"
+          pid_id="$(readlink /proc/self/ns/pid)"
+          uid="$(id -u)"
+          gid="$(id -g)"
+          test "$uid" -gt 0 && test "$gid" -gt 0
+          test ! -e backend/.env && test ! -L backend/.env
+          tools="$("$py" -I -S -B -c 'import sys; print(sys.base_prefix)')"
+          test "$tools" = /opt/hostedtoolcache/Python/3.14.7/x64
+          test "$(realpath "$tools")" = "$tools"
+          test "$(realpath "$pilot")" = "$pilot"
+          test "$(realpath "$py")" = "$tools/bin/python3.14"
+          for command in /usr/bin/unshare /usr/bin/setpriv /usr/bin/timeout /usr/bin/mount /usr/sbin/chroot /usr/bin/env; do
+            test -x "$command"
+          done
+          for directory in /usr/lib/x86_64-linux-gnu /usr/lib64; do
+            test -d "$directory"
+          done
+          mkdir "$pilot/projection" "$pilot/root" "$pilot/result" "$pilot/result/home" "$pilot/result/tmp"
+          "$py" -I -S -B - "$tree" "$pilot/projection" <<'PY'
+          from hashlib import sha1
+          from io import BytesIO
+          from pathlib import Path, PurePosixPath
+          import re, subprocess, sys, tarfile
+          tree, output = sys.argv[1:]
+          root = Path(output)
+          expected = {}
+          rows = subprocess.check_output(["git", "ls-tree", "-r", "-z", tree]).split(b"\0")
+          assert rows.pop() == b""
+          for entry in rows:
+              flags, name = entry.split(b"\t", 1)
+              mode, kind, oid = flags.split()
+              text = name.decode("utf-8")
+              path = PurePosixPath(text)
+              if text == ".env.example":
+                  assert mode == b"100644" and kind == b"blob" and oid == b"24221519afd2c101464b28d0f15049bd54066a91"
+                  continue
+              assert mode in {b"100644", b"100755"} and kind == b"blob"
+              assert not path.is_absolute() and path.as_posix() == text
+              assert path.parts and not any(
+                  p in {".", "..", ".git", ".env"} or p.startswith(".env.")
+                  or not re.fullmatch(r"[A-Za-z0-9_.-]+", p) for p in path.parts)
+              assert text not in expected
+              expected[text] = oid.decode()
+          assert 0 < len(expected) <= 1000
+          archive = subprocess.check_output(["git", "archive", "--format=tar", tree, "--", *sorted(expected)])
+          assert len(archive) <= 32 * 1024 * 1024
+          found = set()
+          with tarfile.open(fileobj=BytesIO(archive), mode="r:") as tar:
+              for member in tar:
+                  if member.isdir():
+                      assert member.name != "." and any(
+                          p.startswith(member.name.rstrip("/") + "/") for p in expected)
+                      continue
+                  leaf = member.name
+                  assert member.isfile() and not member.sparse and leaf in expected and leaf not in found
+                  assert 0 <= member.size <= 8 * 1024 * 1024
+                  source = tar.extractfile(member)
+                  assert source is not None
+                  data = source.read()
+                  assert len(data) == member.size
+                  assert sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest() == expected[leaf]
+                  target = root / leaf
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with target.open("xb") as out:
+                      out.write(data)
+                  found.add(leaf)
+          assert found == expected.keys()
+          print(f"BACKEND_PROJECTION_BOUND files={len(found)}")
+          PY
+          cat >"$pilot/result/isolated.py" <<'PY'
+          import os
+          from pathlib import Path
+          import runpy
+          import sys
+          mount_id, net_id, pid_id, expected_user, expected_group, tooltree, venv = sys.argv[1:]
+          assert os.getuid() == os.geteuid() == int(expected_user) != 0
+          assert os.getgid() == os.getegid() == int(expected_group) != 0 and not os.getgroups()
+          for name, host in [("mnt", mount_id), ("net", net_id), ("pid", pid_id)]:
+              assert os.readlink(f"/proc/self/ns/{name}") != host
+          devices = [line.partition(":")[0].strip()
+                     for line in Path("/proc/net/dev").read_text().splitlines()[2:]]
+          assert devices == ["lo"] and len(Path("/proc/net/route").read_text().splitlines()) == 1
+          status = dict(line.split(":", 1) for line in Path("/proc/self/status").read_text().splitlines() if ":" in line)
+          assert all(int(status[k], 16) == 0 for k in ["CapEff", "CapPrm", "CapInh", "CapBnd", "CapAmb"])
+          assert status["NoNewPrivs"].strip() == "1"
+          assert set(os.environ) == {"PATH", "HOME", "TMPDIR", "LC_ALL", "PYTEST_DISABLE_PLUGIN_AUTOLOAD"}
+          assert str(Path(sys.base_prefix)) == tooltree and str(Path(sys.prefix)) == venv
+          assert sys.version_info[:3] == (3, 14, 7)
+          assert os.getcwd() == "/"
+          os.chdir("/work/backend")
+          assert not any(Path(name).exists() for name in (".env", ".env.example", ".git"))
+          assert not any(Path(p).exists() for p in ("/run", "/var", "/etc", "/sys", "/root", "/home/runner/.gitconfig"))
+          mounts = {}
+          for line in Path("/proc/self/mountinfo").read_text().splitlines():
+              fields = line.split()
+              mounts[fields[4]] = set(fields[5].split(","))
+          ro = {"/work/backend", tooltree, venv, "/usr/lib/x86_64-linux-gnu", "/usr/lib64",
+                "/usr/bin/setpriv", "/usr/bin/env", "/proc", "/dev/null", "/dev/urandom"}
+          assert set(mounts) == ro | {"/", "/scratch"}
+          assert all("ro" in mounts[m] and "nosuid" in mounts[m] for m in ro)
+          assert "ro" in mounts["/"] and "rw" in mounts["/scratch"]
+          assert all(Path("/scratch", n).is_dir() for n in ("home", "tmp"))
+          assert os.listdir("/scratch/home") == []
+          print("FILESYSTEM_AND_NETWORK_ISOLATION_ATTESTED", flush=True)
+          names = (
+              "test_sdk_serialization_and_parsing_over_mock_http",
+              "test_public_environment_names_override_legacy_names",
+              "test_valid_ids_preserve_server_url_and_contract",
+              "test_unknown_citation_rejected",
+              "test_insufficient_does_not_create_client",
+              "test_model_abstention_preserves_metadata",
+              "test_context_budget_and_claim_scope",
+              "test_sdk_http_failures_are_sanitized_without_retries",
+          )
+          sys.argv = [
+              "tests/run_dep01a2_increment2_offline.py",
+              *("tests/test_rag.py::AnswerTests::" + n for n in names),
+              "tests/test_bounded_research.py::test_development_answer_and_exact_selected_metadata",
+              "--junitxml", "/scratch/results.xml",
+          ]
+          runpy.run_path(sys.argv[0], run_name="__main__")
+          PY
+          cat >"$pilot/enter.sh" <<'SH'
+          set -euo pipefail
+          p="$1" tools="$2" uid="$3" gid="$4" mount_id="$5" net_id="$6" pid_id="$7"
+          j="$p/root"
+          venv="$p/venv"
+          test ! -L "$j" && test -d "$j" && test -z "$(ls -A "$j")"
+          /usr/bin/mount --make-rprivate /
+          /usr/bin/mount -t tmpfs -o mode=0755,size=16m,nosuid,nodev tmpfs "$j"
+          mkdir -p "$j/usr/lib" "$j/usr/bin" "$j/usr/lib64" "$j/dev" "$j/proc" "$j/scratch" \
+            "$j/work/backend" "$j$tools" "$j$venv" "$j/usr/lib/x86_64-linux-gnu"
+          ln -s usr/lib "$j/lib"
+          ln -s usr/lib64 "$j/lib64"
+          ln -s usr/bin "$j/bin"
+          ro_mount() {
+            /usr/bin/mount --bind "$1" "$j$2"
+            /usr/bin/mount -o remount,bind,ro,nosuid,nodev "$j$2"
+          }
+          for f in /usr/bin/setpriv /usr/bin/env; do
+            touch "$j$f"
+            ro_mount "$f" "$f"
+          done
+          for f in /dev/null /dev/urandom; do
+            touch "$j$f"
+            /usr/bin/mount --bind "$f" "$j$f"
+            /usr/bin/mount -o remount,bind,ro,nosuid,noexec "$j$f"
+          done
+          sockets=$(/usr/bin/find "$tools" "$venv" /usr/lib/x86_64-linux-gnu /usr/lib64 -type s -print -quit)
+          test -z "$sockets"
+          ro_mount /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
+          ro_mount /usr/lib64 /usr/lib64
+          ro_mount "$tools" "$tools"
+          ro_mount "$venv" "$venv"
+          ro_mount "$p/projection" /work/backend
+          /usr/bin/mount --bind "$p/result" "$j/scratch"
+          /usr/bin/mount -o remount,bind,rw,nosuid,nodev,noexec "$j/scratch"
+          /usr/bin/mount -t proc -o ro,nosuid,nodev,noexec proc "$j/proc"
+          /usr/bin/mount -o remount,ro,nosuid,nodev "$j"
+          # Keep only standard FDs and lower privileges before starting Python.
+          exec /usr/sbin/chroot "$j" /usr/bin/setpriv --reuid="$uid" --regid="$gid" --clear-groups \
+              --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs -- \
+              /usr/bin/env -i PATH=/usr/bin HOME=/scratch/home TMPDIR=/scratch/tmp LC_ALL=C \
+              PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+              "$venv/bin/python" -I -B /scratch/isolated.py \
+              "$mount_id" "$net_id" "$pid_id" "$uid" "$gid" "$tools" "$venv"
+          SH
+          if (
+            ulimit -f 1024
+            /usr/bin/sudo -n -- /usr/bin/timeout -k 5s 90s \
+              /usr/bin/unshare --mount --net --pid --fork --kill-child=KILL -- \
+              /usr/bin/bash "$pilot/enter.sh" "$pilot" "$tools" "$uid" "$gid" "$mount_id" "$net_id" "$pid_id"
+          ) </dev/null >"$pilot/test.stdout" 2>"$pilot/test.stderr"; then
+            :
+          else
+            rc=$?
+            if grep -qx 'FILESYSTEM_AND_NETWORK_ISOLATION_ATTESTED' "$pilot/test.stdout"; then
+              printf 'OFFLINE_PROOF_FAILED exit=%s\n' "$rc"
+            else
+              printf 'OFFLINE_ISOLATION_NOT_ATTESTED exit=%s\n' "$rc"
+            fi
+            exit 1
+          fi
+          "$py" -I -S -B - "$pilot" <<'PY'
+          from collections import Counter
+          import sys
+          from pathlib import Path
+          from xml.etree import ElementTree
+          root = Path(sys.argv[1])
+          assert (root / "test.stdout").read_bytes().splitlines().count(
+              b"FILESYSTEM_AND_NETWORK_ISOLATION_ATTESTED") == 1
+          result = root / "result" / "results.xml"
+          assert result.stat().st_size <= 1024 * 1024
+          doc = ElementTree.parse(result).getroot()
+          suites = [doc] if doc.tag == "testsuite" else list(doc.findall("testsuite"))
+          assert len(suites) == 1
+          suite = suites[0]
+          assert [suite.get(key) for key in ("tests", "failures", "errors", "skipped")] == ["9", "0", "0", "0"]
+          cases = suite.findall("testcase")
+          assert all(not any(c.find(e) is not None for e in ("failure", "error", "skipped")) for c in cases)
+          names = ("test_sdk_serialization_and_parsing_over_mock_http",
+                   "test_public_environment_names_override_legacy_names",
+                   "test_valid_ids_preserve_server_url_and_contract",
+                   "test_unknown_citation_rejected", "test_insufficient_does_not_create_client",
+                   "test_model_abstention_preserves_metadata", "test_context_budget_and_claim_scope",
+                   "test_sdk_http_failures_are_sanitized_without_retries")
+          expected = Counter([("test_rag.AnswerTests", n) for n in names] + [
+              ("test_bounded_research", "test_development_answer_and_exact_selected_metadata")])
+          assert Counter((c.attrib["classname"].removeprefix("tests."), c.attrib["name"])
+                         for c in cases) == expected
+          print("OFFLINE_PROOF_PASS exact_cases=9 failures=0 errors=0 skipped=0")
+          PY
+          test -z "$(git status --porcelain=v1 --untracked-files=all -- backend)"
