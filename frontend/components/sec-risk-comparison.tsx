@@ -88,6 +88,15 @@ export default function SecRiskComparison({ companies }: { companies: Company[] 
         {column.message && <p className="error-state" role={column.status === "cancelled" ? "status" : "alert"}>{column.message}</p>}
         {column.result && <>
           <p className="small muted">{column.result.searched_accessions.length} eligible published filings searched. {column.result.excluded_publication_count} publications excluded by the eligibility checks. This is not a complete count of pending or unpublished filings; zero exclusions does not establish complete source coverage.</p>
+          {(column.status === "evidence" || column.status === "insufficient") && column.result.searched_accessions.length > 0 && (
+            <details className="provenance">
+              <summary>Filings searched</summary>
+              <div className="details-body">
+                <p className="small muted">This list covers only this issuer's search, not all of its filings.</p>
+                <ul>{column.result.searched_accessions.map(accession => <li key={accession}>{accession}</li>)}</ul>
+              </div>
+            </details>
+          )}
           {column.status === "no_publications" ? <p className="notice">No qualifying published evidence available to search. This does not establish that the issuer has no filings or no business risk.</p>
             : column.status === "insufficient" ? <p className="notice">Insufficient topic evidence. No qualifying passages were returned in the searched scope. No result does not mean no risk.</p>
             : <EvidenceResults result={column.result} risk={true} />}
