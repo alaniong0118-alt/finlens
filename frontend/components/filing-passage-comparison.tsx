@@ -45,7 +45,7 @@ export default function FilingPassageComparison({ results }: { results: [FilingC
         <p className="excerpt passage-original">{item.text}</p>
         <p className="small">{results[index].ticker} · {results[index].company_name} · {item.citation.accession_number}/{item.citation.citation_id}</p>
         <p className="small">{item.citation.chunk_id} · {item.citation.filename} · Cleaned source offsets {item.citation.start_char}–{item.citation.end_char}. These are source metadata, not character offsets in the alignment.</p>
-        <a className="source-link" href={item.citation.sec_url} target="_blank" rel="noopener noreferrer">Open official SEC source ↗</a>
+        <a className="source-link" href={item.citation.sec_url} target="_blank" rel="noopener noreferrer">Open official SEC source for Filing {index === 0 ? "A" : "B"} / {item.citation.form} / {item.citation.accession_number}</a>
       </div></details>
     </section>)}</div>}
   </section>;

@@ -223,6 +223,7 @@ for (const strict of [false, true]) for (const pin of [0, 7]) test(`explicit sou
     assert.match(node.textContent, new RegExp(`${filing(index).accession_number}/source_1`));
     assert.match(node.textContent, /Cleaned source offsets 0/); assert.match(node.textContent, /not character offsets in the alignment/);
     assert.equal(node.querySelector('a').href, filing(index).sec_url); assert.equal(node.querySelector('a').rel, 'noopener noreferrer');
+    assert.equal(node.querySelector('a').textContent.trim(), `Open official SEC source for Filing ${index === 0 ? 'A' : 'B'} / ${filing(index).form} / ${filing(index).accession_number}`);
     const summary = node.querySelector('summary'); summary.focus(); await act(async () => summary.click());
     assert.equal(document.activeElement, summary); assert.equal(node.open, true);
   }
@@ -239,6 +240,11 @@ test('manual reverse filing selection keeps A/B direction instead of inferring c
   assert.equal(app.visibleText(0), originals[1][0]); assert.equal(app.visibleText(1), originals[0][0]);
   const details = app.comparison().querySelectorAll('details'); assert.match(details[0].textContent, new RegExp(filing(1).accession_number));
   assert.match(details[1].textContent, new RegExp(filing(0).accession_number)); assert.equal(app.contexts().length, 2);
+  for (const [index, node] of [...details].entries()) {
+    const selected = filing(1 - index); const link = node.querySelector('a');
+    assert.equal(link.textContent.trim(), `Open official SEC source for Filing ${index === 0 ? 'A' : 'B'} / ${selected.form} / ${selected.accession_number}`);
+    assert.equal(link.getAttribute('href'), selected.sec_url);
+  }
 });
 test('identical wording is scoped to the selected pair, not the whole filings', async ctx => {
   const app = await mount(ctx); await app.ready(); await app.settle(await app.search(), [[originals[0][0]], [originals[0][0]]]);
