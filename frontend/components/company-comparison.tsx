@@ -109,15 +109,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
   const columns = data?.key === requestKey ? data.columns : null;
   const cancelled = !!(discovery?.key === key && discovery.cancelled) || !!(data?.key === requestKey && data.cancelled);
   const loading = valid && !cancelled && (!scopes || (year !== null && !columns));
-  const copyEligible = valid && !loading && !cancelled && year !== null
-    && scopes?.length === selected.length && columns?.length === selected.length
-    && columns.every((column, i) => {
-      const scope = scopes[i];
-      return !scope.error && !column.error && column.result && scope.version !== null
-        && Number.isSafeInteger(scope.version) && scope.version >= 0 && column.version === scope.version
-        && column.company.ticker === selected[i].ticker && column.company.cik === selected[i].cik
-        && scope.company.ticker === selected[i].ticker && scope.company.cik === selected[i].cik;
-    });
+  const copyEligible = false;
   const copyOwner = useMemo(() => ({ requestKey, data, discovery, cancelled, loading, valid }), [requestKey, data, discovery, cancelled, loading, valid]);
   const liveCopyOwner = useRef<typeof copyOwner | null>(copyOwner);
   liveCopyOwner.current = copyOwner; // Render ownership precedes passive-effect cancellation.
@@ -296,7 +288,7 @@ export default function CompanyComparison({ companies }: { companies: Company[] 
           <tbody>{visibleMetrics.map(metric => <tr key={metric}><th scope="row">{METRIC_LABELS[metric]}
             <ComparabilityInspector key={requestKey} metric={metric} columns={columns} />
             <button type="button" className="secondary-button" aria-label={`Copy research note for ${METRIC_LABELS[metric]}`}
-              disabled={!copyEligible || copyFeedback?.owner === copyOwner && copyFeedback.pending} onClick={() => copyNote(metric)}>Copy Research Note</button>
+              disabled={!copyEligible || copyFeedback?.owner === copyOwner && copyFeedback.pending} onClick={() => copyNote(metric)}>Copy unavailable in synthetic preview</button>
             <span role="status" aria-live="polite">{copyFeedback?.owner === copyOwner && copyFeedback.metric === metric ? copyFeedback.message : ""}</span>
           </th>{columns.map(column => {
             const point = column.result?.metrics[metric];

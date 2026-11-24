@@ -19,12 +19,7 @@ import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 import { catalogMayContainNintendo, matchesNintendoIrQuestion } from "@/lib/nintendo-ir-reference";
 
 function NintendoIrReference() {
-  return <>
-    <p>Nintendo’s Investor Relations site lists its six-month earnings release of <time dateTime="2026-11-05">5 November 2026</time> under “Six Months Earnings” for the fiscal year ending March 2027.</p>
-    <p className="small muted">Use this guide to find the source. Opening the issuer’s site does not add Nintendo or its figures to your research.</p>
-    <p><a className="source-link" href="https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf" referrerPolicy="no-referrer">Nintendo six-month earnings release, 5 November 2026 (official PDF)</a></p>
-    <a className="source-link" href="https://www.nintendo.co.jp/ir/en/index.html" referrerPolicy="no-referrer">Nintendo Investor Relations (official site)</a>
-  </>;
+  return <p>External editorial sources are unavailable in this synthetic preview.</p>;
 }
 
 export default function Home() {
@@ -144,7 +139,7 @@ export default function Home() {
         </div>}
       </section>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={value => { setExplicitCompanyChoice(true); setTicker(value); }} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
-      <p><Link href="/investigations">Saved investigations</Link></p>
+      <p>Saving and exporting investigations is unavailable in this synthetic preview.</p>
       {!filingEnabled && <p role="status">{capabilities?.filing_research_enabled === false ? "Financial-only capability restriction is active." : "Filing research capabilities are not verified."} Stored financial research remains available. This does not verify runtime readiness or data completeness.</p>}
       <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#quarter-window-title">Reported windows</a><a href="#balance-date-title">Balance dates</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
       {company && <ResearchFreshness key={company.ticker} ticker={company.ticker} catalogChanged={catalogChanged}>
