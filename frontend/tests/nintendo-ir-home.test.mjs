@@ -100,6 +100,7 @@ async function mount(ctx) {
     });
   }
   const input = value => change(query('#research-draft-input'), value, 'input');
+  const set = (selector, value) => change(query(selector), value, 'input');
   return {
     query, region: () => query('[aria-label="Nintendo external source"]'), requests,
     async release(rows, init = {}) {
@@ -108,7 +109,7 @@ async function mount(ctx) {
       item.released = true;
       await act(async () => item.resolve(new Response(JSON.stringify(rows), init)));
     },
-    input,
+    input, set,
     async keep() {
       await input(question);
       await act(async () => query('#research-draft-input').form.querySelector('button').click());
@@ -284,4 +285,54 @@ test('Home offers the dated Nintendo primary source for the plain operating prof
     assert.equal(app.region(), null);
   }
   assert.equal(app.requests.length, before);
+});
+
+test('Home lets the researcher bring an official reference into manual comparison without inventing evidence', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  await app.keep();
+  const before = app.requests.length;
+  const { act } = await import('react');
+  const add = [...app.region().querySelectorAll('button')].find(
+    item => item.textContent === 'Add official reference to comparison');
+  assert.ok(add, 'The official source needs a direct path into the comparison for this draft');
+  const comparison = app.query('[aria-label="Manual evidence comparison"]');
+  const slots = () => [...comparison.querySelectorAll('fieldset')].map(slot => ({
+    reference: slot.querySelector('input:not([type])').value,
+    publication: slot.querySelector('input[type=date]').value,
+    passage: slot.querySelector('textarea').value,
+    assessment: slot.querySelector('select').value,
+  }));
+  assert.deepEqual(slots().map(item => item.reference), ['', '']);
+  await act(async () => add.click());
+  assert.equal(comparison.querySelector('[aria-expanded]').getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(slots(), [
+    { reference: pdf, publication: '2026-11-05', passage: '', assessment: '' },
+    { reference: '', publication: '', passage: '', assessment: '' },
+  ]);
+  await act(async () => add.click());
+  assert.deepEqual(slots().map(item => item.reference), [pdf, '']);
+  assert.equal(app.requests.length, before);
+});
+
+test('Adding the official reference does not overwrite a partial or complete manual source', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  await app.keep();
+  const { act } = await import('react');
+  const section = '[aria-label="Manual evidence comparison"]';
+  const slot = number => section + ' fieldset:nth-of-type(' + number + ')';
+  await act(async () => app.query(section + ' button').click());
+  await app.set(slot(1) + ' textarea', 'Existing source passage A');
+  await app.set(slot(2) + ' input:not([type])', 'Existing source B');
+  const add = app.region().querySelector('button');
+  await act(async () => add.click());
+  assert.equal(app.query(slot(1) + ' textarea').value, 'Existing source passage A');
+  assert.equal(app.query(slot(1) + ' input:not([type])').value, '');
+  assert.equal(app.query(slot(2) + ' input:not([type])').value, 'Existing source B');
+  assert.match(app.query(section + ' [role=status]').textContent, /No notes were replaced/);
+  await app.set(slot(2) + ' input:not([type])', '');
+  await act(async () => add.click());
+  assert.equal(app.query(slot(1) + ' textarea').value, 'Existing source passage A');
+  assert.equal(app.query(slot(2) + ' input:not([type])').value, pdf);
 });

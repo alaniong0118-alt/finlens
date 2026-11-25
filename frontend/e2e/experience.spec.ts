@@ -501,6 +501,16 @@ test('Nintendo curated net sales: keyboard keeps the exact release and isolates 
   await input.press('Enter');
   await expect(guide).toBeVisible();
   await expect(result).toHaveCount(0);
+  const add = guide.getByRole('button', { name: 'Add official reference to comparison', exact: true });
+  await add.press('Enter');
+  const comparison = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });
+  await expect(comparison.getByRole('button', { name: 'Compare two manual sources', exact: true }))
+    .toHaveAttribute('aria-expanded', 'true');
+  await expect(comparison.getByLabel('Source reference A', { exact: true })).toHaveValue(pdf);
+  await expect(comparison.getByLabel('Publication date A', { exact: true })).toHaveValue('2026-11-05');
+  await expect(comparison.getByLabel('Passage A', { exact: true })).toHaveValue('');
+  await expect(comparison.getByLabel('Assessment A', { exact: true })).toHaveValue('');
+  await expect(comparison.getByLabel('Source reference B', { exact: true })).toHaveValue('');
   expect(scenario.ledger.slice(before)).toEqual([]);
   expect(scenario.violations).toEqual([]);
 });

@@ -19,11 +19,14 @@ import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 
 import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion } from "@/lib/nintendo-ir-reference";
 
+const nintendoReleaseUrl = "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf";
+const nintendoReleaseDate = "2026-11-05";
+
 function NintendoIrReference({ keptReference = "" }: { keptReference?: string }) {
   const report = getNintendoInterimNetSales(keptReference);
   const formatDate = (date: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" }).format(new Date(date));
   return <>
-    <p>Nintendo’s Investor Relations site lists its six-month earnings release of <time dateTime="2026-11-05">5 November 2026</time> under “Six Months Earnings” for the fiscal year ending March 2027.</p>
+    <p>Nintendo’s Investor Relations site lists its six-month earnings release of <time dateTime={nintendoReleaseDate}>5 November 2026</time> under “Six Months Earnings” for the fiscal year ending March 2027.</p>
     {report && <section aria-label="Curated Nintendo net sales">
       <h4>What Nintendo reported</h4>
       <p>{report.issuer} · Curated from the original release, not fetched live.</p>
@@ -37,7 +40,7 @@ function NintendoIrReference({ keptReference = "" }: { keptReference?: string })
       <a className="source-link" href={`${report.pdf}#page=${report.page}`} referrerPolicy="no-referrer">Nintendo release, page {report.page} (official PDF)</a>
     </section>}
     <p className="small muted">Use this guide to find the source. Opening the issuer’s site does not add Nintendo or its figures to your research.</p>
-    <p><a className="source-link" href="https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf" referrerPolicy="no-referrer">Nintendo six-month earnings release, 5 November 2026 (official PDF)</a></p>
+    <p><a className="source-link" href={nintendoReleaseUrl} referrerPolicy="no-referrer">Nintendo six-month earnings release, 5 November 2026 (official PDF)</a></p>
     <a className="source-link" href="https://www.nintendo.co.jp/ir/en/index.html" referrerPolicy="no-referrer">Nintendo Investor Relations (official site)</a>
   </>;
 }
@@ -191,7 +194,12 @@ export default function Home() {
           <p>Check the original source, distinguish its publication date from the event date, and identify the affected company.
             Choose a company below to inspect its existing research. This draft does not start a search.</p>
 
-          {showNintendoReference && <section aria-label="Nintendo external source"><NintendoIrReference keptReference={researchContext} /></section>}
+          {showNintendoReference && <section aria-label="Nintendo external source">
+            <NintendoIrReference keptReference={researchContext} />
+            <button type="button" className="secondary-button" onClick={() => {
+              if (researchContext === manualQuestion) manualComparison.current?.addReference(nintendoReleaseUrl, nintendoReleaseDate);
+            }}>Add official reference to comparison</button>
+          </section>}
         </div>}
         {manualQuestion === null && researchInput === "" && <RecordedComparisonPicker standalone />}
         {manualQuestion !== null && <div hidden={researchContext !== manualQuestion}>

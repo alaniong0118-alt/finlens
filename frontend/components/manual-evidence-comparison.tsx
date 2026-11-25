@@ -6,7 +6,11 @@ import { MANUAL_COMPARISON_ASSESSMENTS, MANUAL_COMPARISON_FIELD_LIMITS, MANUAL_C
 
 const blankSource = (): ManualSourceDraft => ({ reference: "", passage: "", locator: "", date: "", assessment: "", rationale: "" });
 
-export type ManualComparisonController = { hasNotes: () => boolean; invalidate: () => void };
+export type ManualComparisonController = {
+  hasNotes: () => boolean;
+  invalidate: () => void;
+  addReference: (reference: string, publicationDate: string) => void;
+};
 
 type ReopenedComparison = ReturnType<typeof reopenManualComparison>;
 type FilePreview = { kind: "loading" } | { kind: "error"; message: string } |
@@ -87,6 +91,7 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
 }) {
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
+  const [sourceNotice, setSourceNotice] = useState("");
   const [sources, setSources] = useState(() => [blankSource(), blankSource()]);
   const [judgment, setJudgment] = useState("");
   const [change, setChange] = useState("");
@@ -116,10 +121,28 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
   }
   useImperativeHandle(controllerRef, () => ({
     hasNotes: () => judgment !== "" || change !== "" || sources.some(source => Object.values(source).some(value => value !== "")),
-    invalidate: () => { fileController.current?.invalidate(); clearRecord(); },
+    invalidate: () => { fileController.current?.invalidate(); clearRecord(); setSourceNotice(""); },
+    addReference: (reference, publicationDate) => {
+      if (!isCurrent) return;
+      setExpanded(true);
+      if (sources.some(source => source.reference.trim() === reference)) {
+        setSourceNotice("This reference is already in your comparison.");
+        return;
+      }
+      const slot = sources.findIndex(source => Object.values(source).every(value => value === ""));
+      if (slot < 0) {
+        setSourceNotice("Both sources already contain notes. No notes were replaced.");
+        return;
+      }
+      clearRecord();
+      setSources(previous => previous.map((source, index) => index === slot
+        ? { ...source, reference, date: publicationDate } : source));
+      setSourceNotice("Official reference added. Check the original and enter the passage and assessment yourself.");
+    },
   }));
   function updateSource(index: number, key: keyof ManualSourceDraft, value: string) {
     clearRecord();
+    setSourceNotice("");
     setSources(previous => previous.map((source, slot) => slot !== index ? source : { ...source, [key]: value }));
   }
   function record() {
@@ -146,6 +169,7 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
     <button type="button" className="secondary-button" aria-expanded={expanded} aria-controls={panelId}
       onClick={() => setExpanded(previous => !previous)}>Compare two manual sources</button>
     <div id={panelId} hidden={!expanded}>
+      {sourceNotice && <p role="status">{sourceNotice}</p>}
       <h4>Compare evidence for and against an explanation</h4>
       <p>Enter two passages yourself. FinLens does not open references or verify these sources. Keep the source’s publication date separate from the event date.</p>
       {sources.map((source, index) => {
