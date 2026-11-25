@@ -1,0 +1,57 @@
+name: FinLens Chromium standalone diagnostic
+on:
+  push:
+    branches: ['proof/finlens-chromium-f20197bb-smoke']
+    paths: ['.github/workflows/finlens-chromium-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  chromium:
+    if: >-
+      github.run_attempt == 1 &&
+      github.repository == 'alaniong0118-alt/finlens' &&
+      github.ref == 'refs/heads/proof/finlens-chromium-f20197bb-smoke' &&
+      github.event.before == 'f20197bbcecc5164227dfef7ff96cca4d7f9a886' &&
+      github.event.deleted == false && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Stage pinned public Playwright only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          timeout --kill-after=5s 210s docker build --pull --platform linux/amd64 \
+            --iidfile "$RUNNER_TEMP/finlens-chromium.iid" .github/finlens-chromium-diagnostic
+      - name: Run network-free Chromium fixture
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          image="$(cat "$RUNNER_TEMP/finlens-chromium.iid")"
+          [[ "$image" =~ ^sha256:[a-f0-9]{64}$ ]]
+          name="finlens-chromium-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cid=''
+          cleanup() {
+            result=$?
+            trap - EXIT
+            if [[ "$cid" =~ ^[a-f0-9]{64}$ ]]; then
+              if ! timeout 12s docker rm -f "$cid" >/dev/null; then
+                printf '%s\n' 'HOLD: diagnostic container cleanup failed' >&2
+                if (( result == 0 )); then result=1; fi
+              fi
+            fi
+            exit "$result"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          cid="$(docker create --pull=never --network none --init --name "$name" \
+            --security-opt no-new-privileges --cap-drop ALL --shm-size 512m --pids-limit 600 "$image")"
+          [[ "$cid" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$(docker inspect "$cid" --format '{{.HostConfig.NetworkMode}} {{.HostConfig.Privileged}} {{len .HostConfig.PortBindings}} {{len .Mounts}} {{.Image}} {{.Config.User}}')" == "none false 0 0 $image pwuser" ]]
+          timeout --kill-after=5s 30s docker start --attach "$cid"
+          [[ "$(docker inspect "$cid" --format '{{.State.Status}} {{.State.ExitCode}}')" == 'exited 0' ]]
+          printf '%s\n' 'PASS: pinned Playwright fixture completed, including teardown'
