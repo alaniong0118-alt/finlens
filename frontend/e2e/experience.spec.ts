@@ -501,6 +501,13 @@ test('Nintendo curated net sales: keyboard keeps the exact release and isolates 
   await input.press('Enter');
   await expect(guide).toBeVisible();
   await expect(result).toHaveCount(0);
+  const sourceNotes = guide.getByRole('region', { name: 'Nintendo operating profit source notes', exact: true });
+  await expect(sourceNotes).toContainText('12.1%');
+  await expect(sourceNotes).toContainText('49.1%');
+  await expect(sourceNotes).toContainText('Nintendo attributed');
+  await expect(sourceNotes).toContainText('not independent proof');
+  await expect(sourceNotes.getByRole('link', { name: 'Management discussion, page 3 (official PDF)', exact: true }))
+    .toHaveAttribute('href', pdf + '#page=3');
   const add = guide.getByRole('button', { name: 'Add official reference to comparison', exact: true });
   await add.press('Enter');
   const comparison = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });

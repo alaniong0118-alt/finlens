@@ -36,6 +36,7 @@ test('manual competing evidence through normal Home, local download, and explici
   const nintendo = page.getByRole('region', { name: 'Nintendo external source', exact: true });
   const officialPdf = nintendo.getByRole('link', { name: 'Nintendo six-month earnings release, 5 November 2026 (official PDF)', exact: true });
   const officialIr = nintendo.getByRole('link', { name: 'Nintendo Investor Relations (official site)', exact: true });
+  const addOfficial = nintendo.getByRole('button', { name: 'Add official reference to comparison', exact: true });
   async function tabTo(target: ReturnType<typeof btn>) {
     await page.keyboard.press('Tab');
     await expect(target).toBeFocused();
@@ -51,6 +52,7 @@ test('manual competing evidence through normal Home, local download, and explici
   await expect(keep).toBeFocused();
   await tabTo(officialPdf);
   await tabTo(officialIr);
+  await tabTo(addOfficial);
   await tabTo(toggle);
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await page.keyboard.press('Enter');

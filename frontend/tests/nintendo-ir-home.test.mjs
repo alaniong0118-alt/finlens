@@ -336,3 +336,28 @@ test('Adding the official reference does not overwrite a partial or complete man
   assert.equal(app.query(slot(1) + ' textarea').value, 'Existing source passage A');
   assert.equal(app.query(slot(2) + ' input:not([type])').value, pdf);
 });
+
+test('The dated Nintendo comparison distinguishes reported results, management explanation and unknowns', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  const { act } = await import('react');
+  await app.input('Why did Nintendo operating profit rise even though sales fell?');
+  await act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  const section = app.region()?.querySelector('[aria-label="Nintendo operating profit source notes"]');
+  assert.ok(section, 'The dated primary release should carry the reported facts and a separately attributed explanation');
+  assert.match(section.textContent, /Reported results/);
+  assert.match(section.textContent, /12\.1%/);
+  assert.match(section.textContent, /49\.1%/);
+  assert.match(section.textContent, /Nintendo attributed/);
+  assert.match(section.textContent, /software/);
+  assert.match(section.textContent, /tariff refund/);
+  assert.match(section.textContent, /does not quantify how much each factor contributed/);
+  assert.equal(section.querySelector('a')?.getAttribute('href'), pdf + '#page=3');
+  assert.equal(section.querySelector('a')?.getAttribute('referrerpolicy'), 'no-referrer');
+  assert.equal(section.querySelector('a[href="' + pdf + '#page=1"]')?.textContent, 'Reported figures, page 1 (official PDF)');
+  await app.keep();
+  assert.ok(app.region(), 'A general release question still gets the dated source');
+  assert.equal(app.region().querySelector('[aria-label="Nintendo operating profit source notes"]'), null);
+  assert.equal(app.requests.length, before);
+});

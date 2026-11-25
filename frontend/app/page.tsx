@@ -17,7 +17,7 @@ import FinancialCoverage from "@/components/financial-coverage";
 import BalanceDateComparison from "@/components/balance-date-comparison";
 import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 
-import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion } from "@/lib/nintendo-ir-reference";
+import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion, matchesNintendoOperatingProfitQuestion } from "@/lib/nintendo-ir-reference";
 
 const nintendoReleaseUrl = "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf";
 const nintendoReleaseDate = "2026-11-05";
@@ -38,6 +38,19 @@ function NintendoIrReference({ keptReference = "" }: { keptReference?: string })
       </dl>
       <p>This release does not establish full-year actual sales or prove why sales changed.</p>
       <a className="source-link" href={`${report.pdf}#page=${report.page}`} referrerPolicy="no-referrer">Nintendo release, page {report.page} (official PDF)</a>
+    </section>}
+    {matchesNintendoOperatingProfitQuestion(keptReference) && <section aria-label="Nintendo operating profit source notes">
+      <h4>What this release says about operating profit</h4>
+      <dl>
+        <dt>Reported results</dt>
+        <dd>For the six months ended 30 September 2026, Nintendo reported that consolidated net sales fell 12.1% and operating profit rose 49.1% year over year.</dd>
+        <dt>Management explanation</dt>
+        <dd>Nintendo attributed the operating profit increase to software making up a larger share of sales and a first-quarter U.S. tariff refund.</dd>
+        <dt>What remains unknown</dt>
+        <dd>This section does not quantify how much each factor contributed. The explanation is the issuer’s account, not independent proof.</dd>
+      </dl>
+      <p><a className="source-link" href={nintendoReleaseUrl + "#page=3"} referrerPolicy="no-referrer">Management discussion, page 3 (official PDF)</a></p>
+      <p><a className="source-link" href={nintendoReleaseUrl + "#page=1"} referrerPolicy="no-referrer">Reported figures, page 1 (official PDF)</a></p>
     </section>}
     <p className="small muted">Use this guide to find the source. Opening the issuer’s site does not add Nintendo or its figures to your research.</p>
     <p><a className="source-link" href={nintendoReleaseUrl} referrerPolicy="no-referrer">Nintendo six-month earnings release, 5 November 2026 (official PDF)</a></p>
