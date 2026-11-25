@@ -154,9 +154,10 @@ async function capture(control: Locator, name: string, page: Page, info: TestInf
 }
 
 async function tabTo(page: Page, target: Locator) {
-  for (let step = 0; step < 64; step++) {
+  // Check the initial focus and the focus after each permitted keypress.
+  for (let step = 0; step <= 64; step++) {
     if (await target.evaluate(element => document.activeElement === element)) return;
-    await page.keyboard.press('Tab');
+    if (step < 64) await page.keyboard.press('Tab');
   }
   throw new Error('Keyboard did not reach the intended native control within 64 tabs');
 }

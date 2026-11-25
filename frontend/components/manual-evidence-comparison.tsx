@@ -12,14 +12,16 @@ type ReopenedComparison = ReturnType<typeof reopenManualComparison>;
 type FilePreview = { kind: "loading" } | { kind: "error"; message: string } |
   { kind: "ready"; comparison: ReopenedComparison };
 
-function ReopenedPreview({ comparison }: { comparison: ReopenedComparison }) {
+function ReopenedPreview({ comparison, standalone }: { comparison: ReopenedComparison; standalone: boolean }) {
+  const Title = standalone ? "h3" : "h5";
+  const Detail = standalone ? "h4" : "h6";
   return <section aria-label="Reopened comparison preview">
-    <h5>Recorded comparison preview · not verified</h5>
+    <Title>Recorded comparison preview · not verified</Title>
     <p>Read-only preview. The current draft and its download are unchanged.</p>
-    <h6>Recorded question</h6>
+    <Detail>Recorded question</Detail>
     <p className="wrap-anywhere" style={{ whiteSpace: "pre-wrap" }}>{comparison.question}</p>
     {comparison.sources.map((source, index) => <section key={index === 0 ? "A" : "B"}>
-      <h6>{index === 0 ? "Manual source A" : "Manual source B"} · not verified</h6>
+      <Detail>{index === 0 ? "Manual source A" : "Manual source B"} · not verified</Detail>
       <dl className="wrap-anywhere" style={{ whiteSpace: "pre-wrap" }}>
         <dt>Source reference</dt><dd>{source.reference}</dd>
         <dt>Passage</dt><dd>{source.passage}</dd>
@@ -36,36 +38,20 @@ function ReopenedPreview({ comparison }: { comparison: ReopenedComparison }) {
   </section>;
 }
 
-export default function ManualEvidenceComparison({ question, isCurrent, controllerRef }: {
-  question: string; isCurrent: boolean; controllerRef: Ref<ManualComparisonController>;
+export function RecordedComparisonPicker({ controllerRef, standalone = false }: {
+  controllerRef?: Ref<{ invalidate: () => void }>;
+  standalone?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const panelId = useId();
-  const [sources, setSources] = useState(() => [blankSource(), blankSource()]);
-  const [judgment, setJudgment] = useState("");
-  const [change, setChange] = useState("");
-  const [recorded, setRecorded] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [needsReview, setNeedsReview] = useState(false);
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const fileRead = useRef(0);
-  const active = useRef<string | null>(null);
-  const revoke = useRef<(() => void) | null>(null);
-  function dispose() {
-    revoke.current?.();
-    revoke.current = null;
-  }
-  useLayoutEffect(() => () => {
-    active.current = null;
-    revoke.current?.();
-    revoke.current = null;
-  }, []);
-  useLayoutEffect(() => () => { fileRead.current += 1; }, [question, isCurrent]);
-  const limits = MANUAL_COMPARISON_FIELD_LIMITS;
+  useLayoutEffect(() => () => { fileRead.current += 1; }, []);
+  useImperativeHandle(controllerRef, () => ({
+    invalidate: () => { fileRead.current += 1; setFilePreview(null); },
+  }), []);
 
   async function previewFile(file: File | null) {
     const read = ++fileRead.current;
-    if (!isCurrent || file === null) { setFilePreview(null); return; }
+    if (file === null) { setFilePreview(null); return; }
     if (file.size > MANUAL_COMPARISON_LIMIT) {
       setFilePreview({ kind: "error", message: "Choose a comparison file of 32 KiB or less." });
       return;
@@ -82,6 +68,45 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
       });
     }
   }
+  return <div>
+    <label>Open a recorded comparison (.json)<input type="file" accept=".json,application/json"
+      onChange={event => {
+        const input = event.currentTarget;
+        const file = input.files?.[0] ?? null;
+        input.value = "";
+        void previewFile(file);
+      }} /></label>
+    {filePreview?.kind === "loading" && <p role="status">Reading the local comparison file…</p>}
+    {filePreview?.kind === "error" && <p role="alert">{filePreview.message}</p>}
+    {filePreview?.kind === "ready" && <ReopenedPreview comparison={filePreview.comparison} standalone={standalone} />}
+  </div>;
+}
+
+export default function ManualEvidenceComparison({ question, isCurrent, controllerRef }: {
+  question: string; isCurrent: boolean; controllerRef: Ref<ManualComparisonController>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
+  const [sources, setSources] = useState(() => [blankSource(), blankSource()]);
+  const [judgment, setJudgment] = useState("");
+  const [change, setChange] = useState("");
+  const [recorded, setRecorded] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [needsReview, setNeedsReview] = useState(false);
+  const fileController = useRef<{ invalidate: () => void }>(null);
+  const active = useRef<string | null>(null);
+  const revoke = useRef<(() => void) | null>(null);
+  function dispose() {
+    revoke.current?.();
+    revoke.current = null;
+  }
+  useLayoutEffect(() => () => {
+    active.current = null;
+    revoke.current?.();
+    revoke.current = null;
+  }, []);
+  const limits = MANUAL_COMPARISON_FIELD_LIMITS;
+
   function clearRecord() {
     if (active.current !== null) setNeedsReview(true);
     active.current = null;
@@ -91,7 +116,7 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
   }
   useImperativeHandle(controllerRef, () => ({
     hasNotes: () => judgment !== "" || change !== "" || sources.some(source => Object.values(source).some(value => value !== "")),
-    invalidate: () => { fileRead.current += 1; setFilePreview(null); clearRecord(); },
+    invalidate: () => { fileController.current?.invalidate(); clearRecord(); },
   }));
   function updateSource(index: number, key: keyof ManualSourceDraft, value: string) {
     clearRecord();
@@ -149,18 +174,7 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
       {isCurrent && recorded && <><p role="status">Provisional judgment recorded for this draft.</p>
         <button type="button" className="secondary-button" onClick={download}>Download recorded comparison (.json)</button></>}
       {error && <p role="alert">{error}</p>}
-      {isCurrent && <div>
-        <label>Open a recorded comparison (.json)<input type="file" accept=".json,application/json"
-          onChange={event => {
-            const input = event.currentTarget;
-            const file = input.files?.[0] ?? null;
-            input.value = "";
-            void previewFile(file);
-          }} /></label>
-        {filePreview?.kind === "loading" && <p role="status">Reading the local comparison file…</p>}
-        {filePreview?.kind === "error" && <p role="alert">{filePreview.message}</p>}
-        {filePreview?.kind === "ready" && <ReopenedPreview comparison={filePreview.comparison} />}
-      </div>}
+      {isCurrent && <RecordedComparisonPicker controllerRef={fileController} />}
     </div>
   </section>;
 }

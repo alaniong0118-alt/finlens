@@ -6,7 +6,7 @@ import CompanyOverview from "@/components/company-overview";
 import FinancialResearch from "@/components/financial-research";
 import FinancialInsights from "@/components/financial-insights";
 import FilingResearch from "@/components/filing-research";
-import ManualEvidenceComparison, { type ManualComparisonController } from "@/components/manual-evidence-comparison";
+import ManualEvidenceComparison, { RecordedComparisonPicker, type ManualComparisonController } from "@/components/manual-evidence-comparison";
 import ThemeControl from "@/components/theme-control";
 import ResearchFreshness from "@/components/research-freshness";
 import CompanyComparison from "@/components/company-comparison";
@@ -193,6 +193,7 @@ export default function Home() {
 
           {showNintendoReference && <section aria-label="Nintendo external source"><NintendoIrReference keptReference={researchContext} /></section>}
         </div>}
+        {manualQuestion === null && researchInput === "" && <RecordedComparisonPicker standalone />}
         {manualQuestion !== null && <div hidden={researchContext !== manualQuestion}>
           <ManualEvidenceComparison key={manualQuestion} question={manualQuestion}
             isCurrent={researchContext === manualQuestion} controllerRef={manualComparison} />
