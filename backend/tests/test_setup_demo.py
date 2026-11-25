@@ -4,7 +4,9 @@ from decimal import Decimal
 from unittest.mock import Mock
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.orm import Session
 
 from app.database import Base
@@ -16,10 +18,23 @@ from scripts import setup_demo as demo
 @pytest.fixture
 def session():
     engine = create_engine("sqlite://")
+
+    @event.listens_for(engine, "connect")
+    def sqlite_fixture_functions(connection, _):
+        # Allow unrelated PostgreSQL-oriented ownership tables to exist in this
+        # SQLite demo fixture; their behavior is not covered by these tests.
+        connection.create_collation("C", lambda left, right: (left > right) - (left < right))
+        connection.create_function("octet_length", 1, lambda value: len(value.encode("utf-8")))
+
     Base.metadata.create_all(engine)
+    config = Config(str(demo.BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(demo.BACKEND_ROOT / "migrations"))
+    heads = ScriptDirectory.from_config(config).get_heads()
+    assert heads, "The tracked migration graph is missing"
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
-        connection.execute(text("INSERT INTO alembic_version VALUES ('f94c6f41e0cb')"))
+        for head in heads:
+            connection.execute(text("INSERT INTO alembic_version VALUES (:revision)"), {"revision": head})
     with Session(engine) as session:
         yield session
     engine.dispose()
