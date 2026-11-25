@@ -20,11 +20,14 @@ const reportQuestion = new RegExp(
 );
 const operatingProfitQuestion = /^why did nintendo['’]s operating profit (?:rise|increase)(?: in the six months ended september 30,? 2026)?\?$/i;
 
+const operatingProfitAndSalesQuestion = /^why did nintendo(?:['’]s)? operating profit (?:rise|increase) even though (?:net )?sales (?:fell|declined)\?$/i;
+
 // A closed set of phrasings for the editorial link, separate from issuer or catalog lookup.
 export function matchesNintendoIrQuestion(question: string): boolean {
   const normalized = question.trim().replace(/\s+/g, " ");
   return question.trim() === nintendoInterimReleasePdf
-    || reportQuestion.test(normalized) || operatingProfitQuestion.test(normalized);
+    || reportQuestion.test(normalized) || operatingProfitQuestion.test(normalized)
+    || operatingProfitAndSalesQuestion.test(normalized);
 }
 
 // These known names and listing identifiers only withhold the editorial guide.

@@ -258,3 +258,30 @@ test('NINTENDO_CURATED_HOME shows the source-backed net sales only after keeping
   assert.equal(Boolean(answer()), false);
   assert.equal(app.requests.length, count);
 });
+
+test('Home offers the dated Nintendo primary source for the plain operating profit question', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  const { act } = await import('react');
+  const keep = () => act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  const question = 'Why did Nintendo operating profit rise even though sales fell?';
+  await app.input(question);
+  await keep();
+  assert.equal(app.query('#research-draft-premise')?.textContent, question);
+  const region = app.region();
+  assert.ok(region, 'Home must offer the dated source for a plain issuer question without a pasted URL');
+  assert.equal(region.querySelector('a[href="' + pdf + '"]')?.textContent,
+    'Nintendo six-month earnings release, 5 November 2026 (official PDF)');
+  assert.equal(region.querySelector('[aria-label="Curated Nintendo net sales"]'), null);
+  for (const unrelated of [
+    question.replace('Nintendo', 'Sony'),
+    'Why did Nintendo operating profit rise even though sales fell in 2024?',
+    'Why did Nintendo operating profit rise even though Sony sales fell?',
+  ]) {
+    await app.input(unrelated);
+    await keep();
+    assert.equal(app.region(), null);
+  }
+  assert.equal(app.requests.length, before);
+});
