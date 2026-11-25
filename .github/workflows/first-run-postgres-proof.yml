@@ -1,0 +1,101 @@
+name: First-run PostgreSQL proof
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+    paths: ['.github/workflows/first-run-postgres-proof.yml']
+permissions:
+  contents: read
+jobs:
+  migrate:
+    if: github.head_ref == 'proof/finlens-fresh-postgres-96cea42-20261125' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 96cea427b1fb6ede1296ce85bed80db5bcdd9a2d
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14.7'
+          architecture: x64
+          check-latest: false
+      - name: Install only hashed migration dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 96cea427b1fb6ede1296ce85bed80db5bcdd9a2d
+          test ! -e backend/.env
+          cat > "$RUNNER_TEMP/finlens-migration-proof.lock" <<'LOCK'
+          numpy==2.5.3 \
+              --hash=sha256:2c25dfa72943e4336ddb6b0ee4277b47a0c85bede0807530ec68103bf58e2c10 \
+              --hash=sha256:b0521d0f4aebb6e06189451025fa17a913287b13c03d5fe05c017333b654ea5b
+          pgvector==0.5.0 \
+              --hash=sha256:fedc9800894e6da2be51358d7b7c574bf34f247ca741a5a09513622135f5964f
+          psycopg[binary]==3.3.6 \
+              --hash=sha256:a1db9f7148b06a28606767efaca51fa6f9398c5c0a3810519be69d7000bdb631
+          psycopg-binary==3.3.6 \
+              --hash=sha256:1fbd30e537dab22cafdf080608f10148fe2a5f3a61294ddb5113caac8a623840 \
+              --hash=sha256:31cd942c23f613276b81a6e6598cefa12960058b0f46e1e874b540c793f6aca5
+          python-dotenv==1.2.4 \
+              --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc
+          sqlalchemy==2.1.2 \
+              --hash=sha256:36e6a8fdbddc0635a3bb30cfddf35facaabc8d17e32060c51d50ad11cd48c4c3 \
+              --hash=sha256:39764b6c6cf8698a22f7c037819dd4f3c0a425628e399d58d366dd7b51ef5b38
+          typing-extensions==4.16.0 \
+              --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+          alembic==1.20.1 --hash=sha256:9970712cfb81ea26c8658d378aaa5b8f6ff9146e5bb111d70497c164016cf598
+          mako==1.4.3 --hash=sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f
+          markupsafe==3.0.4 --hash=sha256:a8e9f292fcda89b324f2f5c91d13f1424a153e40fc2756f38ee23b15835ff300
+          LOCK
+          python -m pip --isolated install --disable-pip-version-check --no-input --only-binary=:all: --require-hashes --no-cache-dir -r "$RUNNER_TEMP/finlens-migration-proof.lock"
+      - name: Apply current Alembic chain to an empty owned database
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          image='pgvector/pgvector@sha256:018b4a92e634c3a5715f613dd43497e3d8028ae051be7ba6fd127bcffb0e7957'
+          config='sha256:b0108689bf51bd54d3129130967d4adf7ba58b395a9ff6653aa598b5fe7d7ba3'
+          docker pull "$image"
+          test "$(docker image inspect "$image" --format '{{.Id}}')" = "$config"
+          name="finlens-first-run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          export POSTGRES_PASSWORD="$(python -c 'import secrets; print(secrets.token_hex(24))')"
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          id=''
+          cleanup() {
+            result=$?
+            trap - EXIT
+            if [[ "$id" =~ ^[0-9a-f]{64}$ ]]; then
+              docker rm -fv "$id" >/dev/null || exit 1
+              if docker container inspect "$id" >/dev/null 2>&1; then exit 1; fi
+            fi
+            exit "$result"
+          }
+          trap cleanup EXIT
+          id=$(docker create --pull=never --name "$name" --restart no --tmpfs /var/lib/postgresql/data:rw \
+            -p 127.0.0.1:15432:5432 -e POSTGRES_PASSWORD \
+            -e POSTGRES_USER=finlens -e POSTGRES_DB=finlens "$image")
+          [[ "$id" =~ ^[0-9a-f]{64}$ ]]
+          test "$(docker inspect "$id" --format '{{.Image}}')" = "$config"
+          docker start "$id" >/dev/null
+          test "$(docker port "$id" 5432/tcp)" = '127.0.0.1:15432'
+          ready=0
+          for i in $(seq 1 35); do
+            if docker exec "$id" pg_isready -h 127.0.0.1 -U finlens -d finlens >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          psql() { docker exec -i "$id" psql -X -A -t -q -v ON_ERROR_STOP=1 -U finlens -d finlens "$@"; }
+          test "$(psql -c "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public'")" = 0
+          psql < docker/postgres/init-pgvector.sql
+          test "$(psql -c "SELECT count(*) FROM pg_extension WHERE extname='vector'")" = 1
+          export DATABASE_URL="postgresql+psycopg://finlens:$POSTGRES_PASSWORD@127.0.0.1:15432/finlens?connect_timeout=5"
+          (cd backend && timeout 90s python -B -m alembic upgrade head)
+          test "$(psql -c 'SELECT version_num FROM alembic_version')" = b8d741104001
+          test "$(psql -c "SELECT string_agg(tablename, ',' ORDER BY tablename) FROM pg_catalog.pg_tables WHERE schemaname='public'")" \
+            = 'alembic_version,companies,company_refresh_state,filing_chunks,filing_publications,financial_facts,refresh_attempts,research_accounts,research_artifacts,research_notes,research_sessions'
+          test "$(psql -c 'SELECT count(*) FROM companies')" = 0
+          printf '%s\n' 'PASS: empty PostgreSQL 16 with pgvector; 7 revisions, 11 tables, no seeded data.'
