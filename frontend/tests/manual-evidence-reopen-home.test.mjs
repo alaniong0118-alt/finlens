@@ -9,7 +9,7 @@ const b = { reference: 'Industry survey, page 4', passage: 'Orders fell before t
 const draft = { question, sources: [a, b], judgment: 'Timing alone is not established.',
   change: 'Comparable monthly orders and shipments.' };
 
-test('REOPEN_HOME opens its own V1 download without replacing notes or reviving stale export', async ctx => {
+test('REOPEN_HOME opens V1 on fresh Home and its own download without replacing notes or reviving stale export', async ctx => {
   const [{ readFileSync }, { createRequire }, { fileURLToPath }, { JSDOM }, { default: ts }, { componentLoader }] = await Promise.all([
     import('node:fs'), import('node:module'), import('node:url'), import('jsdom'), import('typescript'), import('./component-loader.mjs'),
   ]);
@@ -83,8 +83,42 @@ test('REOPEN_HOME opens its own V1 download without replacing notes or reviving 
   const delayedText = 'Synthetic REOPEN_STALE fixture that must not appear';
   const control = doc.querySelector('#research-draft-input');
   const preview = () => doc.querySelector('[aria-label="Reopened comparison preview"]');
+  async function selectFile(bytes, awaitBuffer) {
+    const file = new dom.window.File([bytes], 'manual-comparison.json', { type: 'application/json' });
+    Object.defineProperty(file, 'arrayBuffer', { value: () => awaitBuffer(bytes) });
+    const input = controlFor('Open a recorded comparison (.json)');
+    assert.ok(input, 'A visible local comparison chooser must exist before creating a draft');
+    assert.equal(input.closest('[hidden]'), null);
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+    await act(async () => input.dispatchEvent(new dom.window.Event('change', { bubbles: true })));
+  }
+  const { recordManualComparison } = await import('../lib/manual-evidence-comparison.ts');
+  const encode = value => new TextEncoder().encode(value).buffer;
+  const coldQuestion = 'Recorded question from a previous research session';
+  const coldBytes = encode(recordManualComparison({ ...draft, question: coldQuestion }));
+  await selectFile(coldBytes, async bytes => bytes);
+  for (const value of [coldQuestion, a.passage, b.passage, draft.judgment, draft.change]) {
+    assert.ok(preview()?.textContent.includes(value), value);
+  }
+  assert.equal(control.value, '');
+  assert.equal(button('Compare two manual sources'), undefined);
+  assert.equal(button('Download recorded comparison (.json)'), undefined);
+  assert.equal(downloads.length, 0);
+  await selectFile(encode('{ invalid JSON'), async bytes => bytes);
+  assert.equal(preview(), null);
+  assert.ok(doc.body.textContent.includes('Could not open this file'));
+  let coldRelease;
+  await selectFile(coldBytes, bytes => new Promise(resolve => { coldRelease = () => resolve(bytes); }));
+  assert.equal(typeof coldRelease, 'function');
+  assert.ok(doc.body.textContent.includes('Reading the local comparison file'));
   await change(control, original);
   await click('Keep research draft');
+  await act(async () => coldRelease());
+  assert.equal(preview(), null);
+  assert.equal(doc.body.textContent.includes(coldQuestion), false);
+  assert.equal(control.value, original);
+  assert.deepEqual(requests.slice(before), []);
+
   await click('Compare two manual sources');
   for (const [slot, source] of [['A', a], ['B', b]]) {
     await fill('Source reference ' + slot, source.reference);
@@ -106,19 +140,10 @@ test('REOPEN_HOME opens its own V1 download without replacing notes or reviving 
   await fill('Assessment rationale B', 'Unrecorded live rationale B');
   await fill('Provisional judgment', 'Unrecorded live provisional judgment');
   assert.equal(button('Download recorded comparison (.json)'), undefined);
-  async function selectFile(bytes, awaitBuffer) {
-    const file = new dom.window.File([bytes], 'manual-comparison.json', { type: 'application/json' });
-    Object.defineProperty(file, 'arrayBuffer', { value: () => awaitBuffer(bytes) });
-    const input = controlFor('Open a recorded comparison (.json)');
-    assert.ok(input);
-    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-    await act(async () => input.dispatchEvent(new dom.window.Event('change', { bubbles: true })));
-  }
   await selectFile(downloaded, async buffer => buffer);
   assert.equal(Boolean(preview()?.textContent.includes(draft.judgment)), true, 'Reopen must preview bytes from Home’s actual V1 download');
   assert.equal(controlFor('Provisional judgment').value, 'Unrecorded live provisional judgment');
   assert.equal(button('Download recorded comparison (.json)'), undefined);
-  const { recordManualComparison } = await import('../lib/manual-evidence-comparison.ts');
   const delayed = new TextEncoder().encode(recordManualComparison({ ...draft, question: delayedText })).buffer;
   let release;
   await selectFile(delayed, buffer => new Promise(resolve => { release = () => resolve(buffer); }));

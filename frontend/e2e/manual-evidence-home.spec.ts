@@ -199,10 +199,10 @@ test('manual evidence Reopen previews an actual V1 download without replacing th
   const live = 'Unrecorded live judgment must survive reopening.';
   await judgment.fill(live);
   await expect(download).toHaveCount(0);
-  async function choose(input: Parameters<import('@playwright/test').FileChooser['setFiles']>[0]) {
-    await expect(picker).toBeVisible();
-    await picker.focus();
-    await expect(picker).toBeFocused();
+  async function choose(input: Parameters<import('@playwright/test').FileChooser['setFiles']>[0], target = picker) {
+    await expect(target).toBeVisible();
+    await target.focus();
+    await expect(target).toBeFocused();
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('Space')]);
     expect(await chooser.element().getAttribute('type')).toBe('file');
     expect(await chooser.element().evaluate(element =>
@@ -238,5 +238,25 @@ test('manual evidence Reopen previews an actual V1 download without replacing th
   await expect(preview).toHaveCount(0);
   await expectPreserved();
   expect(scenario.ledger.slice(baseline)).toEqual([]);
+  await page.reload();
+  await expect.poll(() => [scenario.count('/companies'), scenario.count('/capabilities')]).toEqual([2, 2]);
+  await expect(page.getByText('Financial-only capability restriction is active.', { exact: false })).toBeVisible();
+  const reopenedBaseline = scenario.ledger.length;
+  const coldPicker = page.getByLabel('Open a recorded comparison (.json)', { exact: true });
+  const coldPreview = page.getByRole('region', { name: 'Reopened comparison preview', exact: true });
+  await expect(outer).toHaveValue('');
+  await expect(panel).toHaveCount(0);
+  await choose(saved, coldPicker);
+  await expect(coldPreview).toContainText(original);
+  for (const source of expected.sources) await expect(coldPreview).toContainText(source.passage);
+  await expect(coldPreview).toContainText(expected.provisional_judgment);
+  await expect(outer).toHaveValue('');
+  await expect(panel).toHaveCount(0);
+  await expect(download).toHaveCount(0);
+  await choose({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{') }, coldPicker);
+  await expect(page.getByRole('alert')).toContainText('Could not open this file.');
+  await expect(coldPreview).toHaveCount(0);
+  expect(downloads).toEqual([filename]);
+  expect(scenario.ledger.slice(reopenedBaseline)).toEqual([]);
   expect(scenario.violations).toEqual([]);
 });
