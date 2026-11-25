@@ -118,10 +118,21 @@ test('MANUAL_COMPARISON_HOME records once, downloads locally, and invalidates on
   assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
   assert.equal(panel.hidden, false);
   assert.equal(button('Download recorded comparison (.json)'), undefined);
+  const assertAssessmentNames = () => {
+    for (const slot of ['A', 'B']) {
+      const name = 'Assessment ' + slot;
+      const select = controlFor(name);
+      assert.equal(select?.tagName, 'SELECT');
+      assert.equal(select.labels[0]?.firstChild?.textContent, name);
+      assert.equal(select.getAttribute('aria-label'), name, 'Assessment name must not include option text');
+    }
+  };
+  assertAssessmentNames();
   for (const [letter, source] of [['A', a], ['B', b]]) for (const [key, label] of Object.entries({
     reference: 'Source reference ', passage: 'Passage ', locator: 'Locator ', date: 'Publication date ',
     assessment: 'Assessment ', rationale: 'Assessment rationale ',
   })) await fill(label + letter, source[key]);
+  assertAssessmentNames();
   disclosure.focus();
   await click('Compare two manual sources');
   assert.equal(doc.activeElement, disclosure);
@@ -136,6 +147,14 @@ test('MANUAL_COMPARISON_HOME records once, downloads locally, and invalidates on
   assert.equal(nintendoPdf(), issuerLink);
   await fill('Provisional judgment', draft.judgment);
   await fill('Evidence that would change the judgment', draft.change);
+  for (const name of ['Passage A', 'Passage B', 'Assessment rationale A', 'Assessment rationale B',
+    'Provisional judgment', 'Evidence that would change the judgment']) {
+    const control = controlFor(name);
+    assert.equal(control?.tagName, 'TEXTAREA');
+    assert.ok(control.value.length > 0);
+    assert.equal(control.labels[0]?.textContent, name + control.value, 'Controlled value contributes to raw label text');
+    assert.equal(control.getAttribute('aria-label'), name, 'Accessible name stays independent of the entered value');
+  }
   await click('Record provisional judgment');
   await click('Download recorded comparison (.json)');
   assert.deepEqual(downloads, [['finlens-manual-comparison-v1.json', 'blob:http://finlens.test/synthetic-1']]);

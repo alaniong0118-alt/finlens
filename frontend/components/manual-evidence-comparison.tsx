@@ -74,21 +74,24 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
       <p>Enter two passages yourself. FinLens does not open references or verify these sources. Keep the source’s publication date separate from the event date.</p>
       {sources.map((source, index) => {
         const slot = index === 0 ? "A" : "B";
+        const passageLabel = "Passage " + slot;
+        const assessmentLabel = "Assessment " + slot;
+        const rationaleLabel = "Assessment rationale " + slot;
         return <fieldset key={slot}>
           <legend>{"Manual source " + slot + " · not verified"}</legend>
           <label>{"Source reference " + slot}<input maxLength={limits.reference} value={source.reference} onChange={event => updateSource(index, "reference", event.target.value)} /></label>
-          <label>{"Passage " + slot}<textarea rows={3} maxLength={limits.passage} value={source.passage} onChange={event => updateSource(index, "passage", event.target.value)} /></label>
+          <label>{passageLabel}<textarea aria-label={passageLabel} rows={3} maxLength={limits.passage} value={source.passage} onChange={event => updateSource(index, "passage", event.target.value)} /></label>
           <label>{"Locator " + slot}<input placeholder="Optional page or section" maxLength={limits.locator} value={source.locator} onChange={event => updateSource(index, "locator", event.target.value)} /></label>
           <label>{"Publication date " + slot}<input type="date" value={source.date} onChange={event => updateSource(index, "date", event.target.value)} /></label>
-          <label>{"Assessment " + slot}<select value={source.assessment} onChange={event => updateSource(index, "assessment", event.target.value)}>
+          <label>{assessmentLabel}<select aria-label={assessmentLabel} value={source.assessment} onChange={event => updateSource(index, "assessment", event.target.value)}>
             <option value="">Choose an assessment</option>
             {MANUAL_COMPARISON_ASSESSMENTS.map(value => <option key={value} value={value}>{value}</option>)}
           </select></label>
-          <label>{"Assessment rationale " + slot}<textarea rows={2} maxLength={limits.reasoning} value={source.rationale} onChange={event => updateSource(index, "rationale", event.target.value)} /></label>
+          <label>{rationaleLabel}<textarea aria-label={rationaleLabel} rows={2} maxLength={limits.reasoning} value={source.rationale} onChange={event => updateSource(index, "rationale", event.target.value)} /></label>
         </fieldset>;
       })}
-      <label>Provisional judgment<textarea rows={2} maxLength={limits.reasoning} value={judgment} onChange={event => { clearRecord(); setJudgment(event.target.value); }} /></label>
-      <label>Evidence that would change the judgment<textarea rows={2} maxLength={limits.reasoning} value={change} onChange={event => { clearRecord(); setChange(event.target.value); }} /></label>
+      <label>Provisional judgment<textarea aria-label="Provisional judgment" rows={2} maxLength={limits.reasoning} value={judgment} onChange={event => { clearRecord(); setJudgment(event.target.value); }} /></label>
+      <label>Evidence that would change the judgment<textarea aria-label="Evidence that would change the judgment" rows={2} maxLength={limits.reasoning} value={change} onChange={event => { clearRecord(); setChange(event.target.value); }} /></label>
       <p>Your assessment is not a verified finding. This comparison stays on this page, cannot be reopened here, and includes your notes if you download it. Nothing is uploaded.</p>
       <button type="button" className="secondary-button" onClick={record}>Record provisional judgment</button>
       {needsReview && <p role="status">This comparison changed. Review your notes and record the comparison again before downloading.</p>}
