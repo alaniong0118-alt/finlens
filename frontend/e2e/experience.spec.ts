@@ -434,3 +434,38 @@ test('RISK-SEC-01 topic change rejects a delivered old response when transport i
   await info.attach('ignored-abort-proof', { body: JSON.stringify({ deliveredAbortedOldResponse: await scenario.abortedDeliveries(path, '0', 200, '?q=supply+chain&limit=5'),
     currentQuery: 'competition', contextRequests: scenario.count(path), violations: scenario.violations }), contentType: 'application/json' });
 });
+
+test('Nintendo Home: keeping the exact official report URL shows dated context without retrieval', async ({ page, scenario }) => {
+  await scenario.open();
+  await scenario.ready();
+  const input = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const keep = page.getByRole('button', { name: 'Keep research draft', exact: true });
+  const guide = page.getByRole('region', { name: 'Nintendo external source', exact: true });
+  const premise = page.locator('#research-draft-premise');
+  const pdf = 'https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf';
+  const lookalike = pdf.replace('www.nintendo.co.jp', 'www.nintendo.co.jp.example.invalid');
+  const before = scenario.ledger.length;
+
+  await input.fill(lookalike);
+  await keep.click();
+  await expect(premise).toHaveText(lookalike);
+  await expect(guide).toHaveCount(0);
+  await expect(page.locator('a[href="' + lookalike + '"]')).toHaveCount(0);
+
+  await input.fill(pdf);
+  await expect(guide).toHaveCount(0);
+  await keep.click();
+  await expect(premise).toHaveText(pdf);
+  await expect(guide).toBeVisible();
+  await expect(guide.locator('time')).toHaveAttribute('datetime', '2026-11-05');
+  await expect(guide.locator('time')).toHaveText('5 November 2026');
+  const link = guide.getByRole('link', { name: 'Nintendo six-month earnings release, 5 November 2026 (official PDF)', exact: true });
+  await expect(link).toHaveAttribute('href', pdf);
+  await expect(link).toHaveAttribute('referrerpolicy', 'no-referrer');
+
+  await input.fill(pdf + '#page=2');
+  await expect(premise).toHaveCount(0);
+  await expect(guide).toHaveCount(0);
+  expect(scenario.ledger.slice(before)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});
