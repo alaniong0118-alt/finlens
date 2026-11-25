@@ -1,0 +1,27 @@
+# Microsoft Container Registry index and Linux amd64 configuration were independently verified.
+FROM --platform=linux/amd64 mcr.microsoft.com/playwright@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+ENV NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN test "$(node -p 'process.versions.node.split(".")[0]')" = 24
+COPY python.tgz /tmp/finlens-python.tgz
+RUN echo 'cefba034445d2875408d1fd4d5700ae6731563aeb54dcb39fd8164ab5c457533  /tmp/finlens-python.tgz' | sha256sum -c - \
+    && mkdir /opt/proof-python \
+    && tar --extract --gzip --file /tmp/finlens-python.tgz --directory /opt/proof-python --strip-components=1 --no-same-owner --no-same-permissions \
+    && /opt/proof-python/bin/python3.14 -V \
+    && rm /tmp/finlens-python.tgz
+COPY wheels/ /proof-build/wheels/
+COPY test/backend-acceptance-cpu.require-hashes.lock /proof-build/
+RUN --network=none /opt/proof-python/bin/python3.14 -m pip --isolated install --disable-pip-version-check --no-index \
+    --only-binary=:all: --find-links=/proof-build/wheels --require-hashes --no-cache-dir \
+    -r /proof-build/backend-acceptance-cpu.require-hashes.lock \
+    && /opt/proof-python/bin/python3.14 -m pip --isolated check
+WORKDIR /proof
+COPY app /proof/app
+COPY test/browser/ /proof/app/frontend/.proof/
+COPY test /proof/test
+WORKDIR /proof/app/frontend
+RUN npm ci --ignore-scripts --audit=false --fund=false --registry=https://registry.npmjs.org \
+    && test "$(node -p 'require("@playwright/test/package.json").version')" = 1.64.0 \
+    && node -e 'const fs = require("node:fs"), p = require("playwright"); fs.accessSync(p.chromium.executablePath(), fs.constants.X_OK);' \
+    && chown -R pwuser:pwuser /proof/app
+WORKDIR /proof
+USER pwuser
