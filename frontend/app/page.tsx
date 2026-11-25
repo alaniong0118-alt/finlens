@@ -19,6 +19,8 @@ import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 
 import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion, matchesNintendoOperatingProfitQuestion, nintendoSecondQuarterProfit } from "@/lib/nintendo-ir-reference";
 
+import { catalogMayContainWynnMacau, supportsWynnMacauNoticeQuestion, wynnMacauReferences } from "@/lib/wynn-macau-reference";
+
 const nintendoReleaseUrl = "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf";
 const nintendoReleaseDate = "2026-11-05";
 
@@ -67,7 +69,25 @@ function NintendoIrReference({ keptReference = "", onAddQ1 }: { keptReference?: 
   </>;
 }
 
+function WynnMacauOfficialGuide() {
+  return <section aria-label="Wynn Macau official source guide">
+    <h4>Official sources for Wynn Macau, Limited (HKEX 1128)</h4>
+    <section aria-label="Listed issuer notice">
+      <h5>Listed issuer notice</h5>
+      <p>Wynn Macau, Limited · hosted by HKEXnews · Document date: <time dateTime={wynnMacauReferences.documentDate}>27 April 2026</time>.</p>
+      <p>This shareholder communications notice does not establish who holds a gaming concession.</p>
+      <a className="source-link" href={wynnMacauReferences.disclosure} referrerPolicy="no-referrer">Open the issuer notice on HKEXnews</a>
+    </section>
+    <section aria-label="Check the licence holder">
+      <h5>Check the licence holder separately</h5>
+      <p>Do not assume the listed issuer and the licensed company are the same. The regulator’s directory opens separately; FinLens did not verify the licence holder or its current status.</p>
+      <a className="source-link" href={wynnMacauReferences.regulator} referrerPolicy="no-referrer">Open the Macao regulator’s casino directory</a>
+    </section>
+  </section>;
+}
+
 export default function Home() {
+  const [wynnConfirmation, setWynnConfirmation] = useState<string | null>(null);
   const [researchInput, setResearchInput] = useState("");
   const [researchContext, setResearchContext] = useState<string | null>(null);
   const [manualQuestion, setManualQuestion] = useState<string | null>(null);
@@ -76,6 +96,7 @@ export default function Home() {
   const researchInputRef = useRef<HTMLInputElement>(null);
   const manualComparison = useRef<ManualComparisonController>(null);
   function keepQuestion(question: string) {
+    setWynnConfirmation(null);
     setManualQuestion(question);
     setResearchContext(question);
     setResearchDraftError(null);
@@ -105,6 +126,7 @@ export default function Home() {
     const controller = new AbortController(); initialCatalogController.current = controller;
     const read = ++catalogRead.current;
     setCompleteCatalog(null);
+    setWynnConfirmation(null);
     setLoading(true); setError(null);
     getHomeCatalog(controller.signal).then(({ companies: data, complete }) => {
       if (controller.signal.aborted || read !== catalogRead.current) return;
@@ -128,6 +150,7 @@ export default function Home() {
       if (signal.aborted) return false;
       const read = ++catalogRead.current;
       setCompleteCatalog(null);
+      setWynnConfirmation(null);
       const { companies: next, complete } = await getHomeCatalog(controller.signal);
       if (signal.aborted || controller.signal.aborted || read !== catalogRead.current) return false;
       setCompanies(next);
@@ -156,6 +179,9 @@ export default function Home() {
   const showNintendoReference = researchContext !== null && !loading && error === null
     && completeCatalog === companies && !explicitCompanyChoice
     && matchesNintendoIrQuestion(researchContext) && !catalogMayContainNintendo(companies);
+  const showWynnChoice = researchContext !== null && !loading && error === null
+    && completeCatalog === companies && !explicitCompanyChoice
+    && supportsWynnMacauNoticeQuestion(researchContext) && !catalogMayContainWynnMacau(companies);
   return <>
     <a className="skip-link" href="#research-workspace">Skip to research workspace</a>
     <header className="app-header"><div className="header-inner">
@@ -191,6 +217,7 @@ export default function Home() {
               if (next.length > 2000) { setResearchDraftError("Use 2,000 characters or fewer. Your previous draft is unchanged."); return; }
               setPreviousNotesAvailable(manualComparison.current?.hasNotes() ?? false);
               manualComparison.current?.invalidate();
+              setWynnConfirmation(null);
               setResearchInput(next); setResearchContext(null); setResearchDraftError(null); setPendingReplacement(null);
             }} />
           <p className="small muted">{researchInput.length}/2,000 characters</p>
@@ -216,6 +243,17 @@ export default function Home() {
           <p>Check the original source, distinguish its publication date from the event date, and identify the affected company.
             Choose a company below to inspect its existing research. This draft does not start a search.</p>
 
+          {showWynnChoice && <>
+            <button type="button" className="secondary-button"
+              aria-expanded={wynnConfirmation === researchContext} aria-controls="wynn-official-source-guide"
+              onClick={() => setWynnConfirmation(wynnConfirmation === researchContext ? null : researchContext)}>
+              {wynnConfirmation === researchContext ? "Cancel issuer confirmation" : "Confirm Wynn Macau, Limited (HKEX 1128)"}
+            </button>
+            <div id="wynn-official-source-guide">
+              {wynnConfirmation === researchContext && <WynnMacauOfficialGuide />}
+            </div>
+          </>}
+
           {showNintendoReference && <section aria-label="Nintendo external source">
             <NintendoIrReference keptReference={researchContext} onAddQ1={() => {
               if (researchContext === manualQuestion) {
@@ -233,7 +271,7 @@ export default function Home() {
             isCurrent={researchContext === manualQuestion} controllerRef={manualComparison} />
         </div>}
       </section>
-      <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={value => { setExplicitCompanyChoice(true); setTicker(value); }} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
+      <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={value => { setExplicitCompanyChoice(true); setWynnConfirmation(null); setTicker(value); }} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
       <p><Link href="/investigations">Saved investigations</Link></p>
       {!filingEnabled && <p role="status">{capabilities?.filing_research_enabled === false ? "Financial-only capability restriction is active." : "Filing research capabilities are not verified."} Stored financial research remains available. This does not verify runtime readiness or data completeness.</p>}
       <nav className="workspace-nav" aria-label="Research sections"><a href="#insights-title">Annual financial insights</a><a href="#annual-period-title">Annual period comparison</a><a href="#quarter-window-title">Reported windows</a><a href="#balance-date-title">Balance dates</a><a href="#snapshot-title">Company research</a><a href="#history-title">Historical trends</a><a href="#filing-title">SEC research</a><a href="#comparison-title">Company comparison</a><a href="#risk-comparison-title">Compare SEC risk evidence</a><span>AI Analysis · optional</span></nav>
