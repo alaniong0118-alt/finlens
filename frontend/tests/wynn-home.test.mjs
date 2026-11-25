@@ -60,6 +60,13 @@ async function mount(ctx) {
   install('fetch', mockFetch);
   dom.window.fetch = mockFetch;
 
+  const blobs = [], downloads = [];
+  const NativeURL = globalThis.URL;
+  const createObjectURL = blob => { blobs.push(blob); return 'blob:http://finlens.test/roundtrip-' + blobs.length; };
+  const revokeObjectURL = () => {};
+  install('URL', class extends NativeURL { static createObjectURL = createObjectURL; static revokeObjectURL = revokeObjectURL; });
+  Object.assign(dom.window.URL, { createObjectURL, revokeObjectURL });
+  dom.window.HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
   const { default: React, act: reactAct } = await import('react');
   act = reactAct;
   const { createRoot } = await import('react-dom/client');
@@ -109,7 +116,21 @@ async function mount(ctx) {
       item.released = true;
       await act(async () => item.resolve(new Response(JSON.stringify(rows), init)));
     },
-    input, set,
+    input, set, blobs, downloads,
+    async fillLabel(name, value) {
+      const label = [...query('main').querySelectorAll('label')].find(x => x.firstChild?.textContent === name);
+      const control = label?.control;
+      assert.ok(control, name);
+      await change(control, value, control.tagName === 'SELECT' ? 'change' : 'input');
+    },
+    async openBytes(bytes) {
+      const chooser = query('input[type=file][accept=".json,application/json"]');
+      assert.ok(chooser);
+      const file = new dom.window.File([bytes], 'finlens-manual-comparison-v1.json', { type: 'application/json' });
+      Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes });
+      Object.defineProperty(chooser, 'files', { configurable: true, value: [file] });
+      await act(async () => chooser.dispatchEvent(new dom.window.Event('change', { bubbles: true })));
+    },
     async click(button) { await act(async () => button.click()); },
     async keep(value = question) {
       await input(value);
@@ -197,5 +218,59 @@ test('A researcher explicitly adds only the issuer notice address to the same co
   assert.ok([...manual.querySelectorAll('textarea')].every(x => x.value === ''), 'passages and judgments must stay empty');
   assert.ok(![...manual.querySelectorAll('input')].some(x => x.value === roster), 'regulator directory must stay independent');
   assert.equal(app.query('#research-draft-premise')?.textContent, question);
+  assert.equal(app.requests.length, before);
+});
+
+test('Wynn source handoff can be compared, downloaded, and reopened without rewriting live reasoning', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  await app.keep();
+  await app.click(button(app, confirm));
+  await app.click(button(app, 'Add issuer notice link to comparison'));
+  const values = {
+    'Passage A': 'Synthetic issuer excerpt: one named operator holds the concession.',
+    'Locator A': 'Synthetic locator A',
+    'Assessment A': 'supports',
+    'Assessment rationale A': 'Issuer identifies the operator; independent confirmation remains necessary.',
+    'Source reference B': roster,
+    'Passage B': 'Synthetic counterevidence: the roster alone does not establish the claimed start date.',
+    'Locator B': 'Synthetic locator B',
+    'Assessment B': 'challenges',
+    'Assessment rationale B': 'A current roster does not settle a historical date.',
+    'Provisional judgment': 'The named operator is supported, but the start date remains uncertain.',
+    'Evidence that would change the judgment': 'An independently dated concession award notice.',
+  };
+  for (const [name, value] of Object.entries(values)) await app.fillLabel(name, value);
+  await app.click(button(app, 'Record provisional judgment'));
+  await app.click(button(app, 'Download recorded comparison (.json)'));
+  assert.deepEqual(app.downloads, ['finlens-manual-comparison-v1.json']);
+  assert.equal(app.blobs.length, 1);
+  const exported = await app.blobs[0].arrayBuffer();
+  const stored = JSON.parse(new TextDecoder().decode(exported));
+  assert.deepEqual(stored, {
+    schema_version: 1, kind: 'manual_evidence_comparison', question,
+    sources: [
+      { kind: 'manual_unverified', reference: disclosure, passage: values['Passage A'],
+        locator: values['Locator A'], date: null, assessment: 'supports', rationale: values['Assessment rationale A'] },
+      { kind: 'manual_unverified', reference: roster, passage: values['Passage B'],
+        locator: values['Locator B'], date: null, assessment: 'challenges', rationale: values['Assessment rationale B'] },
+    ],
+    provisional_judgment: values['Provisional judgment'],
+    evidence_that_would_change_judgment: values['Evidence that would change the judgment'],
+  });
+  await app.fillLabel('Provisional judgment', 'New live note must not be replaced');
+  assert.equal(button(app, 'Download recorded comparison (.json)'), undefined);
+  await app.openBytes(exported);
+  const preview = app.query('[aria-label="Reopened comparison preview"]');
+  assert.ok(preview);
+  for (const value of [question, disclosure, roster, values['Passage A'], values['Passage B'],
+    values['Assessment rationale A'], values['Assessment rationale B'],
+    values['Provisional judgment'], values['Evidence that would change the judgment']]) {
+    assert.ok(preview.textContent.includes(value), value);
+  }
+  const liveLabel = [...app.query('main').querySelectorAll('label')].find(x => x.firstChild?.textContent === 'Provisional judgment');
+  assert.equal(liveLabel?.control?.value, 'New live note must not be replaced');
+  assert.equal(button(app, 'Download recorded comparison (.json)'), undefined);
   assert.equal(app.requests.length, before);
 });

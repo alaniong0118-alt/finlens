@@ -50,3 +50,69 @@ test('Wynn official-source guide keeps the confirmed issuer notice independent f
   await expect(confirm).toHaveCount(0);
   await expect(guide).toHaveCount(0);
 });
+
+test('Wynn source links and competing assessments survive download and a fresh Home reopen', async ({ page, scenario }) => {
+  await scenario.open();
+  await scenario.ready();
+  const question = 'Can a Wynn Macau announcement tell me who holds the gaming concession?';
+  const issuer = 'https://www.hkexnews.hk/listedco/listconews/sehk/2026/0424/2026042401631_c.pdf';
+  const regulator = 'https://www.dicj.gov.mo/web/EN/information/contacts_casino/content.html';
+  const draft = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const manual = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });
+  const field = (name: string) => manual.getByLabel(name, { exact: true });
+  const button = (name: string) => page.getByRole('button', { name, exact: true });
+  const before = scenario.ledger.length;
+  await draft.fill(question);
+  await draft.press('Enter');
+  await button('Confirm Wynn Macau, Limited (HKEX 1128)').press('Enter');
+  await button('Add issuer notice link to comparison').press('Enter');
+  await expect(field('Source reference A')).toHaveValue(issuer);
+  await expect(field('Publication date A')).toHaveValue('');
+  await expect(field('Source reference B')).toHaveValue('');
+  const syntheticA = 'Synthetic issuer extract: an operator is named.';
+  const syntheticB = 'Synthetic check: the directory does not establish the event date.';
+  const support = 'The named operator is relevant but requires independent verification.';
+  const challenge = 'The directory cannot establish when the concession began.';
+  const judgment = 'The operator may be identifiable; the historical start date is still uncertain.';
+  const change = 'A dated official award notice naming the same operator.';
+  for (const [name, value] of [
+    ['Passage A', syntheticA], ['Locator A', 'Fixture locator A'], ['Assessment rationale A', support],
+    ['Source reference B', regulator], ['Passage B', syntheticB],
+    ['Locator B', 'Fixture locator B'], ['Assessment rationale B', challenge],
+    ['Provisional judgment', judgment], ['Evidence that would change the judgment', change],
+  ]) await field(name).fill(value);
+  await field('Assessment A').selectOption('supports');
+  await field('Assessment B').selectOption('challenges');
+  await button('Record provisional judgment').press('Enter');
+  const [file] = await Promise.all([
+    page.waitForEvent('download'), button('Download recorded comparison (.json)').press('Enter'),
+  ]);
+  expect(file.suggestedFilename()).toBe('finlens-manual-comparison-v1.json');
+  expect(await file.failure()).toBeNull();
+  const path = await file.path();
+  expect(scenario.ledger.slice(before)).toEqual([]);
+  await page.reload();
+  await scenario.ready();
+  await expect.poll(() => [scenario.count('/companies'), scenario.count('/capabilities')]).toEqual([2, 2]);
+  const after = scenario.ledger.length;
+  await expect(draft).toHaveValue('');
+  await expect(manual).toHaveCount(0);
+  await page.getByLabel('Open a recorded comparison (.json)', { exact: true }).setInputFiles(path);
+  const preview = page.getByRole('region', { name: 'Reopened comparison preview', exact: true });
+  for (const value of [question, judgment, change]) await expect(preview).toContainText(value);
+  for (const [slot, fields] of [
+    ['A', [issuer, syntheticA, 'Fixture locator A', 'Not recorded', 'supports', support]],
+    ['B', [regulator, syntheticB, 'Fixture locator B', 'Not recorded', 'challenges', challenge]],
+  ] as const) {
+    const source = preview.locator(':scope > section').filter({
+      has: page.getByRole('heading', { name: 'Manual source ' + slot + ' · not verified', exact: true }),
+    });
+    await expect(source.locator('dt')).toHaveText(['Source reference', 'Passage', 'Locator', 'Publication date', 'Assessment', 'Assessment rationale']);
+    await expect(source.locator('dd')).toHaveText([...fields]);
+  }
+  await expect(preview.locator('input, textarea, select, button, a')).toHaveCount(0);
+  await expect(draft).toHaveValue('');
+  await expect(button('Download recorded comparison (.json)')).toHaveCount(0);
+  expect(scenario.ledger.slice(after)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});
