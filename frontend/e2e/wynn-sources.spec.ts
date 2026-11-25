@@ -37,6 +37,14 @@ test('Wynn official-source guide keeps the confirmed issuer notice independent f
   await page.keyboard.press('Enter');
   await expect(confirm).toBeFocused();
   await expect(guide).toHaveCount(0);
+  await confirm.click();
+  const handoff = guide.getByRole('button', {name: 'Add issuer notice link to comparison', exact: true});
+  await handoff.click();
+  const manual = page.getByRole('region', {name: 'Manual evidence comparison', exact: true});
+  await expect(manual.getByLabel('Source reference A', {exact: true})).toHaveValue(
+    'https://www.hkexnews.hk/listedco/listconews/sehk/2026/0424/2026042401631_c.pdf');
+  await expect(manual.getByLabel('Publication date A', {exact: true})).toHaveValue('');
+  expect(scenario.ledger).toHaveLength(before);
   await draft.fill('Can a Wynn Resorts (NASDAQ: WYNN) announcement tell me who holds the gaming concession?');
   await draft.press('Enter');
   await expect(confirm).toHaveCount(0);

@@ -69,7 +69,7 @@ function NintendoIrReference({ keptReference = "", onAddQ1 }: { keptReference?: 
   </>;
 }
 
-function WynnMacauOfficialGuide() {
+function WynnMacauOfficialGuide({ onAddNotice }: { onAddNotice: () => void }) {
   return <section aria-label="Wynn Macau official source guide">
     <h4>Official sources for Wynn Macau, Limited (HKEX 1128)</h4>
     <section aria-label="Listed issuer notice">
@@ -77,6 +77,8 @@ function WynnMacauOfficialGuide() {
       <p>Wynn Macau, Limited · hosted by HKEXnews · Document date: <time dateTime={wynnMacauReferences.documentDate}>27 April 2026</time>.</p>
       <p>This shareholder communications notice does not establish who holds a gaming concession.</p>
       <a className="source-link" href={wynnMacauReferences.disclosure} referrerPolicy="no-referrer">Open the issuer notice on HKEXnews</a>
+      <p><button type="button" className="secondary-button" onClick={onAddNotice}>Add issuer notice link to comparison</button></p>
+      <p>Only the link is added. Check when the notice was published before adding a publication date.</p>
     </section>
     <section aria-label="Check the licence holder">
       <h5>Check the licence holder separately</h5>
@@ -250,7 +252,9 @@ export default function Home() {
               {wynnConfirmation === researchContext ? "Cancel issuer confirmation" : "Confirm Wynn Macau, Limited (HKEX 1128)"}
             </button>
             <div id="wynn-official-source-guide">
-              {wynnConfirmation === researchContext && <WynnMacauOfficialGuide />}
+              {wynnConfirmation === researchContext && <WynnMacauOfficialGuide onAddNotice={() => {
+                if (researchContext === manualQuestion) manualComparison.current?.addReference(wynnMacauReferences.disclosure, "");
+              }} />}
             </div>
           </>}
 

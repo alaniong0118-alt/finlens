@@ -180,3 +180,22 @@ test('A Wynn Macau company already in the local catalog suppresses the external 
   assert.ok(!button(app, confirm), 'unexpected issuer confirmation offered');
   assert.equal(app.query(region), null);
 });
+
+test('A researcher explicitly adds only the issuer notice address to the same comparison', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  await app.keep();
+  await app.click(button(app, confirm));
+  const optIn = button(app, 'Add issuer notice link to comparison');
+  assert.ok(optIn, 'explicit notice-link handoff missing');
+  const before = app.requests.length;
+  await app.click(optIn);
+  const manual = app.query('[aria-label="Manual evidence comparison"]');
+  const source = [...manual.querySelectorAll('input')].find(x => x.value === disclosure);
+  assert.ok(source, 'issuer notice URL was not copied');
+  assert.ok([...manual.querySelectorAll('input[type=date]')].every(x => x.value === ''), 'printed date is not publication date');
+  assert.ok([...manual.querySelectorAll('textarea')].every(x => x.value === ''), 'passages and judgments must stay empty');
+  assert.ok(![...manual.querySelectorAll('input')].some(x => x.value === roster), 'regulator directory must stay independent');
+  assert.equal(app.query('#research-draft-premise')?.textContent, question);
+  assert.equal(app.requests.length, before);
+});
