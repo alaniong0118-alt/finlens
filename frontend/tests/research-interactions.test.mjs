@@ -58,9 +58,8 @@ after(() => dom.window.close());
 
 function presentationContext(ticker, query, texts) {
   const base = context(ticker, query);
-  return { ...base,
-    context: texts.map((text, index) => `[SOURCE source_${index + 1}]\ntext: |-\n  ${text}\n[END SOURCE source_${index + 1}]`).join('\n\n'),
-    citations: texts.map((text, index) => ({ ...base.citations[0], citation_id: `source_${index + 1}`, chunk_id: `${ticker}-chunk-${index + 1}`, end_char: text.length })) };
+  const citations = texts.map((text, index) => ({ ...base.citations[0], citation_id: `source_${index + 1}`, chunk_id: `${ticker}-chunk-${index + 1}`, end_char: Array.from(text).length }));
+  return { ...base, citations, context: texts.map((text, index) => selectedSourceBlock(citations[index], text)).join('\n\n') };
 }
 
 const salesRow = 'Services 30,739 27,423 91,728 80,408 Total net sales $ 109,417 $ 94,036.';
@@ -130,7 +129,10 @@ test('mounted query/company changes remove highlights and reset evidence expansi
   await app.release(pending, presentationContext('AAPL', 'revenue', Array.from({length:5}, (_, index) => `Revenue old scope ${index}.`)));
   await app.click('Show more evidence (3)'); assert.equal(app.evidence().length, 5);
   await app.change(app.host.querySelector('textarea'), 'supply constraints');
-  assert.equal(app.host.querySelectorAll('mark').length, 0); assert.deepEqual(app.evidence(), []);
+  assert.match(app.host.querySelector('.evidence-query')?.textContent, /completed search: “revenue”.*Kept for reference/);
+  assert.equal(app.evidence().length, 5);
+  assert.equal(app.host.querySelectorAll('mark.value-match').length, 0);
+  assert.equal(app.host.querySelector('.ai-panel'), null);
   pending = await app.search('AAPL', 'supply constraints');
   await app.release(pending, presentationContext('AAPL', 'supply constraints', Array(5).fill('Supply constraints current scope.')));
   assert.equal(app.evidence().length, 2); assert.doesNotMatch(app.host.querySelector('.evidence-results').textContent, /old scope/);
@@ -397,9 +399,12 @@ const companies = [
   { id: 2, ticker: 'JPM', name: 'JPM fixture', cik: '0000019617', exchange: 'NYSE', has_indexed_filing: true, indexed_filing_count: 1 },
 ];
 function filing(ticker) {
-  return { accession_number: `${ticker}-test-accession`, form: '10-Q', filed: '2025-05-01',
+  const cik = companies.find(company => company.ticker === ticker).cik;
+  // Structurally real, fictional fixture accession; no external URL is opened.
+  const accession = `${cik}-25-999900`;
+  return { accession_number: accession, form: '10-Q', filed: '2025-05-01',
     period_start: '2025-01-01', period_end: '2025-03-31', metrics: [], has_filing_chunks: true,
-    sec_url: `https://www.sec.gov/Archives/test/${ticker}` };
+    sec_url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accession.replaceAll('-', '')}/${accession}-index.html` };
 }
 function point(ticker, value, metric = 'revenue', kind = 'quarter') {
   const period = { kind, start: '2025-01-01', end: kind === 'annual' ? '2025-12-31' : '2025-03-31', fiscal_year: 2025, fiscal_period: kind === 'annual' ? 'FY' : 'Q1', fiscal_label_basis: 'test fixture' };
@@ -424,13 +429,16 @@ function history(ticker, value, metric = 'revenue') {
   return { ticker, company_cik: companies.find(company => company.ticker === ticker).cik, metric, unit, requested_period: 'quarter', status: 'available', reason: null,
     history: [observation] };
 }
+function selectedSourceBlock(citation, text) {
+  return `[SOURCE ${citation.citation_id}]\nchunk_id: ${citation.chunk_id}\naccession_number: ${citation.accession_number}\nform: ${citation.form}\nsimilarity: ${citation.similarity.toFixed(6)}\ntext: |-\n${text.split('\n').map(line => '  '+line).join('\n')}\n[END SOURCE ${citation.citation_id}]`;
+}
 function context(ticker, query = 'revenue growth') {
   const source = filing(ticker);
   const text = `${ticker} test evidence: reported revenue increased. This is a stored-excerpt fixture, not a generated answer.`;
+  const citation = { ...source, citation_id: 'source_1', chunk_id: `${ticker}-chunk`, filename: `${ticker}-fixture.htm`,
+    start_char: 0, end_char: Array.from(text).length, evidence_reason: 'strong_lexical', similarity: 0.8, semantic_similarity: 0.8, lexical_score: 1, hybrid_score: 1 };
   return { ticker, company_name: `${ticker} fixture`, query, accession_number: source.accession_number,
-    evidence_status: 'sufficient', context: `[SOURCE source_1]\ntext: |-\n  ${text}\n[END SOURCE source_1]`,
-    citations: [{ ...source, citation_id: 'source_1', chunk_id: `${ticker}-chunk`, filename: `${ticker}-fixture.htm`,
-      start_char: 0, end_char: text.length, evidence_reason: 'strong_lexical', similarity: 0.8, semantic_similarity: 0.8, lexical_score: 1, hybrid_score: 1 }] };
+    evidence_status: 'sufficient', context: selectedSourceBlock(citation, text), citations: [citation] };
 }
 function companyPath(ticker, suffix) { return `/companies/${ticker}/${suffix}`; }
 
@@ -723,7 +731,7 @@ test('mounted company-wide scope preserves source lineage and exposes no AI acti
   await app.release(response, companyContext('AAPL'));
   assert.match(app.host.textContent, /Company-wide · 1 verified published filings searched/);
   assert.match(app.evidence().join(''), /CIK 0000320193|CIK 320193/);
-  assert.match(app.evidence().join(''), /AAPL-test-accession/);
+  assert.match(app.evidence().join(''), /0000320193-25-999900/);
   assert.match(app.evidence().join(''), /AAPL-fixture.htm/);
   assert.ok(![...app.host.querySelectorAll('button')].some(b => b.textContent === 'Generate AI analysis'));
   assert.equal(app.requests.filter(r => r.path.endsWith('/answer')).length, 0);
@@ -1165,7 +1173,7 @@ test('mounted company switch keeps B summary, history and filing after delayed A
     assert.match(app.snapshot().textContent, /\$2B/); assert.doesNotMatch(app.snapshot().textContent, /AAPL test concept|\$1B/);
     assert.match(app.trends().textContent, /\$2B/); assert.doesNotMatch(app.trends().textContent, /AAPL revenue test concept|\$1B/);
     assert.equal(app.select('Indexed SEC filing').value, filing('JPM').accession_number);
-    assert.doesNotMatch(app.host.querySelector('.filing-record').textContent, /AAPL-test-accession/);
+    assert.doesNotMatch(app.host.querySelector('.filing-record').textContent, /0000320193-25-999900/);
   };
   assertCurrent();
   for (const [request, payload] of [[lateSummary, summary('AAPL', '1000000000')], [lateHistory, history('AAPL', '1000000000')], [lateSources, [filing('AAPL')]]]) {
@@ -1186,7 +1194,7 @@ test('mounted company switch clears old scope and rejects pending old evidence',
   assert.equal(oldEvidence.init.signal.aborted, true);
   await app.release(oldEvidence, context('AAPL'));
   assert.deepEqual(app.evidence(), []);
-  assert.doesNotMatch(app.host.textContent, /AAPL test evidence|AAPL-test-accession/);
+  assert.doesNotMatch(app.host.textContent, /AAPL test evidence|0000320193-25-999900/);
   await app.completeCompany('JPM', '2000000000');
   await app.release(await app.search('JPM'), context('JPM'));
   assert.match(app.evidence().join(''), /JPM test evidence/);
@@ -1421,16 +1429,24 @@ test('mounted company switch discards pending and completed comparison state', a
  await app.change(app.host.querySelector('#company'), 'AAPL'); assert.ok(!app.host.querySelector('.direct-answer'));
 });
 
-test('mounted query edits clear completed comparison and reject delayed old responses', async ctx => {
+test('mounted query edits clear completed comparison, keep labeled prior evidence and reject delayed old responses', async ctx => {
  const app = await mount(ctx); await app.completeCompany('AAPL', '1000000000');
  const query = '2024-2025 revenue growth'; let evidence = await app.search('AAPL', query, true);
  await app.release(app.request(companyPath('AAPL', 'research-answer')), comparisonAnswer('AAPL', query));
  await app.release(evidence, context('AAPL', query));
+ const passages = () => [...app.host.querySelectorAll('.evidence-card .excerpt.details-body')].map(n => n.textContent);
+ const prior = passages();
+ assert.equal(prior.length, 1);
  await app.change(app.host.querySelector('textarea'), '2024 net income'); assert.ok(!app.host.querySelector('.direct-answer'));
  evidence = await app.search('AAPL', query, true); const old = app.request(companyPath('AAPL', 'research-answer'));
  await app.change(app.host.querySelector('textarea'), '2025 revenue');
- await app.release(old, comparisonAnswer('AAPL', query)); await app.release(evidence, context('AAPL', query));
- assert.ok(!app.host.querySelector('.direct-answer')); assert.deepEqual(app.evidence(), []);
+ assert.equal(old.init.signal.aborted, true); assert.equal(evidence.init.signal.aborted, true);
+ await app.release(old, comparisonAnswer('AAPL', query));
+ await app.release(evidence, presentationContext('AAPL', query, ['Distinct stale fixture must never replace the earlier completed evidence.']));
+ assert.ok(!app.host.querySelector('.direct-answer'));
+ assert.match(app.host.querySelector('.evidence-query')?.textContent, /Kept for reference.*does not support a different question/);
+ assert.deepEqual(passages(), prior);
+ assert.equal(app.host.querySelector('.passage-tone'), null);
 });
 
 test('mounted direct answer arrives before slow evidence, discloses exact provenance, and survives evidence failure', async ctx => {
@@ -1447,7 +1463,7 @@ test('mounted direct answer arrives before slow evidence, discloses exact proven
   await act(async () => disclosure.querySelector('summary').click());
   assert.equal(disclosure.open, true);
   assert.match(disclosure.textContent, /Exact API value:.*109417000000 USD/);
-  assert.match(disclosure.textContent, /Accession AAPL-test-accession/);
+  assert.match(disclosure.textContent, /Accession 0000320193-25-999900/);
   assert.equal(disclosure.querySelector('a').href, filing('AAPL').sec_url);
   await app.release(pendingEvidence, { detail: 'Local evidence failure fixture' }, 500);
   assert.match(app.host.querySelector('.direct-answer').textContent, /\$109\.42B/);
@@ -1631,7 +1647,7 @@ for (const strict of [false, true]) {
     assertUnverifiedFilings(app);
     await app.release(old, outcome === 'success' ? [filing('AAPL')] : {}, outcome === 'success' ? 200 : 503);
     assertUnverifiedFilings(app);
-    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    assert.doesNotMatch(filingPanel(app).textContent, /0000320193-25-999900/);
     assert.equal(filingSourceRequests(app).length, 1);
     await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
     const replacement = app.request(companyPath('AAPL', 'sources'));
@@ -1649,14 +1665,14 @@ for (const strict of [false, true]) {
     await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 1));
     const old = app.request(companyPath('AAPL', 'sources'));
     assertFilingRequestPending(app);
-    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    assert.doesNotMatch(filingPanel(app).textContent, /0000320193-25-999900/);
     await focusCheck();
     await app.release(app.request(companyPath('AAPL', 'freshness')), freshnessFixture('AAPL', 2));
     const replacement = app.request(companyPath('AAPL', 'sources'));
     assert.equal(old.init.signal.aborted, true);
     await app.release(old, [filing('AAPL')]);
     assertFilingRequestPending(app);
-    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    assert.doesNotMatch(filingPanel(app).textContent, /0000320193-25-999900/);
     await app.release(replacement, [filing('AAPL')]);
     assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
     assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
@@ -1673,7 +1689,7 @@ for (const strict of [false, true]) {
     const replacement = app.request(companyPath('JPM', 'sources'));
     await app.release(old, [filing('AAPL')]);
     assertFilingRequestPending(app);
-    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    assert.doesNotMatch(filingPanel(app).textContent, /0000320193-25-999900/);
     await app.release(replacement, [filing('JPM')]);
     assert.equal(app.select('Indexed SEC filing').value, filing('JPM').accession_number);
     assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
@@ -1724,7 +1740,7 @@ for (const strict of [false, true]) {
     const replacement = app.request(companyPath('AAPL', 'sources'));
     await app.release(old, [filing('AAPL')]);
     assertFilingRequestPending(app);
-    assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
+    assert.doesNotMatch(filingPanel(app).textContent, /0000320193-25-999900/);
     await app.release(replacement, []);
     assert.match(filingPanel(app).textContent, /No recorded filings were returned for this publication/);
     assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
@@ -1957,6 +1973,12 @@ test('Snapshot gaps hide old data when publication version changes', async ctx =
   assert.match(app.snapshot().textContent, /Snapshot coverage gaps/); assert.match(app.snapshot().textContent, /\$2B/);
 });
 
+function cashMetricDetails(app) {
+  const details = [...app.snapshot().querySelectorAll('details.secondary-metrics')].find(node => node.querySelector('summary')?.textContent === 'Cash flow · reported intervals');
+  assert.ok(details, 'Use the named cash-flow disclosure rather than the last snapshot group');
+  return details;
+}
+
 test('mounted cash-flow alternatives confirm YTD, preserve quarter values and reuse the existing selector/cache', async ctx => {
   const app = await mount(ctx);
   await app.release(app.request(companyPath('AAPL', 'financials/summary')), cashSnapshot('AAPL'));
@@ -1967,7 +1989,7 @@ test('mounted cash-flow alternatives confirm YTD, preserve quarter values and re
   assert.equal(cashHints(app).length, 3);
   assert.match(cashHints(app)[0].textContent, /Operating cash flow.*Half-year YTD.*Jun 30, 2025/);
   assert.match(app.snapshot().querySelector('.period-label').textContent, /^Direct quarter/);
-  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
+  assert.match(cashMetricDetails(app).textContent, /Free cash flowUnavailable/);
   assert.match(app.snapshot().querySelector('.metric-grid').textContent, /Revenue\$1B/);
   assert.deepEqual([...app.select('Snapshot period').options].map(option => option.value), ['quarter', 'half_year', 'nine_months', 'annual']);
   const count = app.requests.length;
@@ -1975,11 +1997,11 @@ test('mounted cash-flow alternatives confirm YTD, preserve quarter values and re
   assert.equal(app.requests.length, count, 'Selecting a confirmed mode reuses its snapshot');
   assert.equal(cashHints(app).length, 0);
   assert.match(app.snapshot().querySelector('.period-label').textContent, /^Half-year YTD.*Jun 30, 2025/);
-  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flow\$600M/);
+  assert.match(cashMetricDetails(app).textContent, /Free cash flow\$600M/);
   await app.change(app.select('Snapshot period'), 'quarter');
   assert.equal(app.requests.length, count, 'Returning to quarter does not refetch or rediscover');
   assert.equal(cashHints(app).length, 3);
-  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
+  assert.match(cashMetricDetails(app).textContent, /Free cash flowUnavailable/);
 });
 
 test('Snapshot gaps admit alternative cash-flow hints only for structurally checked sources', async ctx => {
@@ -2011,7 +2033,7 @@ test('mounted cash-flow alternatives ignore invalid values/units/periods and fai
   await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'nine_months' }), cashSnapshot('JPM', 'nine_months', { free_cash_flow: '99' }));
   await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: 'annual' }), { detail: 'Unavailable' }, 503);
   assert.equal(cashHints(app).length, 0);
-  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
+  assert.match(cashMetricDetails(app).textContent, /Free cash flowUnavailable/);
   assert.match(app.snapshot().textContent, /Revenue\$1B/);
   assert.ok(!app.snapshot().querySelector('[role="alert"]'), 'Optional lookup failure preserves the main snapshot');
 });
@@ -2047,7 +2069,7 @@ test('mounted cash-flow alternatives require a confirmed published version', asy
     await app.release(app.request(companyPath('AAPL', 'financials/summary'), { period: mode }), cashSnapshot('AAPL', mode, { operating_cash_flow: '80', capital_expenditures: '20', free_cash_flow: '60' }), 200, null);
   }
   assert.equal(cashHints(app).length, 0);
-  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Free cash flowUnavailable/);
+  assert.match(cashMetricDetails(app).textContent, /Free cash flowUnavailable/);
 });
 
 test('mounted selecting an alternative while discovery is pending shares its request without stale hints', async ctx => {
@@ -2061,7 +2083,7 @@ test('mounted selecting an alternative while discovery is pending shares its req
   await app.release(pending, cashSnapshot('AAPL', 'half_year', { operating_cash_flow: '800000000', capital_expenditures: '200000000', free_cash_flow: '600000000' }));
   assert.match(app.snapshot().querySelector('.period-label').textContent, /^Half-year YTD/);
   assert.equal(cashHints(app).length, 0);
-  assert.match(app.snapshot().querySelector('.secondary-metrics:last-child').textContent, /Operating cash flow\$800M.*Capital expenditures\$200M.*Free cash flow\$600M/);
+  assert.match(cashMetricDetails(app).textContent, /Operating cash flow\$800M.*Capital expenditures\$200M.*Free cash flow\$600M/);
 });
 
 test('mounted delayed alternative responses cannot cross companies', async ctx => {
@@ -2560,7 +2582,7 @@ test('FR-01 source recovery cannot revive a direct answer after query, company o
   assert.ok(!app.host.querySelector('.direct-answer'));
   await app.change(app.host.querySelector('#company'), 'JPM');
   await app.release(oldSources, [filing('AAPL')]);
-  assert.ok(!app.host.querySelector('.direct-answer')); assert.doesNotMatch(app.host.textContent, /AAPL-test-accession/);
+  assert.ok(!app.host.querySelector('.direct-answer')); assert.doesNotMatch(app.host.textContent, /0000320193-25-999900/);
   await app.release(app.request(companyPath('JPM', 'freshness')), freshnessFixture('JPM', 0));
   await app.release(app.request(companyPath('JPM', 'sources')), {}, 503);
   await app.change(app.host.querySelector('textarea'), 'latest revenue'); await app.click('Research question');
@@ -2792,7 +2814,7 @@ test('FD-01 ignored-abort instant history and filing records cannot cross compan
   await app.change(app.host.querySelector('#company'), 'JPM');
   await app.completeCompany('JPM', '2000000000');
   await app.release(sources, [{ ...filing('AAPL'), has_filing_chunks: false }]);
-  assert.doesNotMatch(app.host.textContent, /AAPL-test-accession/);
+  assert.doesNotMatch(app.host.textContent, /0000320193-25-999900/);
   assert.ok(!app.host.querySelector('.recorded-filings'));
 });
 
@@ -2978,7 +3000,7 @@ test('FD-01 Use question cancels pending direct/evidence and discards late respo
   assert.equal(app.host.querySelector('textarea').value, 'What is the latest available operating income?');
 });
 
-test('FD-01 Use question clears resolved answer/evidence and cancels pending AI without generating', async ctx => {
+test('FD-01 Use question clears the answer, keeps labeled prior evidence and cancels pending AI without generating', async ctx => {
   const app = await mount(ctx, true); await app.completeCompany('AAPL', '1000000000');
   const pending = await app.search('AAPL', 'latest revenue', true);
   await app.release(app.request(companyPath('AAPL', 'research-answer')), directAnswer('AAPL', 'latest revenue'));
@@ -2989,7 +3011,8 @@ test('FD-01 Use question clears resolved answer/evidence and cancels pending AI 
   await app.click('Use question');
   assert.equal(ai.init.signal.aborted, true); assert.equal(app.requests.length, count);
   assert.ok(!app.host.querySelector('.direct-answer')); assert.ok(!app.host.querySelector('.ai-panel'));
-  assert.deepEqual(app.evidence(), []);
+  assert.match(app.host.querySelector('.evidence-query')?.textContent, /completed search: “latest revenue”.*Kept for reference/);
+  assert.equal(app.evidence().length, 1);
   await app.release(ai, { evidence_status: 'sufficient', answer: 'OBSOLETE AI', claims: [], citations: [] });
   assert.doesNotMatch(app.host.textContent, /OBSOLETE AI/);
 });
@@ -4269,7 +4292,7 @@ async function mountToneEvidence(ctx, { strict = false, version = 0, scope = 'fi
   const text = 'Search serialization is separate from the exact tone response. Strong no loss; weak.';
   const evidence = { ticker: 'AAPL', company_name: 'Synthetic Apple fixture', query, evidence_status: 'sufficient', citations,
     context: citations.map(citation => scope === 'company' ? companySource(citation, text)
-      : `[SOURCE ${citation.citation_id}]\ntext: |-\n  ${text}\n[END SOURCE ${citation.citation_id}]`).join('\n\n'),
+      : `[SOURCE ${citation.citation_id}]\nchunk_id: ${citation.chunk_id}\naccession_number: ${citation.accession_number}\nform: ${citation.form}\nsimilarity: ${citation.similarity.toFixed(6)}\ntext: |-\n  ${text}\n[END SOURCE ${citation.citation_id}]`).join('\n\n'),
     ...(scope === 'company' ? { retrieval_scope: 'company', company_cik: '0000320193', data_version: version, evidence_version: 0,
       searched_accessions: [toneAccession], excluded_publication_count: 0 } : { accession_number: toneAccession }) };
   await app.release(app.request(scope === 'company' ? companyPath('AAPL', 'context') : companyPath('AAPL', `filings/${toneAccession}/context`)), evidence);
@@ -4320,8 +4343,9 @@ for (const strict of [false, true]) for (const version of [0, 1]) for (const sco
 for (const badSource of [{ sec_url: 'https://www.sec.gov/other' }, { company_cik: '0000019617' }, { filename: '../report.htm' }, { accession_number: '0000320193-25-000001' }]) {
   test(`SEC-NLP-01B mounted unverified source ${JSON.stringify(badSource)} cannot request tone`, async ctx => {
     const app = await mountToneEvidence(ctx, { badSource });
-    assert.equal(app.host.querySelector('.passage-tone button').disabled, true);
-    assert.match(app.host.querySelector('.passage-tone').textContent, /verified passage source/);
+    assert.equal(app.host.querySelector('.passage-tone button'), null, 'Unverified response cannot mount a tone control');
+    assert.equal(app.host.querySelector('.evidence-results'), null, 'Unverified response cannot render evidence cards');
+    assert.match(filingPanel(app).textContent, /Filing evidence could not be verified for this search/);
     assert.equal(toneRequests(app).length, 0);
   });
 }
