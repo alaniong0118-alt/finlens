@@ -1,0 +1,75 @@
+{
+  "candidate": "cfd87915bc679e7f46570f9c8115371c14da1853",
+  "status": "static_input_admission_only",
+  "sec": [
+    {
+      "name": "facts.raw",
+      "official_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+      "length": 3859564,
+      "sha256": "f085735b4d08fb116ade18d24247ffabe11df8eb52eae6556b165831f15ef1ad"
+    },
+    {
+      "name": "submission.raw",
+      "official_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/0000320193-26-000020.txt",
+      "length": 5946811,
+      "sha256": "c7d570d86d5de92899b314776ba1437da6a706d24d0efc2ca014657d2efbaaa7"
+    }
+  ],
+  "model": {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "files": {
+      "1_Pooling/config.json": {
+        "size": 190,
+        "method": "git-blob-sha1",
+        "digest": "d1514c3162bbe87b343f565fadc62e6c06f04f03"
+      },
+      "config.json": {
+        "size": 612,
+        "method": "git-blob-sha1",
+        "digest": "72b987fd805cfa2b58c4c8c952b274a11bfd5a00"
+      },
+      "config_sentence_transformers.json": {
+        "size": 116,
+        "method": "git-blob-sha1",
+        "digest": "fd1b291129c607e5d49799f87cb219b27f98acdf"
+      },
+      "model.safetensors": {
+        "size": 90868376,
+        "method": "sha256",
+        "digest": "53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db"
+      },
+      "modules.json": {
+        "size": 349,
+        "method": "git-blob-sha1",
+        "digest": "952a9b81c0bfd99800fabf352f69c7ccd46c5e43"
+      },
+      "sentence_bert_config.json": {
+        "size": 53,
+        "method": "git-blob-sha1",
+        "digest": "59d594003bf59880a884c574bf88ef7555bb0202"
+      },
+      "special_tokens_map.json": {
+        "size": 112,
+        "method": "git-blob-sha1",
+        "digest": "e7b0375001f109a6b8873d756ad4f7bbb15fbaa5"
+      },
+      "tokenizer.json": {
+        "size": 466247,
+        "method": "git-blob-sha1",
+        "digest": "cb202bfe2e3c98645018a6d12f182a434c9d3e02"
+      },
+      "tokenizer_config.json": {
+        "size": 350,
+        "method": "git-blob-sha1",
+        "digest": "c79f2b6a0cea6f4b564fed1938984bace9d30ff0"
+      },
+      "vocab.txt": {
+        "size": 231508,
+        "method": "git-blob-sha1",
+        "digest": "fb140275c155a9c7c5a3b3e0e77a9e839594a938"
+      }
+    }
+  },
+  "authority": "pending user approval"
+}
