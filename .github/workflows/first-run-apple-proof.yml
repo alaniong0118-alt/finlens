@@ -1,0 +1,76 @@
+name: Apple first-run proof
+on:
+  push:
+    branches: ['proof/finlens-apple-f20197bb-r3']
+    paths: ['.github/workflows/first-run-apple-proof.yml']
+permissions:
+  contents: read
+jobs:
+  apple-fresh:
+    if: >-
+      github.run_attempt == 1 &&
+      github.repository == 'alaniong0118-alt/finlens' &&
+      github.ref == 'refs/heads/proof/finlens-apple-f20197bb-r3' &&
+      github.event.before == 'f20197bbcecc5164227dfef7ff96cca4d7f9a886' &&
+      github.event.deleted == false && github.event.forced == false
+    environment:
+      name: finlens-one-use-apple-proof-r3
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out only the reviewed test package
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: proof-work
+          persist-credentials: false
+      - name: Check out the fixed application candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: f20197bbcecc5164227dfef7ff96cca4d7f9a886
+          path: application
+          persist-credentials: false
+      - name: Stage public locked packages and MiniLM
+        timeout-minutes: 11
+        shell: bash
+        run: bash proof-work/.github/finlens-apple-proof/stage-public.sh "${GITHUB_WORKSPACE}/application"
+      - name: Stage exactly two SEC inputs
+        timeout-minutes: 1
+        shell: bash
+        env:
+          FINLENS_SEC_PREP_ADMITTED: two-fixed-sec-reads
+          FINLENS_SEC_CONTACT: ${{ secrets.FINLENS_APPLE_PROOF_SEC_CONTACT_R3 }}
+        run: timeout 35s python3 -B proof-work/.github/finlens-apple-proof/stage_sec.py
+      - name: Verify isolation then run normal desktop entry
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          unset FINLENS_SEC_CONTACT
+          proof=proof-work/.github/finlens-apple-proof
+          source="$RUNNER_TEMP/finlens-apple-sec-input"
+          destination="$RUNNER_TEMP/finlens-apple-runtime-input"
+          python3 -I -B "$proof/validate-inputs.py" "$source"
+          test ! -e "$destination/sec"
+          mv -- "$source" "$destination/sec"
+          # The same immutable test files are readable only by the ephemeral
+          # runner owner and the image's unprivileged pwuser (UID 1000).
+          setfacl -R -m u:1000:rX "$destination"
+          test "$(getfacl -n -c "$destination" | awk '/^user:1000:/{print $0}')" = user:1000:r-x
+          bash "$proof/start-sealed.sh" "$(cat "$RUNNER_TEMP/finlens-apple-owned/app.iid")" "$destination"
+      - name: Remove owned private input files
+        if: always()
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in finlens-apple-sec-input finlens-apple-runtime-input finlens-apple-owned; do
+            path="$RUNNER_TEMP/$name"
+            test ! -L "$path"
+            if test -e "$path"; then
+              test -d "$path" && test -O "$path"
+              rm -rf --one-file-system -- "$path"
+              test ! -e "$path"
+            fi
+          done
