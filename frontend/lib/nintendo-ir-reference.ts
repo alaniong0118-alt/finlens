@@ -8,7 +8,8 @@ const operatingProfitQuestion = /^why did nintendo['’]s operating profit (?:ri
 // A closed set of phrasings for the editorial link, separate from issuer or catalog lookup.
 export function matchesNintendoIrQuestion(question: string): boolean {
   const normalized = question.trim().replace(/\s+/g, " ");
-  return reportQuestion.test(normalized) || operatingProfitQuestion.test(normalized);
+  return question.trim() === "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf"
+    || reportQuestion.test(normalized) || operatingProfitQuestion.test(normalized);
 }
 
 // These known names and listing identifiers only withhold the editorial guide.

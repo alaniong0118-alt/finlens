@@ -181,3 +181,29 @@ test('HOME_NINTENDO_RELEASE invalidates an edited draft and respects explicit co
   assert.equal(app.query('#company-title').textContent, 'Beta');
   assert.equal(app.region(), null);
 });
+
+test('HOME_NINTENDO_OFFICIAL_URL contextualizes only the explicitly kept pinned release URL', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  const { act } = await import('react');
+  const keep = () => act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  for (const value of [pdf + '?tracking=1', pdf + '#page=2', pdf.replace('261105e', '%3261105e'),
+    pdf.replace('www.nintendo.co.jp', 'www.nintendo.co.jp.example.invalid')]) {
+    await app.input(value);
+    await keep();
+    assert.equal(app.region(), null);
+  }
+  await app.input(pdf);
+  assert.equal(app.region(), null);
+  await keep();
+  assert.equal(app.query('#research-draft-premise')?.textContent, pdf);
+  assert.equal(Boolean(app.region()), true, 'A kept exact Nintendo report URL must show its static source context');
+  const link = app.region().querySelector('a[href="' + pdf + '"]');
+  assert.ok(link);
+  assert.equal(link.getAttribute('referrerpolicy'), 'no-referrer');
+  assert.equal(app.region().querySelector('time')?.dateTime, '2026-11-05');
+  await app.input(pdf + '#page=2');
+  assert.equal(app.region(), null);
+  assert.equal(app.requests.length, before);
+});
