@@ -155,3 +155,88 @@ test('manual competing evidence through normal Home, local download, and explici
   expect(scenario.violations).toEqual([]);
   await info.attach('manual-browser-verdict', { body: JSON.stringify({ project: info.project.name, viewport: page.viewportSize(), apiCallsDuringManualFlow: 0, localDownloads: downloads.length }), contentType: 'application/json' });
 });
+
+test('manual evidence Reopen previews an actual V1 download without replacing the draft or export', async ({ page, scenario }) => {
+  expect([1440, 390]).toContain(page.viewportSize()?.width);
+  const downloads: string[] = [];
+  page.on('download', item => downloads.push(item.suggestedFilename()));
+  scenario.overrides.push(req => req.path === '/companies' ? { body: [] } :
+    req.path === '/capabilities' ? { body: { research_mode: true, ai_analysis_configured: false,
+      ai_analysis_enabled: false, server_profile: 'sec_readonly', filing_research_enabled: false } } : undefined);
+  await scenario.open();
+  await expect.poll(() => [scenario.count('/companies'), scenario.count('/capabilities')]).toEqual([1, 1]);
+  await expect(page.getByText('Financial-only capability restriction is active.', { exact: false })).toBeVisible();
+  const baseline = scenario.ledger.length;
+  const outer = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const btn = (name: string) => page.getByRole('button', { name, exact: true });
+  const panel = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });
+  const field = (name: string) => panel.getByLabel(name, { exact: true });
+  const download = btn('Download recorded comparison (.json)');
+  const picker = field('Open a recorded comparison (.json)');
+  const preview = panel.getByRole('region', { name: 'Reopened comparison preview', exact: true });
+
+  await outer.fill(original);
+  await outer.press('Enter');
+  await btn('Compare two manual sources').press('Enter');
+  for (const [i, s] of expected.sources.entries()) {
+    const slot = i ? 'B' : 'A';
+    await field('Source reference ' + slot).fill(s.reference);
+    await field('Passage ' + slot).fill(s.passage);
+    await field('Locator ' + slot).fill(s.locator);
+    if (s.date) await field('Publication date ' + slot).fill(s.date);
+    await field('Assessment ' + slot).selectOption(s.assessment);
+    await field('Assessment rationale ' + slot).fill(s.rationale);
+  }
+  const judgment = field('Provisional judgment');
+  await judgment.fill(expected.provisional_judgment);
+  await field('Evidence that would change the judgment').fill(expected.evidence_that_would_change_judgment);
+  await btn('Record provisional judgment').press('Enter');
+  const [file] = await Promise.all([page.waitForEvent('download'), download.press('Enter')]);
+  expect(file.suggestedFilename()).toBe(filename);
+  expect(await file.failure()).toBeNull();
+  const saved = await file.path();
+
+  const live = 'Unrecorded live judgment must survive reopening.';
+  await judgment.fill(live);
+  await expect(download).toHaveCount(0);
+  async function choose(input: Parameters<import('@playwright/test').FileChooser['setFiles']>[0]) {
+    await expect(picker).toBeVisible();
+    await picker.focus();
+    await expect(picker).toBeFocused();
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('Space')]);
+    expect(await chooser.element().getAttribute('type')).toBe('file');
+    expect(await chooser.element().evaluate(element =>
+      (element as HTMLInputElement).labels?.[0]?.firstChild?.textContent)).toBe('Open a recorded comparison (.json)');
+    await chooser.setFiles(input);
+  }
+  async function expectPreserved() {
+    await expect(outer).toHaveValue(original);
+    await expect(judgment).toHaveValue(live);
+    for (const [i, source] of expected.sources.entries())
+      await expect(field('Assessment rationale ' + (i ? 'B' : 'A'))).toHaveValue(source.rationale);
+    await expect(download).toHaveCount(0);
+    expect(downloads).toEqual([filename]);
+  }
+  await choose(saved);
+  await expect(preview.getByRole('heading', { name: 'Recorded comparison preview · not verified', exact: true })).toBeVisible();
+  await expect(preview).toContainText(expected.provisional_judgment);
+  await expect(preview).toContainText('Read-only preview');
+  await expect(preview.locator('input, textarea, select, button, a')).toHaveCount(0);
+  await expectPreserved();
+
+  await choose({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{') });
+  await expect(panel.getByRole('alert')).toContainText('Could not open this file.');
+  await expect(preview).toHaveCount(0);
+  await expectPreserved();
+
+  await choose(saved);
+  await expect(preview).toBeVisible();
+  await outer.fill(alternate);
+  await expect(preview).toHaveCount(0);
+  await expect(download).toHaveCount(0);
+  await btn('Restore previous question').press('Enter');
+  await expect(preview).toHaveCount(0);
+  await expectPreserved();
+  expect(scenario.ledger.slice(baseline)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});
