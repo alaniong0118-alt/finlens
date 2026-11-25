@@ -361,3 +361,45 @@ test('The dated Nintendo comparison distinguishes reported results, management e
   assert.equal(app.region().querySelector('[aria-label="Nintendo operating profit source notes"]'), null);
   assert.equal(app.requests.length, before);
 });
+
+test('The Nintendo example offers an auditable second-quarter check on profit persistence', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const without = app.requests.length;
+  const { act } = await import('react');
+  await app.input('Why did Nintendo operating profit rise even though sales fell?');
+  await act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  const check = app.region()?.querySelector('[aria-label="Second-quarter profit check"]');
+  assert.ok(check, 'Provide a second-quarter comparison to test whether the half-year rise persisted');
+  assert.match(check.textContent, /73,904/);
+  assert.match(check.textContent, /88,253/);
+  assert.match(check.textContent, /16\.3%/);
+  assert.match(check.textContent, /does not prove what caused/);
+  assert.equal(check.querySelector('a[href="https://www.nintendo.co.jp/ir/pdf/2026/260806e.pdf#page=1"]')?.getAttribute('referrerpolicy'), 'no-referrer');
+  assert.equal(app.requests.length, without);
+});
+
+test('The source check lets researchers add each official reference separately', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const without = app.requests.length;
+  const { act } = await import('react');
+  await app.input('Why did Nintendo operating profit rise even though sales fell?');
+  await act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  const findButton = name => [...app.region().querySelectorAll('button')].find(button => button.textContent === name);
+  const comparison = app.query('[aria-label="Manual evidence comparison"]');
+  const fields = () => [...comparison.querySelectorAll('fieldset')].map(slot => [
+    slot.querySelector('input:not([type])').value,
+    slot.querySelector('input[type=date]').value,
+    slot.querySelector('textarea').value,
+    slot.querySelector('select').value,
+  ]);
+  await act(async () => findButton('Add official reference to comparison').click());
+  assert.deepEqual(fields(), [[pdf, '2026-11-05', '', ''], ['', '', '', '']]);
+  const addQ1 = findButton('Add first-quarter reference to comparison');
+  assert.ok(addQ1, 'Offer the second official reference as a distinct opt-in action');
+  await act(async () => addQ1.click());
+  assert.deepEqual(fields(), [[pdf, '2026-11-05', '', ''],
+    ['https://www.nintendo.co.jp/ir/pdf/2026/260806e.pdf', '2026-08-06', '', '']]);
+  assert.equal(app.requests.length, without);
+});

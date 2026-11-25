@@ -40,3 +40,13 @@ export function catalogMayContainNintendo(companies: readonly { name: string; ti
   return companies.some(({ name, ticker }) => /nintendo|任天堂/i.test(name.normalize("NFKC"))
     || /(?:^|[^a-z0-9])(?:nintendo|7974|ntdoy|ntdof|jp3756600007)(?:$|[^a-z0-9])/i.test(ticker.normalize("NFKC")));
 }
+
+
+// Same issuer, consolidated operating profit, JPY million. Each July–September
+// amount is derived from page 1 of the same year's H1 and Q1 disclosures.
+export const nintendoSecondQuarterProfit = (() => {
+  const reportedQ1 = "https://www.nintendo.co.jp/ir/pdf/2026/260806e.pdf";
+  const prior = 145_181 - 56_928;
+  const current = 216_500 - 142_596;
+  return { reportedQ1, q1Published: "2026-08-06", prior, current, changePct: (current - prior) / prior * 100 } as const;
+})();

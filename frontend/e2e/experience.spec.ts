@@ -508,6 +508,13 @@ test('Nintendo curated net sales: keyboard keeps the exact release and isolates 
   await expect(sourceNotes).toContainText('not independent proof');
   await expect(sourceNotes.getByRole('link', { name: 'Management discussion, page 3 (official PDF)', exact: true }))
     .toHaveAttribute('href', pdf + '#page=3');
+  const periodCheck = sourceNotes.getByRole('region', { name: 'Second-quarter profit check', exact: true });
+  await expect(periodCheck).toContainText('73,904 million');
+  await expect(periodCheck).toContainText('88,253 million');
+  await expect(periodCheck).toContainText('down 16.3%');
+  await expect(periodCheck).toContainText('does not prove what caused');
+  await expect(periodCheck.getByRole('link', { name: 'First-quarter figures, page 1 (official PDF)', exact: true }))
+    .toHaveAttribute('href', 'https://www.nintendo.co.jp/ir/pdf/2026/260806e.pdf#page=1');
   const add = guide.getByRole('button', { name: 'Add official reference to comparison', exact: true });
   await add.press('Enter');
   const comparison = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });
@@ -518,6 +525,10 @@ test('Nintendo curated net sales: keyboard keeps the exact release and isolates 
   await expect(comparison.getByLabel('Passage A', { exact: true })).toHaveValue('');
   await expect(comparison.getByLabel('Assessment A', { exact: true })).toHaveValue('');
   await expect(comparison.getByLabel('Source reference B', { exact: true })).toHaveValue('');
+  await periodCheck.getByRole('button', { name: 'Add first-quarter reference to comparison', exact: true }).press('Enter');
+  await expect(comparison.getByLabel('Source reference B', { exact: true })).toHaveValue('https://www.nintendo.co.jp/ir/pdf/2026/260806e.pdf');
+  await expect(comparison.getByLabel('Publication date B', { exact: true })).toHaveValue('2026-08-06');
+  await expect(comparison.getByLabel('Passage B', { exact: true })).toHaveValue('');
   expect(scenario.ledger.slice(before)).toEqual([]);
   expect(scenario.violations).toEqual([]);
 });

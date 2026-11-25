@@ -17,12 +17,12 @@ import FinancialCoverage from "@/components/financial-coverage";
 import BalanceDateComparison from "@/components/balance-date-comparison";
 import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 
-import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion, matchesNintendoOperatingProfitQuestion } from "@/lib/nintendo-ir-reference";
+import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion, matchesNintendoOperatingProfitQuestion, nintendoSecondQuarterProfit } from "@/lib/nintendo-ir-reference";
 
 const nintendoReleaseUrl = "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf";
 const nintendoReleaseDate = "2026-11-05";
 
-function NintendoIrReference({ keptReference = "" }: { keptReference?: string }) {
+function NintendoIrReference({ keptReference = "", onAddQ1 }: { keptReference?: string; onAddQ1?: () => void }) {
   const report = getNintendoInterimNetSales(keptReference);
   const formatDate = (date: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" }).format(new Date(date));
   return <>
@@ -51,6 +51,15 @@ function NintendoIrReference({ keptReference = "" }: { keptReference?: string })
       </dl>
       <p><a className="source-link" href={nintendoReleaseUrl + "#page=3"} referrerPolicy="no-referrer">Management discussion, page 3 (official PDF)</a></p>
       <p><a className="source-link" href={nintendoReleaseUrl + "#page=1"} referrerPolicy="no-referrer">Reported figures, page 1 (official PDF)</a></p>
+      <section aria-label="Second-quarter profit check">
+        <h5>Did higher profit persist into the second quarter?</h5>
+        <p>Subtracting first-quarter operating profit from the half-year result yields JPY {nintendoSecondQuarterProfit.current.toLocaleString("en-GB")} million for July to September 2026, versus JPY {nintendoSecondQuarterProfit.prior.toLocaleString("en-GB")} million a year earlier. That is down {Math.abs(nintendoSecondQuarterProfit.changePct).toFixed(1)}% year over year.</p>
+        <p>The half-year increase did not persist in that quarter. This calculation does not prove what caused the difference or independently verify Nintendo’s explanation.</p>
+        <p><a className="source-link" href={nintendoSecondQuarterProfit.reportedQ1 + "#page=1"} referrerPolicy="no-referrer">First-quarter figures, page 1 (official PDF)</a></p>
+        {onAddQ1 && <button type="button" className="secondary-button" onClick={onAddQ1}>
+          Add first-quarter reference to comparison
+        </button>}
+      </section>
     </section>}
     <p className="small muted">Use this guide to find the source. Opening the issuer’s site does not add Nintendo or its figures to your research.</p>
     <p><a className="source-link" href={nintendoReleaseUrl} referrerPolicy="no-referrer">Nintendo six-month earnings release, 5 November 2026 (official PDF)</a></p>
@@ -208,7 +217,11 @@ export default function Home() {
             Choose a company below to inspect its existing research. This draft does not start a search.</p>
 
           {showNintendoReference && <section aria-label="Nintendo external source">
-            <NintendoIrReference keptReference={researchContext} />
+            <NintendoIrReference keptReference={researchContext} onAddQ1={() => {
+              if (researchContext === manualQuestion) {
+                manualComparison.current?.addReference(nintendoSecondQuarterProfit.reportedQ1, nintendoSecondQuarterProfit.q1Published);
+              }
+            }} />
             <button type="button" className="secondary-button" onClick={() => {
               if (researchContext === manualQuestion) manualComparison.current?.addReference(nintendoReleaseUrl, nintendoReleaseDate);
             }}>Add official reference to comparison</button>
