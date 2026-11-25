@@ -207,3 +207,54 @@ test('HOME_NINTENDO_OFFICIAL_URL contextualizes only the explicitly kept pinned 
   assert.equal(app.region(), null);
   assert.equal(app.requests.length, before);
 });
+
+test('NINTENDO_CURATED_BINDING admits only the exact original report and distinguishes actual from forecast', () => {
+  const load = componentLoader(fileURLToPath(new URL('..', import.meta.url)));
+  const { getNintendoInterimNetSales } = load(fileURLToPath(new URL('../lib/nintendo-ir-reference.ts', import.meta.url)));
+  assert.equal(typeof getNintendoInterimNetSales, 'function', 'Missing curated Nintendo source binding');
+  const report = getNintendoInterimNetSales(pdf);
+  assert.deepEqual(report, {
+    issuer: 'Nintendo Co., Ltd.', pdf, page: 1, published: '2026-11-05', currency: 'JPY', unit: 'million',
+    actual: { amount: '966,041', periodEnd: '2026-09-30' },
+    forecast: { amount: '2,050,000', periodEnd: '2027-03-31' },
+  });
+  for (const variant of [pdf + '#page=1', pdf + '?x=1', pdf.replace('261105e', '261105_3e'),
+    pdf.replace('261105e', '261105_2e'), pdf.replace('261105e', '261106e'), pdf.replace('261105e', '%3261105e'),
+    pdf.replace('www.nintendo.co.jp', 'www.nintendo.co.jp.example.invalid'),
+    question, "What were Nintendo's actual net sales for the year ending March 31, 2027?", "Why did Nintendo's operating profit rise?"]) {
+    assert.equal(getNintendoInterimNetSales(variant), null);
+  }
+});
+
+test('NINTENDO_CURATED_HOME shows the source-backed net sales only after keeping the exact URL', async ctx => {
+  const app = await mount(ctx);
+  const { act } = await import('react');
+  await app.release([acme]);
+  const count = app.requests.length;
+  const keep = () => act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  const answer = () => app.region()?.querySelector('[aria-label="Curated Nintendo net sales"]');
+  await app.keep();
+  assert.ok(app.region());
+  assert.equal(Boolean(answer()), false, 'Generic source guide is still link-only');
+  await app.input(pdf.replace('261105e', '261105_2e')); await keep();
+  assert.equal(app.region(), null);
+  await app.input(pdf);
+  assert.equal(app.region(), null);
+  await keep();
+  assert.equal(Boolean(answer()), true, 'Missing curated net sales in the kept Home draft');
+  const rows = [...answer().querySelectorAll('dt, dd')].map(n => n.textContent);
+  assert.deepEqual(rows, [
+    'Actual consolidated net sales', 'JPY 966,041 million · Six months ended 30 September 2026',
+    'Nintendo full-year forecast at publication (not actual)', 'JPY 2,050,000 million · Year ending 31 March 2027',
+  ]);
+  assert.match(answer().textContent, /not fetched live/);
+  assert.match(answer().textContent, /does not establish full-year actual sales/);
+  const link = answer().querySelector('a');
+  assert.equal(link.getAttribute('href'), pdf + '#page=1');
+  assert.equal(link.getAttribute('referrerpolicy'), 'no-referrer');
+  assert.match(link.textContent, /page 1/);
+  await app.input("Why did Nintendo's operating profit rise?"); await keep();
+  assert.ok(app.region());
+  assert.equal(Boolean(answer()), false);
+  assert.equal(app.requests.length, count);
+});

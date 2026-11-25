@@ -1,3 +1,18 @@
+const nintendoInterimReleasePdf = "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf";
+
+// Curated from Nintendo's November 5, 2026 English release, page 1.
+// The consolidated operating-results and full-year forecast tables are separate.
+const nintendoInterimNetSales = {
+  issuer: "Nintendo Co., Ltd.", pdf: nintendoInterimReleasePdf, page: 1,
+  published: "2026-11-05", currency: "JPY", unit: "million",
+  actual: { amount: "966,041", periodEnd: "2026-09-30" },
+  forecast: { amount: "2,050,000", periodEnd: "2027-03-31" },
+} as const;
+
+export function getNintendoInterimNetSales(reference: string) {
+  return reference.trim() === nintendoInterimReleasePdf ? nintendoInterimNetSales : null;
+}
+
 const publicationDate = "(?:5 november 2026|november 5,? 2026|2026-11-05)";
 const reportQuestion = new RegExp(
   `^what did nintendo report (?:on ${publicationDate}|in its (?:six[- ]month earnings release(?: (?:of|dated) ${publicationDate})?|${publicationDate} earnings release))\\?$`,
@@ -8,7 +23,7 @@ const operatingProfitQuestion = /^why did nintendo['’]s operating profit (?:ri
 // A closed set of phrasings for the editorial link, separate from issuer or catalog lookup.
 export function matchesNintendoIrQuestion(question: string): boolean {
   const normalized = question.trim().replace(/\s+/g, " ");
-  return question.trim() === "https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf"
+  return question.trim() === nintendoInterimReleasePdf
     || reportQuestion.test(normalized) || operatingProfitQuestion.test(normalized);
 }
 

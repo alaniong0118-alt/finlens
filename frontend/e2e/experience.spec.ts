@@ -469,3 +469,38 @@ test('Nintendo Home: keeping the exact official report URL shows dated context w
   expect(scenario.ledger.slice(before)).toEqual([]);
   expect(scenario.violations).toEqual([]);
 });
+
+test('Nintendo curated net sales: keyboard keeps the exact release and isolates published forecast', async ({ page, scenario }) => {
+  await scenario.open();
+  await scenario.ready();
+  const input = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const guide = page.getByRole('region', { name: 'Nintendo external source', exact: true });
+  const result = guide.getByRole('region', { name: 'Curated Nintendo net sales', exact: true });
+  const pdf = 'https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf';
+  const before = scenario.ledger.length;
+
+  await input.focus();
+  await page.keyboard.insertText(pdf);
+  await expect(input).toHaveValue(pdf);
+  await expect(result).toHaveCount(0);
+  await input.press('Enter');
+  await expect(result).toBeVisible();
+  await expect(result.locator('dt, dd')).toHaveText([
+    'Actual consolidated net sales', 'JPY 966,041 million · Six months ended 30 September 2026',
+    'Nintendo full-year forecast at publication (not actual)', 'JPY 2,050,000 million · Year ending 31 March 2027',
+  ]);
+  await expect(result).toContainText('not fetched live');
+  await expect(result).toContainText('does not establish full-year actual sales');
+  await expect(result.getByRole('link', { name: 'Nintendo release, page 1 (official PDF)', exact: true }))
+    .toHaveAttribute('href', pdf + '#page=1');
+
+  await input.focus();
+  await input.press('ControlOrMeta+a');
+  await page.keyboard.insertText("Why did Nintendo's operating profit rise?");
+  await expect(result).toHaveCount(0);
+  await input.press('Enter');
+  await expect(guide).toBeVisible();
+  await expect(result).toHaveCount(0);
+  expect(scenario.ledger.slice(before)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});

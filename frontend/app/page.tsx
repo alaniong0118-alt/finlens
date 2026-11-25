@@ -6,6 +6,7 @@ import CompanyOverview from "@/components/company-overview";
 import FinancialResearch from "@/components/financial-research";
 import FinancialInsights from "@/components/financial-insights";
 import FilingResearch from "@/components/filing-research";
+import ManualEvidenceComparison, { type ManualComparisonController } from "@/components/manual-evidence-comparison";
 import ThemeControl from "@/components/theme-control";
 import ResearchFreshness from "@/components/research-freshness";
 import CompanyComparison from "@/components/company-comparison";
@@ -16,11 +17,25 @@ import FinancialCoverage from "@/components/financial-coverage";
 import BalanceDateComparison from "@/components/balance-date-comparison";
 import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 
-import { catalogMayContainNintendo, matchesNintendoIrQuestion } from "@/lib/nintendo-ir-reference";
+import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion } from "@/lib/nintendo-ir-reference";
 
-function NintendoIrReference() {
+function NintendoIrReference({ keptReference = "" }: { keptReference?: string }) {
+  const report = getNintendoInterimNetSales(keptReference);
+  const formatDate = (date: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" }).format(new Date(date));
   return <>
     <p>Nintendo’s Investor Relations site lists its six-month earnings release of <time dateTime="2026-11-05">5 November 2026</time> under “Six Months Earnings” for the fiscal year ending March 2027.</p>
+    {report && <section aria-label="Curated Nintendo net sales">
+      <h4>What Nintendo reported</h4>
+      <p>{report.issuer} · Curated from the original release, not fetched live.</p>
+      <dl>
+        <dt>Actual consolidated net sales</dt>
+        <dd>{report.currency} {report.actual.amount} {report.unit} · Six months ended {formatDate(report.actual.periodEnd)}</dd>
+        <dt>Nintendo full-year forecast at publication (not actual)</dt>
+        <dd>{report.currency} {report.forecast.amount} {report.unit} · Year ending {formatDate(report.forecast.periodEnd)}</dd>
+      </dl>
+      <p>This release does not establish full-year actual sales or prove why sales changed.</p>
+      <a className="source-link" href={`${report.pdf}#page=${report.page}`} referrerPolicy="no-referrer">Nintendo release, page {report.page} (official PDF)</a>
+    </section>}
     <p className="small muted">Use this guide to find the source. Opening the issuer’s site does not add Nintendo or its figures to your research.</p>
     <p><a className="source-link" href="https://www.nintendo.co.jp/ir/pdf/2026/261105e.pdf" referrerPolicy="no-referrer">Nintendo six-month earnings release, 5 November 2026 (official PDF)</a></p>
     <a className="source-link" href="https://www.nintendo.co.jp/ir/en/index.html" referrerPolicy="no-referrer">Nintendo Investor Relations (official site)</a>
@@ -30,6 +45,24 @@ function NintendoIrReference() {
 export default function Home() {
   const [researchInput, setResearchInput] = useState("");
   const [researchContext, setResearchContext] = useState<string | null>(null);
+  const [manualQuestion, setManualQuestion] = useState<string | null>(null);
+  const [pendingReplacement, setPendingReplacement] = useState<string | null>(null);
+  const [previousNotesAvailable, setPreviousNotesAvailable] = useState(false);
+  const researchInputRef = useRef<HTMLInputElement>(null);
+  const manualComparison = useRef<ManualComparisonController>(null);
+  function keepQuestion(question: string) {
+    setManualQuestion(question);
+    setResearchContext(question);
+    setResearchDraftError(null);
+    setPendingReplacement(null);
+    setPreviousNotesAvailable(false);
+  }
+  function restorePreviousQuestion() {
+    if (manualQuestion === null) return;
+    setResearchInput(manualQuestion);
+    keepQuestion(manualQuestion);
+    researchInputRef.current?.focus();
+  }
   const [researchDraftError, setResearchDraftError] = useState<string | null>(null);
   const [explicitCompanyChoice, setExplicitCompanyChoice] = useState(false);
   const [completeCatalog, setCompleteCatalog] = useState<Company[] | null>(null);
@@ -119,20 +152,38 @@ export default function Home() {
         <form onSubmit={event => {
           event.preventDefault();
           if (!researchInput.trim()) { setResearchDraftError("Enter an event, question or reference to keep a draft."); return; }
-          setResearchContext(researchInput); setResearchDraftError(null);
+          if (manualQuestion !== null && manualQuestion !== researchInput && manualComparison.current?.hasNotes()) {
+            setPendingReplacement(researchInput);
+            return;
+          }
+          keepQuestion(researchInput);
         }}>
           <label htmlFor="research-draft-input">Event, question or reference URL</label>
-          <input id="research-draft-input" type="text" aria-label="Event, question or reference URL" maxLength={2000}
+          <input ref={researchInputRef} id="research-draft-input" type="text" aria-label="Event, question or reference URL" maxLength={2000}
             aria-describedby={`research-draft-help${researchDraftError ? " research-draft-error" : ""}`} aria-invalid={!!researchDraftError}
             value={researchInput} onChange={event => {
               const next = event.target.value;
               if (next.length > 2000) { setResearchDraftError("Use 2,000 characters or fewer. Your previous draft is unchanged."); return; }
-              setResearchInput(next); setResearchContext(null); setResearchDraftError(null);
+              setPreviousNotesAvailable(manualComparison.current?.hasNotes() ?? false);
+              manualComparison.current?.invalidate();
+              setResearchInput(next); setResearchContext(null); setResearchDraftError(null); setPendingReplacement(null);
             }} />
           <p className="small muted">{researchInput.length}/2,000 characters</p>
           <button type="submit" className="secondary-button">Keep research draft</button>
           {researchDraftError && <p id="research-draft-error" role="alert">{researchDraftError}</p>}
         </form>
+        {researchContext === null && previousNotesAvailable && pendingReplacement === null &&
+          <button type="button" className="secondary-button" onClick={restorePreviousQuestion}>Restore previous question</button>}
+        {pendingReplacement !== null && <div className="notice" role="group" aria-labelledby="research-replacement-message">
+          <p id="research-replacement-message" role="status">Keeping the new question would discard the previous comparison and its notes.
+            Cancel to restore the previous question and its notes.</p>
+          <button type="button" className="secondary-button" onClick={restorePreviousQuestion}>Cancel replacement</button>
+          <button type="button" className="secondary-button" onClick={() => {
+            if (researchInput !== pendingReplacement) return;
+            keepQuestion(pendingReplacement);
+            researchInputRef.current?.focus();
+          }}>Discard previous comparison and keep new question</button>
+        </div>}
         {researchContext !== null && <div>
           <h3>Unverified research context</h3>
           <p id="research-draft-premise" className="wrap-anywhere" style={{ whiteSpace: "pre-wrap" }}>{researchContext}</p>
@@ -140,7 +191,11 @@ export default function Home() {
           <p>Check the original source, distinguish its publication date from the event date, and identify the affected company.
             Choose a company below to inspect its existing research. This draft does not start a search.</p>
 
-          {showNintendoReference && <section aria-label="Nintendo external source"><NintendoIrReference /></section>}
+          {showNintendoReference && <section aria-label="Nintendo external source"><NintendoIrReference keptReference={researchContext} /></section>}
+        </div>}
+        {manualQuestion !== null && <div hidden={researchContext !== manualQuestion}>
+          <ManualEvidenceComparison key={manualQuestion} question={manualQuestion}
+            isCurrent={researchContext === manualQuestion} controllerRef={manualComparison} />
         </div>}
       </section>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={value => { setExplicitCompanyChoice(true); setTicker(value); }} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />
