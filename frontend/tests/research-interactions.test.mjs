@@ -1567,10 +1567,15 @@ const dependentRequests = app => app.requests.filter(item => item.path.startsWit
 
 const filingPanel = app => app.host.querySelector('[aria-labelledby="filing-title"]');
 const filingSourceRequests = app => app.requests.filter(item => item.path.endsWith('/sources'));
+function filingInventoryStatus(app) {
+  const status = app.select('Indexed SEC filing')?.closest('label')?.nextElementSibling;
+  assert.equal(status?.getAttribute('aria-live'), 'polite', 'Observe filing inventory, not an earlier live region');
+  return status;
+}
 function assertUnverifiedFilings(app) {
   const panel = filingPanel(app);
-  assert.equal(panel.querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
-  assert.match(panel.querySelector('[role="status"]').textContent, /Publication not yet verified/);
+  assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
+  assert.match(filingInventoryStatus(app).querySelector('[role="status"]').textContent, /Publication not yet verified/);
   assert.match(app.select('Indexed SEC filing').textContent, /Publication not yet verified/);
   assert.equal(app.select('Indexed SEC filing').disabled, true);
   assert.doesNotMatch(panel.textContent, /Loading filings|Checking indexed SEC evidence|Indexed searchable SEC evidence \(0\)|No recorded filings|No indexed filing available|Not indexed for filing research|Could not load the filing list/);
@@ -1578,7 +1583,7 @@ function assertUnverifiedFilings(app) {
 }
 function assertFilingRequestPending(app) {
   const panel = filingPanel(app);
-  assert.equal(panel.querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'true');
+  assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'true');
   assert.match(app.select('Indexed SEC filing').textContent, /Loading filings/);
   assert.match(panel.textContent, /Checking indexed SEC evidence/);
   assert.doesNotMatch(panel.textContent, /No recorded filings|Not indexed for filing research|Indexed searchable SEC evidence \(0\)/);
@@ -1608,7 +1613,7 @@ for (const strict of [false, true]) {
     assert.equal(request.init.headers['X-FinLens-Data-Version'], String(version));
     assert.equal(filingSourceRequests(app).length, 1);
     await app.release(request, [filing('AAPL')]);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
     assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
     assert.match(filingPanel(app).textContent, /Indexed searchable SEC evidence \(1\)/);
     await app.change(app.host.querySelector('textarea'), 'new query');
@@ -1633,7 +1638,7 @@ for (const strict of [false, true]) {
     assertFilingRequestPending(app);
     await app.release(replacement, []);
     assert.match(filingPanel(app).textContent, /No recorded filings were returned for this publication/);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
     assert.equal(filingSourceRequests(app).length, 2);
   });
 
@@ -1654,7 +1659,7 @@ for (const strict of [false, true]) {
     assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
     await app.release(replacement, [filing('AAPL')]);
     assert.equal(app.select('Indexed SEC filing').value, filing('AAPL').accession_number);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
     assert.equal(filingSourceRequests(app).length, 3);
   });
 
@@ -1671,14 +1676,14 @@ for (const strict of [false, true]) {
     assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
     await app.release(replacement, [filing('JPM')]);
     assert.equal(app.select('Indexed SEC filing').value, filing('JPM').accession_number);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
   });
 
   test(`REL-LIVE-01B genuine source failure permits one explicit keyboard retry strict ${strict}`, async ctx => {
     const app = await mount(ctx, false, companies, { strict });
     await app.release(app.request(companyPath('AAPL', 'sources')), {}, 503);
     assert.match(filingPanel(app).textContent, /Could not load the filing list/);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
     const count = filingSourceRequests(app).length;
     await act(async () => {});
     assert.equal(filingSourceRequests(app).length, count, 'Failure never retries automatically');
@@ -1689,7 +1694,7 @@ for (const strict of [false, true]) {
     assertFilingRequestPending(app);
     await app.release(app.request(companyPath('AAPL', 'sources')), [filing('AAPL')]);
     assert.equal(app.select('Indexed SEC filing').disabled, false);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
   });
 
   test(`REL-LIVE-01B source 409 reconciles without retrying the rejected pin strict ${strict}`, async ctx => {
@@ -1722,7 +1727,7 @@ for (const strict of [false, true]) {
     assert.doesNotMatch(filingPanel(app).textContent, /AAPL-test-accession/);
     await app.release(replacement, []);
     assert.match(filingPanel(app).textContent, /No recorded filings were returned for this publication/);
-    assert.equal(filingPanel(app).querySelector('[aria-live="polite"]').getAttribute('aria-busy'), 'false');
+    assert.equal(filingInventoryStatus(app).getAttribute('aria-busy'), 'false');
     assert.equal(filingSourceRequests(app).length, 2);
   });
 }
@@ -4880,3 +4885,59 @@ for (const strict of [false, true]) for (const outcome of ['failure', 'success']
     }
   });
 }
+
+test('synthetic cold Apple Home separates filing publication, answer, and cancelled context', async ctx => {
+  const ticker = 'AAPL', question = "What was Apple's latest quarterly revenue?", sequel = 'services net sales';
+  const app = await mount(ctx, false, companies, { initialVersion: null });
+  const filingControl = () => app.select('Indexed SEC filing');
+  const sourcePath = companyPath(ticker, 'sources');
+  const source = riskSource(ticker);
+  const contextPath = companyPath(ticker, 'filings/' + source.accession_number + '/context');
+  async function search(query) {
+    await app.change(app.host.querySelector('textarea#research-query'), query);
+    await app.click('Research question');
+    return app.request(contextPath, { q: query });
+  }
+  const stamp = name => console.log('FINLENS_HOME_REPLAY: ' + name);
+  assert.ok(!app.requests.some(item => item.path === sourcePath));
+  assert.ok(!filingControl() || filingControl().disabled);
+  await app.release(app.request(companyPath(ticker, 'freshness')), freshnessFixture(ticker, 7));
+  const inventory = app.request(sourcePath);
+  assert.equal(String(inventory.init.headers['X-FinLens-Data-Version']), '7');
+  assert.ok(!filingControl() || filingControl().disabled);
+  await app.release(app.request(companyPath(ticker, 'financials/summary')), summary(ticker, '1000000000'));
+  await app.release(app.request(companyPath(ticker, 'financials/metrics/revenue')), history(ticker, '1000000000'));
+  await app.release(inventory, [source]);
+  assert.equal(filingControl()?.disabled, false);
+  assert.equal(filingControl()?.value, source.accession_number);
+  stamp('filing_publication_ready');
+
+  const firstContext = await search(question);
+  const direct = app.request(companyPath(ticker, 'research-answer'));
+  assert.equal(String(direct.init.headers['X-FinLens-Data-Version']), '7');
+  assert.equal(String(firstContext.init.headers['X-FinLens-Data-Version']), '7');
+  const response = directAnswer(ticker, question);
+  Object.assign(response.observation.provenance[0], { accession_number: source.accession_number, sec_url: source.sec_url });
+  await app.release(direct, response);
+  assert.match(app.host.querySelector('.direct-answer')?.textContent, /Research Answer.*\$109\.42B/);
+  assert.equal(firstContext.released, false);
+  assert.equal(firstContext.init.signal.aborted, false);
+  assert.deepEqual(app.evidence(), []);
+  stamp('deterministic_answer_before_context');
+
+  const liveContext = await search(sequel);
+  assert.equal(firstContext.init.signal.aborted, true);
+  assert.equal(liveContext.params.get('q'), sequel);
+  await app.release(app.request(companyPath(ticker, 'research-answer')),
+    { ticker, question: sequel, matched: false, status: 'not_matched' });
+  await app.release(firstContext, riskResponse('filing', question, 7, 'Synthetic retired query should never appear.'));
+  assert.deepEqual(app.evidence(), []);
+  stamp('superseded_cold_context_ignored');
+  await app.release(liveContext, riskResponse('filing', sequel, 7, 'Synthetic current evidence about services net sales.'));
+  assert.match(app.host.querySelector('.evidence-results > p')?.textContent ?? '', /Search: “services net sales”/);
+  assert.equal(app.evidence().length, 1);
+  assert.match(app.evidence()[0], /Synthetic current evidence/);
+  assert.doesNotMatch(app.evidence()[0], /Synthetic retired query/);
+  assert.equal(app.requests.some(r => r.path.endsWith('/answer')), false);
+  stamp('current_context_ready');
+});
