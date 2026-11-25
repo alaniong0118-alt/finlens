@@ -6,7 +6,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 45_000,
-  globalTimeout: 600_000,
+  // The two serial viewport projects can exceed ten minutes on GitHub runners.
+  globalTimeout: 720_000,
   expect: { timeout: 5_000 },
   forbidOnly: !!process.env.CI,
   reporter: [['list'], ['html', { open: 'never' }]],

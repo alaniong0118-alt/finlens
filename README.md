@@ -83,7 +83,9 @@ npm ci
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
-Open **http://127.0.0.1:3000**. Select **AAPL** and inspect the snapshot and selected history. Expand **Sources and details** to inspect exact values and SEC provenance. Choose an indexed filing, enter a topic and select **Search SEC evidence**. This path requires no OpenAI key. Fresh demo setup prepares AAPL only; other companies need the separately documented catalog preparation before they become Ready or have financial data.
+Open **http://127.0.0.1:3000**. Select **AAPL** and inspect the snapshot and selected history. Expand **Sources and details** to inspect exact values and SEC provenance. Choose an indexed filing, enter a topic in **Research question or search**, and select **Research question**. On a fresh demo, try “What was Apple's latest quarterly revenue?” and check the reporting date and filing link rather than assuming the result is for today's calendar quarter. This path requires no OpenAI key. Fresh demo setup prepares AAPL only; other companies need the separately documented catalog preparation before they become Ready or have financial data.
+
+To try the off-catalog source and evidence-comparison path, enter “Why did Nintendo operating profit rise even though sales fell?” on Home and select **Keep research draft**. If the complete local catalog does not include Nintendo, the guide links the dated official release and keeps the reported results separate from the company's explanation and what is still unknown. Select **Add official reference to comparison** to bring the link and publication date to an empty slot. Read the original yourself, provide a distinct second source, and record what would change your judgment. You can download the comparison locally and reopen it with **Open a recorded comparison (.json)**. This example uses a reviewed Nintendo source, not automatic live external search.
 
 The frontend displays evidence directly. The same API is inspectable at:
 
