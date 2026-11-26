@@ -89,6 +89,8 @@ To try the off-catalog source and evidence-comparison path, enter “Why did Nin
 
 For a second example, start on a fresh Home page. Enter “Can a Wynn Macau announcement tell me who holds the gaming concession?” and select **Keep research draft**. If Wynn Macau is not in the local catalog, select **Confirm Wynn Macau, Limited (HKEX 1128)**, then **Add issuer notice link to comparison**. This adds only the notice link, not a passage or publication date. The notice does not establish the concession holder. Use the regulator’s directory separately to check the claim. Add a distinct second source reference. For each source, enter a relevant passage, choose an assessment, and explain its rationale. Fill **Provisional judgment** and **Evidence that would change the judgment**, then select **Record provisional judgment**. Download the comparison as JSON and use **Open a recorded comparison (.json)** to review it later. FinLens does not verify the licence holder or its current status in this example.
 
+If you already have a source, paste a single HTTPS URL with no query string or fragment into **Event, question or reference URL**, then select **Keep research draft**. Use **Add pasted link to comparison** to copy the URL into an empty source slot as unverified text. FinLens does not open the URL, fetch evidence, or fill a passage or publication date. If the shortcut is unavailable, use **Compare two manual sources** and enter a reference yourself. In either case, check the original before recording a judgment.
+
 The frontend displays evidence directly. The same API is inspectable at:
 
 - [Context for revenue growth](http://127.0.0.1:8000/companies/AAPL/filings/0000320193-26-000020/context?q=revenue%20growth&limit=5)
