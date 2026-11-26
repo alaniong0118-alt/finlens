@@ -111,7 +111,12 @@ test('completed selected-filing passage joins a same-question comparison and sur
   const actions = page.getByRole('button', { name: 'Add this passage to comparison', exact: true });
   const handoff = page.locator('.evidence-card').nth(1).getByRole('button', { name: 'Add this passage to comparison', exact: true });
   await expect(actions).toHaveCount(0);
-  await editor.fill(query);
+  await expect(editor).toHaveValue('');
+  const beforePreparing = scenario.ledger.length;
+  await page.getByRole('button', { name: 'Use kept question', exact: true }).press('Enter');
+  await expect(editor).toHaveValue(query);
+  await expect(editor).toBeFocused();
+  expect(scenario.ledger.slice(beforePreparing)).toEqual([]);
   await submit.press('Enter');
   await expect(page.getByRole('region', { name: 'Research Answer', exact: true })).toBeVisible();
   await expect(handoff).toBeVisible();
