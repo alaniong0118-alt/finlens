@@ -7,6 +7,7 @@ import FinancialResearch from "@/components/financial-research";
 import FinancialInsights from "@/components/financial-insights";
 import FilingResearch from "@/components/filing-research";
 import ManualEvidenceComparison, { RecordedComparisonPicker, type ManualComparisonController } from "@/components/manual-evidence-comparison";
+import { unverifiedPastedReference } from "@/lib/manual-evidence-comparison";
 import ThemeControl from "@/components/theme-control";
 import ResearchFreshness from "@/components/research-freshness";
 import CompanyComparison from "@/components/company-comparison";
@@ -181,6 +182,7 @@ export default function Home() {
   const showNintendoReference = researchContext !== null && !loading && error === null
     && completeCatalog === companies && !explicitCompanyChoice
     && matchesNintendoIrQuestion(researchContext) && !catalogMayContainNintendo(companies);
+  const pastedReference = unverifiedPastedReference(researchContext);
   const showWynnChoice = researchContext !== null && !loading && error === null
     && completeCatalog === companies && !explicitCompanyChoice
     && supportsWynnMacauNoticeQuestion(researchContext) && !catalogMayContainWynnMacau(companies);
@@ -245,6 +247,12 @@ export default function Home() {
           <p>Check the original source, distinguish its publication date from the event date, and identify the affected company.
             Choose a company below to inspect its existing research. This draft does not start a search.</p>
 
+          {pastedReference && !showNintendoReference && researchContext === manualQuestion && <p>
+            <button type="button" className="secondary-button" onClick={() => {
+              manualComparison.current?.addReference(pastedReference, "", "pasted");
+            }}>Add pasted link to comparison</button>
+            <span className="small muted"> Add as unverified reference text only. FinLens will not open or check it.</span>
+          </p>}
           {showWynnChoice && <>
             <button type="button" className="secondary-button"
               aria-expanded={wynnConfirmation === researchContext} aria-controls="wynn-official-source-guide"

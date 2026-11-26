@@ -9,7 +9,7 @@ const blankSource = (): ManualSourceDraft => ({ reference: "", passage: "", loca
 export type ManualComparisonController = {
   hasNotes: () => boolean;
   invalidate: () => void;
-  addReference: (reference: string, publicationDate: string) => void;
+  addReference: (reference: string, publicationDate: string, origin?: "official" | "pasted") => void;
 };
 
 type ReopenedComparison = ReturnType<typeof reopenManualComparison>;
@@ -122,7 +122,7 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
   useImperativeHandle(controllerRef, () => ({
     hasNotes: () => judgment !== "" || change !== "" || sources.some(source => Object.values(source).some(value => value !== "")),
     invalidate: () => { fileController.current?.invalidate(); clearRecord(); setSourceNotice(""); },
-    addReference: (reference, publicationDate) => {
+    addReference: (reference, publicationDate, origin = "official") => {
       if (!isCurrent) return;
       setExpanded(true);
       if (sources.some(source => source.reference.trim() === reference)) {
@@ -137,7 +137,9 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
       clearRecord();
       setSources(previous => previous.map((source, index) => index === slot
         ? { ...source, reference, date: publicationDate } : source));
-      setSourceNotice("Official reference added. Check the original and enter the passage and assessment yourself.");
+      setSourceNotice(origin === "pasted"
+        ? "Unverified reference added as text only. Check the original and enter the passage and assessment yourself."
+        : "Official reference added. Check the original and enter the passage and assessment yourself.");
     },
   }));
   function updateSource(index: number, key: keyof ManualSourceDraft, value: string) {

@@ -1,0 +1,41 @@
+import { expect, test } from './fixtures/browser';
+
+test('Home keeps a pasted HTTPS reference inert and only adds it after explicit action', async ({ page, scenario }) => {
+  await scenario.open();
+  await scenario.ready();
+  const before = scenario.ledger.length;
+  const url = page.url();
+  const savedState = () => page.evaluate(() => [localStorage, sessionStorage].map(store =>
+    Object.keys(store).sort().map(key => [key, store.getItem(key)])));
+  const savedBefore = await savedState();
+  let downloads = 0;
+  page.on('download', () => { downloads++; });
+  const draft = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const add = page.getByRole('button', { name: 'Add pasted link to comparison', exact: true });
+  const comparison = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });
+  const sourceA = comparison.getByLabel('Source reference A', { exact: true });
+  const rejected = 'https://example.org/report?signature=synthetic-only';
+  await draft.fill(rejected);
+  await draft.press('Enter');
+  await expect(page.locator('#research-draft-premise')).toHaveText(rejected);
+  await expect(add).toHaveCount(0);
+  await expect(comparison.getByRole('button', { name: 'Compare two manual sources', exact: true })).toBeVisible();
+  const userRef = 'https://example.org/reports/quarterly.pdf';
+  await draft.fill(userRef);
+  await expect(add).toHaveCount(0);
+  await draft.press('Enter');
+  await expect(add).toBeVisible();
+  await expect(page.locator('a[href="' + userRef + '"]')).toHaveCount(0);
+  await expect(sourceA).toHaveValue('');
+  await add.press('Enter');
+  await expect(sourceA).toHaveValue(userRef);
+  await expect(comparison.getByLabel('Publication date A', { exact: true })).toHaveValue('');
+  await expect(comparison.getByLabel('Passage A', { exact: true })).toHaveValue('');
+  await expect(comparison.getByRole('status')).toContainText('Unverified reference added as text only');
+  await expect(comparison.getByRole('button', { name: 'Download recorded comparison (.json)', exact: true })).toHaveCount(0);
+  expect(page.url()).toBe(url);
+  expect(downloads).toBe(0);
+  expect(await savedState()).toEqual(savedBefore);
+  expect(scenario.ledger.slice(before)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});

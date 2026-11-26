@@ -302,3 +302,91 @@ for (const chinese of ['永利澳門的公告能告訴我誰持有博彩經營�
     assert.equal(app.requests.length, before);
   });
 }
+
+const pastedReference = 'https://example.org/reports/quarterly%25.pdf';
+const pastedButton = 'Add pasted link to comparison';
+test('kept user link is an explicit, inert and unverified reference with blank metadata', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  await app.keep(pastedReference);
+  const handoff = button(app, pastedButton);
+  assert.ok(handoff, 'The user can explicitly use the kept reference');
+  const panel = app.query('[aria-label="Manual evidence comparison"]');
+  const source = () => [...panel.querySelectorAll('input')].find(node => node.labels?.[0]?.firstChild?.textContent === 'Source reference A');
+  assert.equal(source()?.value, '');
+  assert.equal(app.query('a[href="' + pastedReference + '"]'), null);
+  await app.click(handoff);
+  assert.equal(source()?.value, pastedReference);
+  assert.match(panel.querySelector('[role="status"]')?.textContent ?? '', /unverified/i);
+  assert.doesNotMatch(panel.querySelector('[role="status"]')?.textContent ?? '', /official/i);
+  assert.ok([...panel.querySelectorAll('input[type=date], textarea')].every(node => node.value === ''));
+  assert.equal(app.downloads.length, 0);
+  assert.equal(app.requests.length, before);
+});
+
+test('new kept reference cannot be a credential-bearing, clickable or mixed-text URL', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  for (const input of [
+    'http://example.org/file',
+    'https://user:password@example.org/report',
+    'https://example.org/report?signature=fixture-secret',
+    'https://example.org/report#token',
+    'https://example.org/%',
+    'https://example.org/%GG',
+    'https://example.org/%2',
+    'https://127.0.0.1/report',
+    'https://2130706433/report',
+    'https://[::1]/report',
+    'https://localhost/report',
+    'https://example.org:8443/report',
+    'https://例子.org/report',
+    'https://example.org/Report\u202epdf',
+    'https://xn--abc.example/report',
+    'https://example.org/a\\b',
+    'Read https://example.org/report',
+  ]) {
+    await app.keep(input);
+    assert.equal(button(app, pastedButton), undefined, input);
+    assert.ok(button(app, 'Compare two manual sources'), 'Manual entry still available');
+  }
+  assert.equal(app.requests.length, before);
+  assert.equal(app.downloads.length, 0);
+});
+
+test('kept link handoff does not alter a filled comparison, duplicate refs, or an edited draft', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  await app.keep(pastedReference);
+  const ref = slot => [...app.query('[aria-label="Manual evidence comparison"]').querySelectorAll('input')]
+    .find(node => node.labels?.[0]?.firstChild?.textContent === 'Source reference ' + slot);
+  await app.click(button(app, 'Compare two manual sources'));
+  await app.fillLabel('Source reference A', 'Researcher’s existing first source');
+  await app.fillLabel('Passage B', 'Second slot already contains a partial note');
+  await app.click(button(app, pastedButton));
+  assert.deepEqual(['A', 'B'].map(slot => ref(slot).value), ['Researcher’s existing first source', '']);
+  assert.match(app.query('[aria-label="Manual evidence comparison"] [role="status"]').textContent, /No notes were replaced/);
+  await app.fillLabel('Passage B', '');
+  await app.click(button(app, pastedButton));
+  assert.equal(ref('B').value, pastedReference);
+  await app.click(button(app, pastedButton));
+  assert.match(app.query('[aria-label="Manual evidence comparison"] [role="status"]').textContent, /already in your comparison/);
+  await app.input('https://example.org/different.pdf');
+  assert.equal(button(app, pastedButton), undefined);
+  assert.equal(ref('A').value, 'Researcher’s existing first source');
+  assert.equal(ref('B').value, pastedReference);
+  assert.equal(app.requests.length, before);
+});
+
+test('unverified link handoff is available independently of an unavailable company catalog', async ctx => {
+  const app = await mount(ctx);
+  await app.release([], { status: 503 });
+  const before = app.requests.length;
+  await app.keep(pastedReference);
+  await app.click(button(app, pastedButton));
+  assert.match(app.query('[aria-label="Manual evidence comparison"] [role="status"]').textContent, /Unverified/);
+  assert.equal(app.requests.length, before);
+});

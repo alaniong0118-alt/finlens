@@ -4,6 +4,29 @@ export const MANUAL_COMPARISON_FIELD_LIMITS = {
   question: 2000, reference: 2048, passage: 4000, locator: 240, reasoning: 1500,
 } as const;
 
+// Classification for a text-only handoff, not verification or permission to fetch.
+export function unverifiedPastedReference(value: string | null): string | null {
+  if (!value || value.length > MANUAL_COMPARISON_FIELD_LIMITS.reference
+      || !value.startsWith("https://") || /[\s\\?#\u0000-\u001f\u007f-\u009f\p{Cf}]/u.test(value)
+      || /%(?![0-9a-f]{2})/i.test(value)
+      || /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(value)) return null;
+  const host = value.slice("https://".length).split("/", 1)[0];
+  const labels = host.toLowerCase().split(".");
+  const tld = labels.at(-1) || "";
+  if (host.length > 253 || labels.length < 2
+      || !/^[a-z]{2,63}$/.test(tld)
+      || ["local", "internal", "localhost", "onion", "invalid", "test"].includes(tld)
+      || labels.some(label => label.startsWith("xn--") || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.hostname !== host.toLowerCase()
+        || parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 export const MANUAL_COMPARISON_ASSESSMENTS = ["supports", "challenges", "does not distinguish"] as const;
 
 export type ManualSourceDraft = {
