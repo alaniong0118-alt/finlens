@@ -8,6 +8,7 @@ import DirectResearchAnswer from "@/components/research-answer";
 import DualFilingEvidence from "@/components/dual-filing-evidence";
 import EvidenceReportExport from "@/components/evidence-report-export";
 import { evidenceExcerpt } from "@/lib/evidence-presentation";
+import { fitsManualFilingPassage, type ManualFilingPassage } from "@/lib/manual-evidence-comparison";
 import PassageTone, { type RegisterAnalysisCancellation } from "@/components/passage-tone";
 import { RISK_TOPICS, RISK_EXPLANATION, riskTopic, riskQueryLabel, validateRiskEvidence, RiskEvidenceError, type RiskRequest } from "@/lib/sec-risk";
 
@@ -227,16 +228,31 @@ function validateFilingResponse(value: unknown, company: Company, filing: Filing
   }
 }
 
-export function EvidenceResults({ result, answer, company, risk = false, allowAnalysis = true, registerAnalysisCancellation }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company; risk?: boolean; allowAnalysis?: boolean; registerAnalysisCancellation?: RegisterAnalysisCancellation }) {
+export type KeptEvidenceDraft = Readonly<{ question: string }>;
+
+type EvidenceComparisonHandoff = {
+  comparisonDraft?: KeptEvidenceDraft | null;
+  onAddPassage?: (draft: KeptEvidenceDraft, passage: ManualFilingPassage) => void;
+};
+
+export function EvidenceResults({ result, answer, company, risk = false, allowAnalysis = true, registerAnalysisCancellation, addToComparison }: { result: EvidenceContext; answer?: ResearchAnswer | null; company?: Company; risk?: boolean; allowAnalysis?: boolean; registerAnalysisCancellation?: RegisterAnalysisCancellation; addToComparison?: (passage: ManualFilingPassage) => void }) {
   const [expanded, setExpanded] = useState(false);
   const evidenceId = useId();
   const passages = evidencePassages(result);
-  const previews = passages.map(passage => ({ ...passage, excerpt: evidenceExcerpt(passage.text, result.query, answer, passages.map(item => item.text)) }));
+  const previews = passages.map(passage => {
+    const { citation, text } = passage;
+    const handoff = addToComparison && officialSecUrl(citation.sec_url) === citation.sec_url ? {
+      reference: citation.sec_url, passage: text,
+      locator: `Accession ${citation.accession_number} · File ${citation.filename} · Chunk ${citation.chunk_id} · Cleaned text offsets ${citation.start_char}–${citation.end_char}`,
+    } : null;
+    return { ...passage, handoff: handoff && fitsManualFilingPassage(handoff) ? handoff : null,
+      excerpt: evidenceExcerpt(text, result.query, answer, passages.map(item => item.text)) };
+  });
   return <div className="evidence-results" aria-live="polite">
     <div className="section-heading"><h3>{risk ? passages.length ? "Candidate SEC passages" : "Insufficient topic evidence in the searched scope" : passages.length ? `${passages.length} SEC evidence passages` : "retrieval_scope" in result ? "Insufficient evidence in published company filings" : "Insufficient evidence in this filing"}</h3><span className="badge">Research Mode</span></div>
     <p className="muted small">Search: “{result.query}” · Highlights mark matching text, not verified claim support. Excerpts retain the source wording.</p>
     {passages.length === 0 && <div className="empty-state"><p>{risk ? "No qualifying passages were returned for this topic and scope. This does not mean no risk. Edit the query or explicitly choose another scope and search again." : "Try a more specific financial topic. FinLens does not substitute model knowledge when filing evidence is weak."}</p></div>}
-    <div id={evidenceId}>{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt }) => <article className="evidence-card" key={citation.citation_id}>
+    <div id={evidenceId}>{previews.slice(0, expanded ? previews.length : 2).map(({ citation, text, rank, excerpt, handoff }) => <article className="evidence-card" key={citation.citation_id}>
       <div className="evidence-heading"><h4>Evidence {rank} <span className="muted">· {citation.form}</span></h4><span className="small muted">Filed {formatDate(citation.filed)}</span></div>
       <p className="excerpt evidence-preview">{excerpt.start > 0 && "… "}{excerpt.parts.map((part, index) => part.kind ? <mark key={index} className={`evidence-highlight ${part.kind === "value" ? "value-match" : ""}`}>{part.text}</mark> : part.text)}{excerpt.end < text.length && " …"}</p>
       <details className="provenance"><summary>Read full evidence passage</summary><p className="excerpt details-body">{text}</p></details>
@@ -249,6 +265,7 @@ export function EvidenceResults({ result, answer, company, risk = false, allowAn
         <p>Hybrid rank {rank} · Retrieval rule: {citation.evidence_reason.replaceAll("_", " ")}</p>
         <p>Scores describe retrieval ranking, not factual confidence.</p>
       </div></details>
+      {handoff && <button type="button" className="secondary-button" onClick={() => addToComparison?.(handoff)}>Add this passage to comparison</button>}
       {!risk && allowAnalysis && <PassageTone registerAnalysisCancellation={registerAnalysisCancellation} identity={company && result.ticker === company.ticker
         && ("retrieval_scope" in result ? result.company_cik === company.cik && result.searched_accessions.includes(citation.accession_number)
           : result.accession_number === citation.accession_number) ? filingToneIdentity(company, citation) : null} />}
@@ -307,7 +324,7 @@ export function AIAnalysis({ result, configured, registerAnalysisCancellation }:
   </section>;
 }
 
-function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady, cancelKeyword, cancelEvidence, financialOnly = false, filingControls }: {
+function FilingSearch({ company, filing, configured, query, setQuery, retrievalScope, companyEvidenceReady, cancelKeyword, cancelEvidence, financialOnly = false, filingControls, comparisonDraft, onAddPassage }: EvidenceComparisonHandoff & {
   company: Company; filing: FilingSource | null; configured: boolean;
   retrievalScope: "filing" | "company";
   query: string; setQuery: (value: string) => void;
@@ -377,6 +394,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const liveEvidenceOwner = useRef(evidenceOwner);
   liveEvidenceOwner.current = evidenceOwner;
   const [completedEvidenceOwner, setCompletedEvidenceOwner] = useState<string | null>(null);
+  const [handoffReceipt, setHandoffReceipt] = useState<{ generation: number; draft: KeptEvidenceDraft } | null>(null);
   const riskReady = !financialOnly && (retrievalScope === "company" ? companyEvidenceReady : Boolean(filing));
   const riskOwner = JSON.stringify([company.ticker, company.cik, version, retrievalScope, evidenceIdentity, purpose, query, riskGuide]);
   const liveRiskOwner = useRef(riskOwner);
@@ -463,7 +481,10 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     const currentEvidence = () => evidenceScope.current.current(evidenceId)
       && liveEvidenceOwner.current === evidenceOwner && !evidenceSignal.aborted;
     const completeEvidence = (response: EvidenceContext) => {
-      if (currentEvidence()) { setResult(response); setCompletedEvidenceOwner(evidenceOwner); }
+      if (currentEvidence()) {
+        setResult(response); setCompletedEvidenceOwner(evidenceOwner);
+        setHandoffReceipt(selectedFiling && comparisonDraft?.question === question ? { generation: evidenceId, draft: comparisonDraft } : null);
+      }
     };
     // Settle each branch independently: a slow/failed context must never delay
     // or erase a valid direct answer, and answer failure cannot erase evidence.
@@ -483,6 +504,9 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     await Promise.all([direct, evidence]);
   }
   const evidenceAnalysisReady = result?.query === query.trim() && !loading && !error;
+  const canHandoff = purpose === "general" && retrievalScope === "filing" && filing !== null
+    && handoffReceipt !== null && handoffReceipt.draft === comparisonDraft && evidenceAnalysisReady
+    && evidenceScope.current.current(handoffReceipt.generation);
   return <>
     {purpose !== "keyword" && <>
     <form onSubmit={search} className="search-form">
@@ -570,7 +594,13 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
       {purpose === "risk" ? <><p className="small">{riskQueryLabel(searchedRisk!.request.query)} · {company.ticker} · CIK {company.cik} · Publication {searchedRisk!.request.version}</p><p className="muted small">{RISK_EXPLANATION}</p></> : <h3>Supporting SEC evidence</h3>}
       {purpose === "general" && <p role="status" className="notice evidence-query">Evidence from completed search: “{result.query}”.{!evidenceAnalysisReady ? " Kept for reference until another search succeeds; it does not support a different question." : ""}</p>}
       <p className="small muted">{"retrieval_scope" in result ? `Company-wide · ${result.searched_accessions.length} verified published filings searched. ${result.excluded_publication_count ? `${result.excluded_publication_count} ineligible publications excluded. ` : ""}` : `Selected filing only · accession ${result.accession_number}. `}{purpose === "risk" ? "Filing dates describe the returned sources, not a current or complete risk assessment." : "Passages may describe different periods and are research, not validation of the structured answer."}</p>
-      <EvidenceResults key={`evidence-${purpose}-${result.query}-${retrievalScope}`} result={result} answer={purpose === "risk" || !evidenceAnalysisReady || "retrieval_scope" in result || answer?.question !== result.query ? null : answer} company={company} risk={purpose === "risk"} allowAnalysis={evidenceAnalysisReady} registerAnalysisCancellation={registerAnalysisCancellation} />
+      <EvidenceResults key={`evidence-${purpose}-${result.query}-${retrievalScope}`} result={result} answer={purpose === "risk" || !evidenceAnalysisReady || "retrieval_scope" in result || answer?.question !== result.query ? null : answer} company={company} risk={purpose === "risk"} allowAnalysis={evidenceAnalysisReady} registerAnalysisCancellation={registerAnalysisCancellation}
+        addToComparison={canHandoff && onAddPassage ? (passage) => {
+          if (handoffReceipt !== null && evidenceScope.current.current(handoffReceipt.generation)
+              && liveEvidenceOwner.current === evidenceOwner) {
+            onAddPassage(handoffReceipt.draft, passage);
+          }
+        } : undefined} />
       {version !== null && <EvidenceReportExport company={company} result={result} dataVersion={version} referenceOnly={!evidenceAnalysisReady} risk={purpose === "risk"} />}
       {purpose === "general" && ("retrieval_scope" in result ? <p className="muted small">Company-wide search provides stored evidence only. AI generation is unavailable in this scope.</p> : evidenceAnalysisReady && <AIAnalysis key={`${result.query}-${result.accession_number}`} result={result} configured={configured} registerAnalysisCancellation={registerAnalysisCancellation} />)}
     </>}
@@ -594,7 +624,7 @@ function RecordedFilings({ filings, unknown = false }: { filings: FilingSource[]
   </details>;
 }
 
-export default function FilingResearch({ company, configured, filingResearchEnabled = true }: {
+export default function FilingResearch({ company, configured, filingResearchEnabled = true, comparisonDraft, onAddPassage }: EvidenceComparisonHandoff & {
   company: Company; configured: boolean; filingResearchEnabled?: boolean;
 }) {
   const { version, changed } = useResearchVersion();
@@ -651,7 +681,7 @@ export default function FilingResearch({ company, configured, filingResearchEnab
   return <section className="panel filing-panel" aria-labelledby="filing-title">
     <h2 id="filing-title">Financial questions</h2>
     <p>Deterministic answers from stored financial data. Source references may retain filing metadata and official SEC links.</p>
-    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={filingResearchEnabled && sourceReady && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={filingResearchEnabled && sourceReady && company.has_indexed_filing && indexed.length > 0} configured={filingResearchEnabled && configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} cancelEvidence={cancelEvidence} financialOnly={!filingResearchEnabled} filingControls={filingResearchEnabled ? <>
+    <FilingSearch key={`${company.ticker}-${company.cik}`} company={company} filing={filingResearchEnabled && sourceReady && company.has_indexed_filing ? filing ?? null : null} companyEvidenceReady={filingResearchEnabled && sourceReady && company.has_indexed_filing && indexed.length > 0} configured={filingResearchEnabled && configured} query={query} setQuery={setQuery} retrievalScope={retrievalScope} cancelKeyword={cancelKeyword} cancelEvidence={cancelEvidence} financialOnly={!filingResearchEnabled} comparisonDraft={comparisonDraft} onAddPassage={onAddPassage} filingControls={filingResearchEnabled ? <>
     <div className="section-heading"><div><p className="eyebrow">SEC research</p><h3>Read the evidence</h3></div><span className="badge">No AI required</span></div>
     <p className="muted small">Search a selected filing or published filings for this company. Metric snapshots may refer to a different period or accession.</p>
     <label className="filing-select">Evidence search scope<select value={retrievalScope} onChange={(event) => { cancelEvidence.current?.(); cancelKeyword.current?.(true); setRetrievalScope(event.target.value as "filing" | "company"); }}>

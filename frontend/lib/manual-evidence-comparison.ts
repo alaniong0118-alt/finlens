@@ -58,13 +58,26 @@ function date(value: string): string | null {
   return value;
 }
 
-function comparisonReference(value: string): string {
+export function comparisonReference(value: string): string {
   const label = value.trim();
   try {
     const url = new URL(label);
     if (url.protocol === "http:" || url.protocol === "https:") return url.href;
   } catch { /* Not a URL; compare the plain reference below. Never retrieve it. */ }
   return label.toLowerCase();
+}
+
+export type ManualFilingPassage = Pick<ManualSourceDraft, "reference" | "passage" | "locator">;
+
+export function fitsManualFilingPassage(source: ManualFilingPassage): boolean {
+  try {
+    const limits = MANUAL_COMPARISON_FIELD_LIMITS;
+    text(source.reference, limits.reference, "source reference");
+    text(source.passage, limits.passage, "passage");
+    text(source.locator, limits.locator, "locator");
+    // A textarea normalizes CR; do not offer a handoff that alters the passage.
+    return !source.passage.includes("\r");
+  } catch { return false; }
 }
 
 export function recordManualComparison(draft: Draft): string {

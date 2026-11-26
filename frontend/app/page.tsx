@@ -5,9 +5,9 @@ import { describeApiError, firstReadyCompany, getCapabilities, getHomeCatalog, t
 import CompanyOverview from "@/components/company-overview";
 import FinancialResearch from "@/components/financial-research";
 import FinancialInsights from "@/components/financial-insights";
-import FilingResearch from "@/components/filing-research";
+import FilingResearch, { type KeptEvidenceDraft } from "@/components/filing-research";
 import ManualEvidenceComparison, { RecordedComparisonPicker, type ManualComparisonController } from "@/components/manual-evidence-comparison";
-import { unverifiedPastedReference } from "@/lib/manual-evidence-comparison";
+import { unverifiedPastedReference, type ManualFilingPassage } from "@/lib/manual-evidence-comparison";
 import ThemeControl from "@/components/theme-control";
 import ResearchFreshness from "@/components/research-freshness";
 import CompanyComparison from "@/components/company-comparison";
@@ -98,7 +98,15 @@ export default function Home() {
   const [previousNotesAvailable, setPreviousNotesAvailable] = useState(false);
   const researchInputRef = useRef<HTMLInputElement>(null);
   const manualComparison = useRef<ManualComparisonController>(null);
+  const [comparisonDraft, setComparisonDraft] = useState<KeptEvidenceDraft | null>(null);
+  const keptDraft = useRef<KeptEvidenceDraft | null>(null);
+  function addFilingPassage(draft: KeptEvidenceDraft, passage: ManualFilingPassage) {
+    if (keptDraft.current === draft) manualComparison.current?.addPassage(passage);
+  }
   function keepQuestion(question: string) {
+    const draft = { question };
+    keptDraft.current = draft;
+    setComparisonDraft(draft);
     setWynnConfirmation(null);
     setManualQuestion(question);
     setResearchContext(question);
@@ -220,6 +228,8 @@ export default function Home() {
               const next = event.target.value;
               if (next.length > 2000) { setResearchDraftError("Use 2,000 characters or fewer. Your previous draft is unchanged."); return; }
               setPreviousNotesAvailable(manualComparison.current?.hasNotes() ?? false);
+              keptDraft.current = null;
+              setComparisonDraft(null);
               manualComparison.current?.invalidate();
               setWynnConfirmation(null);
               setResearchInput(next); setResearchContext(null); setResearchDraftError(null); setPendingReplacement(null);
@@ -294,7 +304,8 @@ export default function Home() {
         <BalanceDateComparison company={company} />
         <CashFlowWindowComparison company={company} />
         <FinancialCoverage company={company} />
-        <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} filingResearchEnabled={filingEnabled} /></div>
+        <div className="research-grid"><FinancialResearch company={company} /><FilingResearch company={company} configured={configured} filingResearchEnabled={filingEnabled}
+          comparisonDraft={comparisonDraft} onAddPassage={addFilingPassage} /></div>
       </ResearchFreshness>}
       <CompanyComparison companies={companies} />
       {filingEnabled ? <SecRiskComparison companies={companies} /> : <section className="panel" aria-labelledby="risk-comparison-title"><h2 id="risk-comparison-title">SEC risk evidence unavailable</h2><p>Filing retrieval is not enabled in this workspace. No risk evidence requests are sent.</p></section>}

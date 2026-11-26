@@ -83,3 +83,104 @@ test('selected-filing research saves complete browser JSON without including the
   expect(scenario.ledger.slice(transportCount)).toEqual([]);
   expect(scenario.ledger.some(item => item.path.endsWith('/answer'))).toBe(false);
 });
+
+test('completed selected-filing passage joins a same-question comparison and survives local reopen', async ({ page, scenario }) => {
+  const ticker = 'AAA';
+  const filing = data.accession(ticker);
+  const query = 'What was the latest quarterly revenue?';
+  const prefix = 'The synthetic filing describes the sequence of deliveries and customer orders. '.repeat(5);
+  const other = prefix + 'FIRST1 DOCUMENT ONLY';
+  const passage = prefix + 'SECOND DOCUMENT ONLY';
+  const base = data.evidence(ticker, query, 0, filing);
+  const citations = [other, passage].map((body, i) => ({
+    ...base.citations[0], citation_id: `source_${i + 1}`, filename: `report-${i + 1}.htm`,
+    chunk_id: `shipment-fixture-${i + 1}`, start_char: 37, end_char: 37 + Array.from(body).length,
+  }));
+  const citation = citations[1];
+  const context = { ...base, citations,
+    context: [other, passage].map((body, i) => data.evidenceSourceBlock(citations[i], body, false)).join('\n\n') };
+  scenario.overrides.push(request => request.path === `/companies/${ticker}/filings/${filing}/context`
+    && request.query.get('q') === query ? { body: context } : undefined);
+  await scenario.open();
+  await scenario.ready(ticker);
+  const draft = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  await draft.fill(query);
+  await page.getByRole('button', { name: 'Keep research draft', exact: true }).press('Enter');
+  const editor = page.getByRole('textbox', { name: 'Research question or search', exact: true });
+  const submit = page.getByRole('button', { name: 'Research question', exact: true });
+  const actions = page.getByRole('button', { name: 'Add this passage to comparison', exact: true });
+  const handoff = page.locator('.evidence-card').nth(1).getByRole('button', { name: 'Add this passage to comparison', exact: true });
+  await expect(actions).toHaveCount(0);
+  await editor.fill(query);
+  await submit.press('Enter');
+  await expect(page.getByRole('region', { name: 'Research Answer', exact: true })).toBeVisible();
+  await expect(handoff).toBeVisible();
+  await expect(page.locator('.evidence-card').nth(1).locator('.evidence-preview')).not.toContainText('SECOND DOCUMENT ONLY');
+  await draft.fill('Another Home question');
+  await expect(actions).toHaveCount(0);
+  await draft.fill(query);
+  await page.getByRole('button', { name: 'Keep research draft', exact: true }).press('Enter');
+  await expect(actions).toHaveCount(0);
+  await submit.press('Enter');
+  await expect(handoff).toBeVisible();
+
+  const comparison = page.getByRole('region', { name: 'Manual evidence comparison', exact: true });
+  const field = (name: string) => comparison.getByLabel(name, { exact: true });
+  const before = scenario.ledger.length;
+  const storage = () => page.evaluate(() => [localStorage, sessionStorage].map(store =>
+    Object.keys(store).sort().map(key => [key, store.getItem(key)])));
+  const savedBefore = await storage();
+  await handoff.press('Enter');
+  await expect(field('Source reference A')).toHaveValue(citation.sec_url);
+  await expect(field('Passage A')).toHaveValue(passage);
+  const locator = `Accession ${filing} · File ${citation.filename} · Chunk ${citation.chunk_id} · Cleaned text offsets ${citation.start_char}–${citation.end_char}`;
+  await expect(field('Locator A')).toHaveValue(locator);
+  for (const blank of ['Publication date A', 'Assessment A', 'Assessment rationale A', 'Provisional judgment']) {
+    await expect(field(blank)).toHaveValue('');
+  }
+  await handoff.press('Enter');
+  await expect(field('Source reference B')).toHaveValue('');
+  await expect(comparison.getByRole('status')).toContainText('already in your comparison');
+  await editor.fill('Different current filing question');
+  await expect(actions).toHaveCount(0);
+  await editor.fill(query);
+  await expect(actions).toHaveCount(0);
+  await expect(field('Passage A')).toHaveValue(passage);
+
+  await field('Assessment A').selectOption('supports');
+  await field('Assessment rationale A').fill('The filing records a change in delivery timing.');
+  await field('Source reference B').fill('Synthetic independent shipment survey');
+  await field('Passage B').fill('New order counts declined before shipments moved.');
+  await field('Assessment B').selectOption('challenges');
+  await field('Assessment rationale B').fill('Demand may have weakened first.');
+  const judgment = 'The timing explanation is plausible but not sufficient.';
+  await field('Provisional judgment').fill(judgment);
+  await field('Evidence that would change the judgment').fill('Compare dated orders and actual shipments.');
+  await comparison.getByRole('button', { name: 'Record provisional judgment', exact: true }).press('Enter');
+  const [download] = await Promise.all([page.waitForEvent('download'),
+    comparison.getByRole('button', { name: 'Download recorded comparison (.json)', exact: true }).press('Enter')]);
+  expect(await download.failure()).toBeNull();
+  const path = await download.path();
+  const result = JSON.parse(await readFile(path, 'utf8'));
+  expect(result.question).toBe(query);
+  expect(result.sources[0]).toEqual({ kind: 'manual_unverified', reference: citation.sec_url,
+    passage, locator, date: null, assessment: 'supports', rationale: 'The filing records a change in delivery timing.' });
+  expect(result.sources[1].assessment).toBe('challenges');
+  expect(await storage()).toEqual(savedBefore);
+  expect(scenario.ledger.slice(before)).toEqual([]);
+
+  await scenario.open();
+  await scenario.ready(ticker);
+  const reopenedAt = scenario.ledger.length;
+  await page.getByLabel('Open a recorded comparison (.json)', { exact: true }).setInputFiles(path);
+  const preview = page.getByRole('region', { name: 'Reopened comparison preview', exact: true });
+  await expect(preview).toContainText(citation.sec_url);
+  await expect(preview.locator('dd').filter({ hasText: 'SECOND DOCUMENT ONLY' })).toHaveText(passage);
+  await expect(preview).not.toContainText('FIRST1 DOCUMENT ONLY');
+  await expect(preview).toContainText(locator);
+  await expect(preview).toContainText('New order counts declined before shipments moved.');
+  await expect(preview).toContainText(judgment);
+  await expect(preview.locator('a')).toHaveCount(0);
+  expect(scenario.ledger.slice(reopenedAt)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});

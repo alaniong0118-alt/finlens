@@ -4965,3 +4965,90 @@ test('synthetic cold Apple Home separates filing publication, answer, and cancel
   assert.equal(app.requests.some(r => r.path.endsWith('/answer')), false);
   stamp('current_context_ready');
 });
+
+test('FOCUSED_BRIDGE adds only a current completed SEC passage to the matching kept Home draft', async ctx => {
+  const app = await mount(ctx);
+  await app.release(app.request(companyPath('AAPL', 'financials/summary')), summary('AAPL', '1000000000'));
+  await app.release(app.request(companyPath('AAPL', 'financials/metrics/revenue')), history('AAPL', '1000000000'));
+  const accession = '0000320193-25-999999';
+  const source = { ...filing('AAPL'), accession_number: accession,
+    sec_url: 'https://www.sec.gov/Archives/edgar/data/320193/000032019325999999/0000320193-25-999999-index.html' };
+  await app.release(app.request(companyPath('AAPL', 'sources')), [source]);
+  const query = 'How does Apple describe shipment timing?';
+  const text = 'The synthetic filing describes shipments moving to the following quarter.';
+  const draft = app.host.querySelector('#research-draft-input');
+  await app.change(draft, query);
+  await app.click('Keep research draft');
+  const editor = app.host.querySelector('#research-query');
+  await app.change(editor, query);
+  await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), { ticker: 'AAPL', question: query, matched: false, status: 'not_matched' });
+  const evidence = presentationContext('AAPL', query, [text]);
+  const citation = Object.assign(evidence.citations[0], source);
+  evidence.accession_number = accession;
+  evidence.context = `[SOURCE source_1]\nchunk_id: ${citation.chunk_id}\naccession_number: ${citation.accession_number}\nform: ${citation.form}\nsimilarity: ${citation.similarity.toFixed(6)}\ntext: |-\n  ${text}\n[END SOURCE source_1]`;
+  async function finishSearch() {
+    await app.release(app.request(companyPath('AAPL', `filings/${accession}/context`)), evidence);
+  }
+  await finishSearch();
+  assert.equal(app.evidence().length, 1, "A completed validated passage is actually rendered before testing the handoff");
+  const handoff = () => [...app.host.querySelectorAll('.evidence-card button')]
+    .find(button => button.textContent === 'Add this passage to comparison');
+  assert.ok(handoff(), 'A current completed passage for the matching kept question has an explicit handoff');
+  const oldButton = handoff();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(draft, 'Replacement question');
+    draft.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    oldButton.click();
+  });
+  await app.change(draft, query);
+  await app.click('Keep research draft');
+  assert.ok(!handoff(), 'Restoring the same Home question cannot revive an old filing search');
+  const notAdded = app.host.querySelector('[aria-label="Manual evidence comparison"]');
+  assert.equal(notAdded.querySelector('textarea[aria-label="Passage A"]').value, '', 'Old callback did not add a passage');
+  await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), { ticker: 'AAPL', question: query, matched: false, status: 'not_matched' });
+  await finishSearch();
+  const requestsAfterReselection = app.requests.length;
+  await act(async () => handoff().click());
+  const form = app.host.querySelector('[aria-label="Manual evidence comparison"]');
+  const field = label => ([...form.querySelectorAll('label')].find(item => item.firstChild?.textContent === label)?.querySelector('input,textarea,select') ?? form.querySelector('[aria-label="' + label + '"]')).value;
+  assert.equal(field('Source reference A'), evidence.citations[0].sec_url);
+  assert.equal(field('Passage A'), text);
+  assert.match(field('Locator A'), new RegExp(evidence.citations[0].accession_number));
+  assert.ok(field('Locator A').includes(citation.filename) && field('Locator A').includes(citation.chunk_id));
+  assert.equal(field('Publication date A'), '');
+  assert.equal(field('Assessment rationale A'), '');
+  assert.equal(field('Provisional judgment'), '');
+  assert.equal(field('Source reference B'), '');
+  await act(async () => handoff().click());
+  assert.equal(field('Source reference B'), '', 'The same source cannot be added twice');
+  assert.equal(app.requests.length, requestsAfterReselection, 'Handoff performs no transport');
+  const input = label => [...form.querySelectorAll('label')].find(item => item.firstChild?.textContent === label).querySelector('input,textarea,select');
+  await app.change(input('Source reference A'), '');
+  await app.change(input('Passage A'), '');
+  await act(async () => {
+    const locatorInput = input('Locator A');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(locatorInput, 'Partial note, leave it alone');
+    locatorInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    handoff().click();
+  });
+  assert.equal(field('Locator A'), 'Partial note, leave it alone');
+  assert.equal(field('Passage B'), text, 'Only entirely empty B can be populated');
+  await app.change(input('Source reference B'), 'Independent manual reference');
+  await act(async () => handoff().click());
+  assert.match(form.textContent, /Both sources already contain notes/);
+  assert.equal(field('Locator A'), 'Partial note, leave it alone');
+  assert.equal(field('Source reference B'), 'Independent manual reference');
+  await app.click('Research question');
+  await app.release(app.request(companyPath('AAPL', 'research-answer')), { ticker: 'AAPL', question: query, matched: false, status: 'not_matched' });
+  const longFilename = 'f'.repeat(230) + '.htm';
+  evidence.context = evidence.context.replace(citation.chunk_id, 'oversize-locator');
+  evidence.citations = [{ ...citation, filename: longFilename, chunk_id: 'oversize-locator' }];
+  await finishSearch();
+  assert.equal(app.evidence().length, 1, 'Long source metadata still belongs to an admitted passage');
+  assert.ok(!handoff(), 'Unrepresentable locator cannot be silently shortened');
+  await app.change(editor, 'A different question');
+  assert.ok(!handoff(), 'Reference-only old results cannot be added');
+  assert.equal(field('Passage B'), text, 'Changing research input does not overwrite comparison');
+});

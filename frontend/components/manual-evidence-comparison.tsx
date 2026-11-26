@@ -2,13 +2,14 @@
 import { useId, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { downloadEvidenceReport } from "@/lib/evidence-report";
 import { MANUAL_COMPARISON_ASSESSMENTS, MANUAL_COMPARISON_FIELD_LIMITS, MANUAL_COMPARISON_LIMIT,
-  recordManualComparison, reopenManualComparison, type ManualSourceDraft } from "@/lib/manual-evidence-comparison";
+  comparisonReference, fitsManualFilingPassage, recordManualComparison, reopenManualComparison, type ManualFilingPassage, type ManualSourceDraft } from "@/lib/manual-evidence-comparison";
 
 const blankSource = (): ManualSourceDraft => ({ reference: "", passage: "", locator: "", date: "", assessment: "", rationale: "" });
 
 export type ManualComparisonController = {
   hasNotes: () => boolean;
   invalidate: () => void;
+  addPassage: (source: ManualFilingPassage) => void;
   addReference: (reference: string, publicationDate: string, origin?: "official" | "pasted") => void;
 };
 
@@ -93,6 +94,8 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
   const panelId = useId();
   const [sourceNotice, setSourceNotice] = useState("");
   const [sources, setSources] = useState(() => [blankSource(), blankSource()]);
+  const currentSources = useRef(sources);
+  currentSources.current = sources;
   const [judgment, setJudgment] = useState("");
   const [change, setChange] = useState("");
   const [recorded, setRecorded] = useState<string | null>(null);
@@ -122,6 +125,25 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
   useImperativeHandle(controllerRef, () => ({
     hasNotes: () => judgment !== "" || change !== "" || sources.some(source => Object.values(source).some(value => value !== "")),
     invalidate: () => { fileController.current?.invalidate(); clearRecord(); setSourceNotice(""); },
+    addPassage: (passage) => {
+      if (!isCurrent || !fitsManualFilingPassage(passage)) return;
+      setExpanded(true);
+      const rows = currentSources.current;
+      if (rows.some(source => comparisonReference(source.reference) === comparisonReference(passage.reference))) {
+        setSourceNotice("This reference is already in your comparison.");
+        return;
+      }
+      const slot = rows.findIndex(source => Object.values(source).every(value => value === ""));
+      if (slot < 0) {
+        setSourceNotice("Both sources already contain notes. No notes were replaced.");
+        return;
+      }
+      clearRecord();
+      const next = rows.map((source, index) => index === slot ? { ...source, ...passage } : source);
+      currentSources.current = next;
+      setSources(next);
+      setSourceNotice("Filing passage added for your own assessment. No judgment was recorded.");
+    },
     addReference: (reference, publicationDate, origin = "official") => {
       if (!isCurrent) return;
       setExpanded(true);
@@ -173,7 +195,7 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
     <div id={panelId} hidden={!expanded}>
       {sourceNotice && <p role="status">{sourceNotice}</p>}
       <h4>Compare evidence for and against an explanation</h4>
-      <p>Enter two passages yourself. FinLens does not open references or verify these sources. Keep the source’s publication date separate from the event date.</p>
+      <p>Compare two distinct sources. FinLens does not open references or verify the comparison. Keep the source’s publication date separate from the event date.</p>
       {sources.map((source, index) => {
         const slot = index === 0 ? "A" : "B";
         const passageLabel = "Passage " + slot;
