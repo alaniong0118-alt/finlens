@@ -7,7 +7,7 @@ import FinancialResearch from "@/components/financial-research";
 import FinancialInsights from "@/components/financial-insights";
 import FilingResearch, { type KeptEvidenceDraft } from "@/components/filing-research";
 import ManualEvidenceComparison, { RecordedComparisonPicker, type ManualComparisonController } from "@/components/manual-evidence-comparison";
-import { unverifiedPastedReference, type ManualFilingPassage } from "@/lib/manual-evidence-comparison";
+import { canEditReopenedComparison, unverifiedPastedReference, type ManualFilingPassage, type ReopenedManualComparison } from "@/lib/manual-evidence-comparison";
 import ThemeControl from "@/components/theme-control";
 import ResearchFreshness from "@/components/research-freshness";
 import CompanyComparison from "@/components/company-comparison";
@@ -100,10 +100,21 @@ export default function Home() {
   const manualComparison = useRef<ManualComparisonController>(null);
   const [comparisonDraft, setComparisonDraft] = useState<KeptEvidenceDraft | null>(null);
   const keptDraft = useRef<KeptEvidenceDraft | null>(null);
+  const coldComparisonUntouched = useRef(true);
+  const [editableCopy, setEditableCopy] = useState<ReopenedManualComparison | null>(null);
+  function continueComparison(copy: ReopenedManualComparison) {
+    if (!coldComparisonUntouched.current || researchInputRef.current?.value !== ""
+        || !canEditReopenedComparison(copy)) return;
+    keepQuestion(copy.question);
+    setResearchInput(copy.question);
+    setEditableCopy(copy);
+  }
   function addFilingPassage(draft: KeptEvidenceDraft, passage: ManualFilingPassage) {
     if (keptDraft.current === draft) manualComparison.current?.addPassage(passage);
   }
   function keepQuestion(question: string) {
+    coldComparisonUntouched.current = false;
+    if (question !== manualQuestion) setEditableCopy(null);
     const draft: KeptEvidenceDraft = { question, isCurrent: () => keptDraft.current === draft };
     keptDraft.current = draft;
     setComparisonDraft(draft);
@@ -228,6 +239,7 @@ export default function Home() {
               const next = event.target.value;
               if (next.length > 2000) { setResearchDraftError("Use 2,000 characters or fewer. Your previous draft is unchanged."); return; }
               setPreviousNotesAvailable(manualComparison.current?.hasNotes() ?? false);
+              coldComparisonUntouched.current = false;
               keptDraft.current = null;
               setComparisonDraft(null);
               manualComparison.current?.invalidate();
@@ -287,10 +299,10 @@ export default function Home() {
             }}>Add official reference to comparison</button>
           </section>}
         </div>}
-        {manualQuestion === null && researchInput === "" && <RecordedComparisonPicker standalone />}
+        {manualQuestion === null && researchInput === "" && <RecordedComparisonPicker standalone onContinue={coldComparisonUntouched.current ? continueComparison : undefined} />}
         {manualQuestion !== null && <div hidden={researchContext !== manualQuestion}>
           <ManualEvidenceComparison key={manualQuestion} question={manualQuestion}
-            isCurrent={researchContext === manualQuestion} controllerRef={manualComparison} />
+            isCurrent={researchContext === manualQuestion} controllerRef={manualComparison} editableCopy={editableCopy ?? undefined} />
         </div>}
       </section>
       <CompanyOverview companies={companies} company={company} ticker={ticker} loading={loading} error={error} onChange={value => { setExplicitCompanyChoice(true); setWynnConfirmation(null); setTicker(value); }} onRetry={loadCatalog} filingResearchEnabled={filingEnabled} />

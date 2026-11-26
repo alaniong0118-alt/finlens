@@ -115,7 +115,7 @@ export function recordManualComparison(draft: Draft): string {
   return json;
 }
 
-type ReopenedManualComparison = {
+export type ReopenedManualComparison = {
   schema_version: 1;
   kind: "manual_evidence_comparison";
   question: string;
@@ -123,6 +123,16 @@ type ReopenedManualComparison = {
   provisional_judgment: string;
   evidence_that_would_change_judgment: string;
 };
+
+// Single-line inputs remove CR/LF and textareas normalize CR. Keep such
+// canonical-but-unrepresentable records readable without changing their bytes.
+export function canEditReopenedComparison(copy: ReopenedManualComparison): boolean {
+  return !/[\r\n]/.test(copy.question)
+    && !copy.provisional_judgment.includes("\r")
+    && !copy.evidence_that_would_change_judgment.includes("\r")
+    && copy.sources.every(source => !/[\r\n]/.test(source.reference + source.locator)
+      && !source.passage.includes("\r") && !source.rationale.includes("\r"));
+}
 
 type ReopenedManualSource = Omit<ManualSourceDraft, "date" | "assessment"> & {
   kind: "manual_unverified";

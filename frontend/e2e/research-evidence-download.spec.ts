@@ -187,6 +187,49 @@ test('completed selected-filing passage joins a same-question comparison and sur
   await expect(preview).toContainText(judgment);
   await expect(preview.locator('a')).toHaveCount(0);
   expect(scenario.ledger.slice(reopenedAt)).toEqual([]);
+
+  const originalBytes = await readFile(path);
+  const savedBeforeCopy = await storage();
+  let automaticDownloads = 0;
+  const countDownload = () => { automaticDownloads += 1; };
+  page.on('download', countDownload);
+  const continueCopy = page.getByRole('button', { name: 'Continue as an editable copy', exact: true });
+  await expect(preview.getByRole('button')).toHaveCount(0);
+  await continueCopy.press('Enter');
+  await expect(preview).toHaveCount(0);
+  await expect(comparison.getByText(/Editable copy from a local file/)).toBeVisible();
+  await expect(comparison.getByRole('heading', { name: 'Compare evidence for and against an explanation', exact: true })).toBeFocused();
+  await expect(field('Source reference A')).toHaveValue(citation.sec_url);
+  await expect(field('Passage A')).toHaveValue(passage);
+  await expect(field('Locator A')).toHaveValue(locator);
+  await expect(field('Publication date A')).toHaveValue('');
+  await expect(field('Provisional judgment')).toHaveValue(judgment);
+  await expect(comparison.getByRole('button', { name: 'Download recorded comparison (.json)', exact: true })).toHaveCount(0);
+  expect(await storage()).toEqual(savedBeforeCopy);
+  expect(scenario.ledger.slice(reopenedAt)).toEqual([]);
+  expect(automaticDownloads).toBe(0);
+  page.off('download', countDownload);
+
+  const revisedJudgment = 'The order evidence weakens the timing-only explanation.';
+  await field('Assessment rationale B').fill('Compare the pre-disruption order counts.');
+  await field('Provisional judgment').fill(revisedJudgment);
+  await comparison.getByRole('button', { name: 'Record provisional judgment', exact: true }).press('Enter');
+  const [revised] = await Promise.all([page.waitForEvent('download'),
+    comparison.getByRole('button', { name: 'Download recorded comparison (.json)', exact: true }).press('Enter')]);
+  expect(await revised.failure()).toBeNull();
+  const revisedPath = await revised.path();
+  const revisedRecord = JSON.parse(await readFile(revisedPath, 'utf8'));
+  expect(revisedRecord.sources[0]).toEqual(result.sources[0]);
+  expect(revisedRecord.sources[1]).toEqual({ ...result.sources[1], rationale: 'Compare the pre-disruption order counts.' });
+  expect(revisedRecord.provisional_judgment).toBe(revisedJudgment);
+  expect(await readFile(path)).toEqual(originalBytes);
+  expect(scenario.ledger.slice(reopenedAt)).toEqual([]);
+
+  await scenario.open();
+  await scenario.ready(ticker);
+  await page.getByLabel('Open a recorded comparison (.json)', { exact: true }).setInputFiles(revisedPath);
+  await expect(preview).toContainText(revisedJudgment);
+  await expect(preview).toContainText('Compare the pre-disruption order counts.');
   expect(scenario.violations).toEqual([]);
 });
 

@@ -2,7 +2,7 @@
 import { useId, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { downloadEvidenceReport } from "@/lib/evidence-report";
 import { MANUAL_COMPARISON_ASSESSMENTS, MANUAL_COMPARISON_FIELD_LIMITS, MANUAL_COMPARISON_LIMIT,
-  comparisonReference, fitsManualFilingPassage, recordManualComparison, reopenManualComparison, type ManualFilingPassage, type ManualSourceDraft } from "@/lib/manual-evidence-comparison";
+  canEditReopenedComparison, comparisonReference, fitsManualFilingPassage, recordManualComparison, reopenManualComparison, type ManualFilingPassage, type ManualSourceDraft } from "@/lib/manual-evidence-comparison";
 
 const blankSource = (): ManualSourceDraft => ({ reference: "", passage: "", locator: "", date: "", assessment: "", rationale: "" });
 
@@ -15,7 +15,7 @@ export type ManualComparisonController = {
 
 type ReopenedComparison = ReturnType<typeof reopenManualComparison>;
 type FilePreview = { kind: "loading" } | { kind: "error"; message: string } |
-  { kind: "ready"; comparison: ReopenedComparison };
+  { kind: "ready"; comparison: ReopenedComparison; read: number };
 
 function ReopenedPreview({ comparison, standalone }: { comparison: ReopenedComparison; standalone: boolean }) {
   const Title = standalone ? "h3" : "h5";
@@ -43,9 +43,10 @@ function ReopenedPreview({ comparison, standalone }: { comparison: ReopenedCompa
   </section>;
 }
 
-export function RecordedComparisonPicker({ controllerRef, standalone = false }: {
+export function RecordedComparisonPicker({ controllerRef, standalone = false, onContinue }: {
   controllerRef?: Ref<{ invalidate: () => void }>;
   standalone?: boolean;
+  onContinue?: (comparison: ReopenedComparison) => void;
 }) {
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const fileRead = useRef(0);
@@ -66,7 +67,7 @@ export function RecordedComparisonPicker({ controllerRef, standalone = false }: 
       const buffer = await file.arrayBuffer();
       if (read !== fileRead.current) return;
       const comparison = reopenManualComparison(new Uint8Array(buffer));
-      setFilePreview({ kind: "ready", comparison });
+      setFilePreview({ kind: "ready", comparison, read });
     } catch {
       if (read === fileRead.current) setFilePreview({
         kind: "error", message: "Could not open this file. Choose an original FinLens comparison JSON download.",
@@ -83,27 +84,41 @@ export function RecordedComparisonPicker({ controllerRef, standalone = false }: 
       }} /></label>
     {filePreview?.kind === "loading" && <p role="status">Reading the local comparison file…</p>}
     {filePreview?.kind === "error" && <p role="alert">{filePreview.message}</p>}
-    {filePreview?.kind === "ready" && <ReopenedPreview comparison={filePreview.comparison} standalone={standalone} />}
+    {filePreview?.kind === "ready" && <>
+      <ReopenedPreview comparison={filePreview.comparison} standalone={standalone} />
+      {standalone && onContinue && (canEditReopenedComparison(filePreview.comparison)
+        ? <button type="button" className="secondary-button" onClick={() => {
+            if (fileRead.current !== filePreview.read) return;
+            fileRead.current += 1;
+            onContinue(filePreview.comparison);
+          }}>Continue as an editable copy</button>
+        : <p className="small muted">This comparison stays read-only because editing would change its original text.</p>)}
+    </>}
   </div>;
 }
 
-export default function ManualEvidenceComparison({ question, isCurrent, controllerRef }: {
-  question: string; isCurrent: boolean; controllerRef: Ref<ManualComparisonController>;
+export default function ManualEvidenceComparison({ question, isCurrent, controllerRef, editableCopy }: {
+  question: string; isCurrent: boolean; controllerRef: Ref<ManualComparisonController>; editableCopy?: ReopenedComparison;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(editableCopy));
   const panelId = useId();
   const [sourceNotice, setSourceNotice] = useState("");
-  const [sources, setSources] = useState(() => [blankSource(), blankSource()]);
+  const [sources, setSources] = useState<ManualSourceDraft[]>(() => editableCopy
+    ? editableCopy.sources.map(({ reference, passage, locator, date, assessment, rationale }) =>
+      ({ reference, passage, locator, date: date ?? "", assessment, rationale }))
+    : [blankSource(), blankSource()]);
   const currentSources = useRef(sources);
   currentSources.current = sources;
-  const [judgment, setJudgment] = useState("");
-  const [change, setChange] = useState("");
+  const [judgment, setJudgment] = useState(editableCopy?.provisional_judgment ?? "");
+  const [change, setChange] = useState(editableCopy?.evidence_that_would_change_judgment ?? "");
   const [recorded, setRecorded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsReview, setNeedsReview] = useState(false);
   const fileController = useRef<{ invalidate: () => void }>(null);
   const active = useRef<string | null>(null);
   const revoke = useRef<(() => void) | null>(null);
+  const copyHeading = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => { if (editableCopy) copyHeading.current?.focus(); }, [editableCopy]);
   function dispose() {
     revoke.current?.();
     revoke.current = null;
@@ -194,7 +209,8 @@ export default function ManualEvidenceComparison({ question, isCurrent, controll
       onClick={() => setExpanded(previous => !previous)}>Compare two manual sources</button>
     <div id={panelId} hidden={!expanded}>
       {sourceNotice && <p role="status">{sourceNotice}</p>}
-      <h4>Compare evidence for and against an explanation</h4>
+      <h4 ref={copyHeading} tabIndex={editableCopy ? -1 : undefined}>Compare evidence for and against an explanation</h4>
+      {editableCopy && <p>Editable copy from a local file · not verified. Review the earlier judgment and record it again before downloading. The original file is unchanged.</p>}
       <p>Compare two distinct sources. FinLens does not open references or verify the comparison. Keep the source’s publication date separate from the event date.</p>
       {sources.map((source, index) => {
         const slot = index === 0 ? "A" : "B";

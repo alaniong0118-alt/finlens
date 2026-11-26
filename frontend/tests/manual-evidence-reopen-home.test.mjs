@@ -164,4 +164,56 @@ test('REOPEN_HOME opens V1 on fresh Home and its own download without replacing 
   assert.equal(downloads.length, 1);
   assert.equal(blobs.length, 1);
   assert.deepEqual(requests.slice(before), []);
+  assert.ok(!button('Continue as an editable copy'), 'Live draft cannot import an editable copy');
+
+  async function freshHome() {
+    await act(async () => root.unmount());
+    root = createRoot(doc.querySelector('#root'));
+    await act(async () => root.render(React.createElement(exports.default)));
+  }
+  await freshHome();
+  const freshRequests = requests.length;
+  const corruptButValid = encode(recordManualComparison({ ...draft, question: 'Line one\nline two' }));
+  await selectFile(corruptButValid, async bytes => bytes);
+  assert.ok(preview(), 'Canonical but unrepresentable text remains readable');
+  assert.ok(!button('Continue as an editable copy'));
+  await selectFile(downloaded, async bytes => bytes);
+  assert.ok(preview());
+  const copied = button('Continue as an editable copy');
+  assert.ok(copied, 'A fresh validated preview offers an explicit editable copy');
+  const beforeCopy = Buffer.from(downloaded);
+  await act(async () => { copied.click(); copied.click(); });
+  assert.ok(!preview(), 'The in-memory editor is not the old read-only preview');
+  assert.equal(doc.querySelector('#research-draft-input').value, original);
+  assert.equal(controlFor('Source reference A').value, a.reference);
+  assert.equal(controlFor('Passage B').value, b.passage);
+  assert.equal(controlFor('Publication date B').value, '');
+  assert.equal(controlFor('Assessment B').value, b.assessment);
+  assert.equal(controlFor('Provisional judgment').value, draft.judgment);
+  assert.ok(!button('Download recorded comparison (.json)'), 'The import is not a recorded judgment');
+  assert.equal(downloads.length, 1, 'The import does not download');
+  await fill('Provisional judgment', 'Reconsidered after checking the timing.');
+  await click('Record provisional judgment');
+  await click('Download recorded comparison (.json)');
+  const edited = JSON.parse(await blobs[1].text());
+  assert.equal(edited.provisional_judgment, 'Reconsidered after checking the timing.');
+  assert.equal(edited.sources[1].date, null);
+  assert.deepEqual(Buffer.from(downloaded), beforeCopy, 'Original bytes are untouched');
+  assert.deepEqual(requests.slice(freshRequests), []);
+
+  await freshHome();
+  const untouched = doc.querySelector('#research-draft-input');
+  await selectFile(downloaded, async bytes => bytes);
+  const old = button('Continue as an editable copy');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(untouched), 'value').set.call(untouched, 'New current question');
+    untouched.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    old.click();
+  });
+  assert.equal(untouched.value, 'New current question');
+  assert.ok(!button('Compare two manual sources'), 'Stale button cannot create a draft');
+  await change(untouched, '');
+  await selectFile(downloaded, async bytes => bytes);
+  assert.ok(preview());
+  assert.ok(!button('Continue as an editable copy'), 'Typing and clearing must not rearm a cold draft');
 });
