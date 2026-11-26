@@ -104,7 +104,7 @@ export default function Home() {
     if (keptDraft.current === draft) manualComparison.current?.addPassage(passage);
   }
   function keepQuestion(question: string) {
-    const draft = { question };
+    const draft: KeptEvidenceDraft = { question, isCurrent: () => keptDraft.current === draft };
     keptDraft.current = draft;
     setComparisonDraft(draft);
     setWynnConfirmation(null);

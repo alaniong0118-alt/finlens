@@ -228,7 +228,7 @@ function validateFilingResponse(value: unknown, company: Company, filing: Filing
   }
 }
 
-export type KeptEvidenceDraft = Readonly<{ question: string }>;
+export type KeptEvidenceDraft = Readonly<{ question: string; isCurrent: () => boolean }>;
 
 type EvidenceComparisonHandoff = {
   comparisonDraft?: KeptEvidenceDraft | null;
@@ -351,6 +351,8 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
   const [riskGuide, setRiskGuide] = useState("supply_chain");
   const [searchedRisk, setSearchedRisk] = useState<{ owner: string; request: RiskRequest } | null>(null);
   const questionInput = useRef<HTMLTextAreaElement | null>(null);
+  const editorGeneration = useRef(0);
+  const preparationGeneration = editorGeneration.current;
   const presentation = METRIC_CATALOG.find(item => item.id === guideMetric)!;
   const comparing = guideMode === "comparison";
   const guideMetrics = METRIC_CATALOG.filter(item => !comparing || fiscalQuestionPeriods(item.id, true).length > 0);
@@ -424,6 +426,7 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     setResult(null); setLoading(false); setError(null);
   }, [evidenceIdentity]);
   function edit(value: string) {
+    editorGeneration.current += 1;
     cancelAnalysis();
     cancelKeyword.current?.(true);
     scope.current.invalidate(); controller.current?.abort();
@@ -504,6 +507,9 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
     await Promise.all([direct, evidence]);
   }
   const evidenceAnalysisReady = result?.query === query.trim() && !loading && !error;
+  const canPrepareKeptQuestion = purpose === "general" && query === ""
+    && comparisonDraft != null && comparisonDraft.question.trim() !== ""
+    && !/^https?:\/\/\S+$/i.test(comparisonDraft.question.trim());
   const canHandoff = purpose === "general" && retrievalScope === "filing" && filing !== null
     && handoffReceipt !== null && handoffReceipt.draft === comparisonDraft && evidenceAnalysisReady
     && evidenceScope.current.current(handoffReceipt.generation);
@@ -556,6 +562,13 @@ function FilingSearch({ company, filing, configured, query, setQuery, retrievalS
         }}>Use question</button>
         <p className="muted small">Fills the editor below. Review or edit it, then submit explicitly.</p>
       </fieldset>}
+      {canPrepareKeptQuestion && <button type="button" className="secondary-button" onClick={() => {
+        if (editorGeneration.current === preparationGeneration
+            && comparisonDraft?.isCurrent() && questionInput.current?.value === "") {
+          edit(comparisonDraft.question);
+          questionInput.current?.focus();
+        }
+      }}>Use kept question</button>}
       <label htmlFor="research-query">Research question or search<textarea ref={questionInput} id="research-query" value={query} maxLength={2000} onChange={(event) => edit(event.target.value)} placeholder="What was the latest quarterly revenue?" rows={3} /></label>
       {purpose === "general" && <div className="question-chips" aria-label="Example research topics">{(financialOnly ? EXAMPLES.slice(0, 2) : EXAMPLES).map((example) => <button type="button" key={example} onClick={() => edit(example)}>{example}</button>)}</div>}
       <button className="primary-button" disabled={version === null || !query.trim() || loading || answerLoading || purpose === "risk" && !riskReady}>{loading || answerLoading ? "Researching stored SEC data…" : purpose === "risk" ? "Search risk topic" : "Research question"}</button>

@@ -5052,3 +5052,44 @@ test('FOCUSED_BRIDGE adds only a current completed SEC passage to the matching k
   assert.ok(!handoff(), 'Reference-only old results cannot be added');
   assert.equal(field('Passage B'), text, 'Changing research input does not overwrite comparison');
 });
+
+test('FOCUSED_PREFILL explicitly copies a kept question into an empty research editor without a request or overwrite', async ctx => {
+  const app = await mount(ctx);
+  await app.completeCompany('AAPL', '1000000000');
+  const draft = app.host.querySelector('#research-draft-input');
+  const editor = app.host.querySelector('#research-query');
+  const action = () => [...app.host.querySelectorAll('button')]
+    .find(button => button.textContent === 'Use kept question');
+  const before = app.requests.length;
+  assert.ok(!action());
+  await app.change(draft, 'How does Apple describe shipment timing?');
+  assert.ok(!action(), 'Unkept text is not offered');
+  await app.click('Keep research draft');
+  assert.equal(editor.value, '');
+  assert.ok(action(), 'Kept question can be explicitly copied into the empty editor');
+  const previousAction = action();
+  const example = [...app.host.querySelectorAll('button')].find(button => button.textContent === 'Use question');
+  const prepared = app.host.querySelector('.question-guide .question-preview').textContent;
+  await act(async () => { example.click(); previousAction.click(); });
+  assert.equal(editor.value, prepared, 'A retained same-batch action must not overwrite the guide');
+  await app.change(editor, '');
+  const oldPurposeAction = action();
+  const purpose = app.select('Research purpose');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(purpose, 'risk');
+    purpose.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    oldPurposeAction.click();
+  });
+  assert.equal(editor.value, '', 'A retained general-mode action must not cross into risk');
+  assert.ok(!action());
+  await app.change(purpose, 'general');
+  await act(async () => action().click());
+  assert.equal(editor.value, 'How does Apple describe shipment timing?');
+  assert.equal(document.activeElement, editor);
+  assert.ok(!action(), 'Do not offer to overwrite an existing question');
+  await app.change(draft, 'Would this affect customer orders?');
+  await app.click('Keep research draft');
+  assert.equal(editor.value, 'How does Apple describe shipment timing?');
+  assert.ok(!action());
+  assert.equal(app.requests.length, before, 'Preparation does not submit any research');
+});

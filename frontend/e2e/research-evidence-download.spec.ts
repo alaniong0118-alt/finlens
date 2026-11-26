@@ -184,3 +184,30 @@ test('completed selected-filing passage joins a same-question comparison and sur
   expect(scenario.ledger.slice(reopenedAt)).toEqual([]);
   expect(scenario.violations).toEqual([]);
 });
+
+test('Home can prepare a kept research question with no submission or overwrite', async ({ page, scenario }) => {
+  await scenario.open();
+  await scenario.ready('AAA');
+  const draft = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const editor = page.getByRole('textbox', { name: 'Research question or search', exact: true });
+  const keep = page.getByRole('button', { name: 'Keep research draft', exact: true });
+  const use = page.getByRole('button', { name: 'Use kept question', exact: true });
+  const before = scenario.ledger.length;
+  const question = 'What is the evidence for a change in shipment timing?';
+  await draft.fill('https://example.org/quarterly-report');
+  await keep.press('Enter');
+  await expect(use).toHaveCount(0);
+  await draft.fill(question);
+  await expect(use).toHaveCount(0);
+  await keep.press('Enter');
+  await expect(editor).toHaveValue('');
+  await use.press('Enter');
+  await expect(editor).toHaveValue(question);
+  await expect(editor).toBeFocused();
+  await draft.fill('Different kept question with existing research notes');
+  await keep.press('Enter');
+  await expect(use).toHaveCount(0);
+  await expect(editor).toHaveValue(question);
+  expect(scenario.ledger.slice(before)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});
