@@ -116,3 +116,25 @@ test('Wynn source links and competing assessments survive download and a fresh H
   expect(scenario.ledger.slice(after)).toEqual([]);
   expect(scenario.violations).toEqual([]);
 });
+
+test('Wynn Traditional Chinese question stays scoped to the confirmed issuer and separates the regulator', async ({ page, scenario }) => {
+  await scenario.open();
+  await scenario.ready();
+  const before = scenario.ledger.length;
+  const draft = page.getByRole('textbox', { name: 'Event, question or reference URL', exact: true });
+  const confirm = page.getByRole('button', { name: 'Confirm Wynn Macau, Limited (HKEX 1128)', exact: true });
+  const guide = page.getByRole('region', { name: 'Wynn Macau official source guide', exact: true });
+  await draft.fill('永利澳門的公告能告訴我誰持有博彩經營批給嗎？');
+  await draft.press('Enter');
+  await expect(confirm).toBeVisible();
+  await expect(guide).toHaveCount(0);
+  await confirm.press('Enter');
+  await expect(guide.getByRole('region', { name: 'Listed issuer notice' })).toContainText('does not establish who holds a gaming concession');
+  await expect(guide.getByRole('region', { name: 'Check the licence holder' })).toContainText('did not verify the licence holder');
+  await draft.fill('永利度假村的公告能告訴我誰持有博彩經營批給嗎？');
+  await draft.press('Enter');
+  await expect(confirm).toHaveCount(0);
+  await expect(guide).toHaveCount(0);
+  expect(scenario.ledger.slice(before)).toEqual([]);
+  expect(scenario.violations).toEqual([]);
+});

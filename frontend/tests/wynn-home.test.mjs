@@ -274,3 +274,31 @@ test('Wynn source handoff can be compared, downloaded, and reopened without rewr
   assert.equal(button(app, 'Download recorded comparison (.json)'), undefined);
   assert.equal(app.requests.length, before);
 });
+
+for (const chinese of ['永利澳門的公告能告訴我誰持有博彩經營批給嗎？', '永利澳门的公告能告诉我谁持有博彩经营批给吗？']) {
+  test('Wynn Chinese trial question requires the same issuer confirmation and evidence boundaries: ' + chinese, async ctx => {
+    const app = await mount(ctx);
+    await app.release([acme]);
+    const before = app.requests.length;
+    await app.keep(chinese);
+    const consent = button(app, confirm);
+    assert.ok(consent, 'explicit issuer confirmation is required in the localized query');
+    assert.equal(app.query(region), null);
+    await app.click(consent);
+    assert.ok(app.query(region));
+    assert.ok(app.query('a[href="' + disclosure + '"]'));
+    assert.ok(app.query('a[href="' + roster + '"]'));
+    assert.match(app.query(region).textContent, /does not establish who holds a gaming concession/);
+    assert.equal(app.requests.length, before);
+    for (const invalid of [
+      '永利度假村的公告能告訴我誰持有博彩經營批給嗎？',
+      '永利澳門的公告已證明它持有博彩經營批給嗎？',
+      '永利澳門的公告能告訴我誰持有博彩經營批給嗎？順便查投資建議',
+    ]) {
+      await app.keep(invalid);
+      assert.equal(button(app, confirm), undefined);
+      assert.equal(app.query(region), null);
+    }
+    assert.equal(app.requests.length, before);
+  });
+}

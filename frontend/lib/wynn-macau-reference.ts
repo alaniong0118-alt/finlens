@@ -7,6 +7,11 @@ export const wynnMacauReferences = {
 
 export function supportsWynnMacauNoticeQuestion(text: string): boolean {
   const normalized = text.trim().replace(/\s+/g, " ");
+  // The two matching Chinese phrasings ask the same narrow source question;
+  // do not infer a financed entity, an operator, or a concession owner from them.
+  if (/^(?:永利澳門的公告能告訴我誰持有博彩經營批給嗎|永利澳门的公告能告诉我谁持有博彩经营批给吗)[?？]?$/u.test(normalized)) {
+    return true;
+  }
   return /^can (?:a|this) wynn macau(?:,? limited)?(?: \(hkex:? 1128\))? (?:announcement|notice) (?:tell me who holds|confirm who holds) (?:the|a) gaming (?:concession|licen[cs]e)\??$/iu.test(normalized);
 }
 
