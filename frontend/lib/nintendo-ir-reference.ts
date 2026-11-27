@@ -27,11 +27,17 @@ export function matchesNintendoOperatingProfitQuestion(question: string): boolea
   return operatingProfitQuestion.test(normalized) || operatingProfitAndSalesQuestion.test(normalized);
 }
 
+export function matchesNintendoSecondQuarterProfitQuestion(question: string): boolean {
+  const normalized = question.trim().replace(/\s+/g, " ");
+  return /^why did nintendo(?:['’]s)? operating profit change in fy2027 q2\?$/i.test(normalized);
+}
+
 // A closed set of phrasings for the editorial link, separate from issuer or catalog lookup.
 export function matchesNintendoIrQuestion(question: string): boolean {
   const normalized = question.trim().replace(/\s+/g, " ");
   return question.trim() === nintendoInterimReleasePdf
-    || reportQuestion.test(normalized) || matchesNintendoOperatingProfitQuestion(normalized);
+    || reportQuestion.test(normalized) || matchesNintendoOperatingProfitQuestion(normalized)
+    || matchesNintendoSecondQuarterProfitQuestion(normalized);
 }
 
 // These known names and listing identifiers only withhold the editorial guide.

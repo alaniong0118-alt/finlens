@@ -18,7 +18,7 @@ import FinancialCoverage from "@/components/financial-coverage";
 import BalanceDateComparison from "@/components/balance-date-comparison";
 import CashFlowWindowComparison from "@/components/cash-flow-window-comparison";
 
-import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion, matchesNintendoOperatingProfitQuestion, nintendoSecondQuarterProfit } from "@/lib/nintendo-ir-reference";
+import { catalogMayContainNintendo, getNintendoInterimNetSales, matchesNintendoIrQuestion, matchesNintendoOperatingProfitQuestion, matchesNintendoSecondQuarterProfitQuestion, nintendoSecondQuarterProfit } from "@/lib/nintendo-ir-reference";
 
 import { catalogMayContainWynnMacau, supportsWynnMacauNoticeQuestion, wynnMacauReferences } from "@/lib/wynn-macau-reference";
 
@@ -27,6 +27,7 @@ const nintendoReleaseDate = "2026-11-05";
 
 function NintendoIrReference({ keptReference = "", onAddQ1 }: { keptReference?: string; onAddQ1?: () => void }) {
   const report = getNintendoInterimNetSales(keptReference);
+  const asksAboutQ2 = matchesNintendoSecondQuarterProfitQuestion(keptReference);
   const formatDate = (date: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" }).format(new Date(date));
   return <>
     <p>Nintendo’s Investor Relations site lists its six-month earnings release of <time dateTime={nintendoReleaseDate}>5 November 2026</time> under “Six Months Earnings” for the fiscal year ending March 2027.</p>
@@ -42,22 +43,26 @@ function NintendoIrReference({ keptReference = "", onAddQ1 }: { keptReference?: 
       <p>This release does not establish full-year actual sales or prove why sales changed.</p>
       <a className="source-link" href={`${report.pdf}#page=${report.page}`} referrerPolicy="no-referrer">Nintendo release, page {report.page} (official PDF)</a>
     </section>}
-    {matchesNintendoOperatingProfitQuestion(keptReference) && <section aria-label="Nintendo operating profit source notes">
+    {(asksAboutQ2 || matchesNintendoOperatingProfitQuestion(keptReference)) && <section aria-label="Nintendo operating profit source notes">
       <h4>What this release says about operating profit</h4>
       <dl>
         <dt>Reported results</dt>
         <dd>For the six months ended 30 September 2026, Nintendo reported that consolidated net sales fell 12.1% and operating profit rose 49.1% year over year.</dd>
+        {!asksAboutQ2 && <>
         <dt>Management explanation</dt>
         <dd>Nintendo attributed the operating profit increase to software making up a larger share of sales and a first-quarter U.S. tariff refund.</dd>
         <dt>What remains unknown</dt>
         <dd>This section does not quantify how much each factor contributed. The explanation is the issuer’s account, not independent proof.</dd>
+        </>}
       </dl>
-      <p><a className="source-link" href={nintendoReleaseUrl + "#page=3"} referrerPolicy="no-referrer">Management discussion, page 3 (official PDF)</a></p>
+      {!asksAboutQ2 && <p><a className="source-link" href={nintendoReleaseUrl + "#page=3"} referrerPolicy="no-referrer">Management discussion, page 3 (official PDF)</a></p>}
       <p><a className="source-link" href={nintendoReleaseUrl + "#page=1"} referrerPolicy="no-referrer">Reported figures, page 1 (official PDF)</a></p>
       <section aria-label="Second-quarter profit check">
-        <h5>Did higher profit persist into the second quarter?</h5>
+        <h5>{asksAboutQ2 ? "Derived FY2027 Q2 operating profit" : "Did higher profit persist into the second quarter?"}</h5>
         <p>Subtracting first-quarter operating profit from the half-year result yields JPY {nintendoSecondQuarterProfit.current.toLocaleString("en-GB")} million for July to September 2026, versus JPY {nintendoSecondQuarterProfit.prior.toLocaleString("en-GB")} million a year earlier. That is down {Math.abs(nintendoSecondQuarterProfit.changePct).toFixed(1)}% year over year.</p>
-        <p>The half-year increase did not persist in that quarter. This calculation does not prove what caused the difference or independently verify Nintendo’s explanation.</p>
+        {asksAboutQ2
+          ? <p>The reported half-year rise and the derived Q2 decline cover different periods. These figures do not establish why operating profit declined in Q2.</p>
+          : <p>The half-year increase did not persist in that quarter. This calculation does not prove what caused the difference or independently verify Nintendo’s explanation.</p>}
         <p><a className="source-link" href={nintendoSecondQuarterProfit.reportedQ1 + "#page=1"} referrerPolicy="no-referrer">First-quarter figures, page 1 (official PDF)</a></p>
         {onAddQ1 && <button type="button" className="secondary-button" onClick={onAddQ1}>
           Add first-quarter reference to comparison

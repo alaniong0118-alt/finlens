@@ -403,3 +403,40 @@ test('The source check lets researchers add each official reference separately',
     ['https://www.nintendo.co.jp/ir/pdf/2026/260806e.pdf', '2026-08-06', '', '']]);
   assert.equal(app.requests.length, without);
 });
+
+test('Home keeps the exact Nintendo FY2027 Q2 question and distinguishes the derived decline', async ctx => {
+  const app = await mount(ctx);
+  await app.release([acme]);
+  const before = app.requests.length;
+  const { act } = await import('react');
+  const keep = async question => {
+    await app.input(question);
+    await act(async () => app.query('#research-draft-input').form.querySelector('button').click());
+  };
+
+  for (const question of ['Why did Nintendo operating profit change in FY2027 Q2?', '  WHY did Nintendo’s operating profit change in FY2027   q2?  ']) {
+    await keep(question);
+    const region = app.region();
+    assert.ok(region, 'The kept Q2 question opens the dated Nintendo source');
+    assert.ok(region.querySelector('a[href="' + pdf + '"]'));
+    assert.match(region.textContent, /For the six months ended 30 September 2026.*operating profit rose 49\.1%/);
+    const check = region.querySelector('[aria-label="Second-quarter profit check"]');
+    assert.match(check.textContent, /Derived FY2027 Q2 operating profit/);
+    assert.match(check.textContent, /73,904.*88,253.*down 16\.3%/);
+    assert.match(check.textContent, /do not establish why operating profit declined in Q2/);
+    assert.doesNotMatch(region.textContent, /Nintendo attributed|tariff refund/);
+  }
+  for (const question of [
+    "Why did Sony operating profit change in FY2027 Q2?",
+    "Why did Nintendo operating profit change in FY2026 Q2?",
+    "Why did Nintendo operating profit change in calendar Q2 2027?",
+    "Why did Nintendo operating profit change in the second quarter?",
+    "Why did Nintendo net sales change in FY2027 Q2?",
+    "Why did Nintendo and Sony operating profit change in FY2027 Q2?",
+    "Why did Nintendo operating profit rise in FY2027 Q2?"
+  ]) {
+    await keep(question);
+    assert.equal(app.region(), null, question);
+  }
+  assert.equal(app.requests.length, before);
+});
